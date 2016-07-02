@@ -68,7 +68,7 @@ All dependencies come with package itself and may be modified directly. So don't
 
 ### Requirements
 
-Go 1.5+, MongoDB 3.2+ (for all data), Redis 3.2.0+
+Go 1.5+, MongoDB 3.2+ (for data), Redis 3.2.0+ (for jobs queue)
 
 Contributing
 ------------------
@@ -89,4 +89,4 @@ Feel free to send PRs. If you want to contribute new service integration, please
 \* - **package source is modified**
 
 ### License
-Code available on GPLV3 [license](https://github.com/requilence/integram/master/LICENSE)
+Code available on GPLV3 [license](https://github.com/requilence/integram/blob/master/LICENSE)
