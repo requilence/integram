@@ -1,0 +1,2 @@
+gofmt -l -w .
+go test
