@@ -90,3 +90,5 @@ Feel free to send PRs. If you want to contribute new service integration, please
 
 ### License
 Code available on GPLV3 [license](https://github.com/requilence/integram/blob/master/LICENSE)
+
+![Analytics](https://ga-beacon.appspot.com/UA-80266491-1/github_readme)
