@@ -3,7 +3,6 @@ package bitbucket
 import (
 	"errors"
 	"fmt"
-	"github.com/davecgh/go-spew/spew"
 	api "github.com/ktrysmt/go-bitbucket"
 	"github.com/requilence/integram"
 	m "github.com/requilence/integram/html"
@@ -164,12 +163,6 @@ func prInlineButtonPressed(c *integram.Context, fullRepoName string, prID int) e
 	pr := api.PullRequest{}
 
 	c.ServiceCache(issueUniqueID(fullRepoName, prID), &pr)
-	rest := Api(c)
-
-	spew.Dump(rest.Repositories.ListPublic())
-
-	fmt.Printf("prID: %d\n", prID)
-	//owner, repo := splitRepo(fullRepoName)
 
 	switch c.Callback.Data {
 	case "back":

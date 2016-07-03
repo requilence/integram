@@ -32,10 +32,7 @@ import (
 	"mime/multipart"
 	"os"
 	"path/filepath"
-	//	"github.com/davecgh/go-spew/spew"
 	tg "gopkg.in/telegram-bot-api.v3"
-	"io/ioutil"
-	"sync"
 )
 
 type Config struct {
