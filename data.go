@@ -692,6 +692,10 @@ func (user *User) saveProtectedSetting(key string, value interface{}) error {
 
 	}
 
+	if user.data == nil {
+		user.getData()
+	}
+
 	if user.data.Protected == nil {
 		user.data.Protected = make(map[string]*userProtected)
 	}
