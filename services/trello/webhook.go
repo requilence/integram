@@ -460,11 +460,11 @@ func WebhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 		msg.SetTextFmt("%s %s %s", Mention(c, byMember), a, Mention(c, wh.Action.Member))
 
 	case "voteOnCard":
-		uc := t.Card{}
+
 		if wh.Action.Data.Voted == true {
-			c.UpdateServiceCache("card_"+card.Id, bson.M{"$addToSet": bson.M{"val.idmembersvoted": wh.Action.IdMemberCreator}}, &uc)
+			c.UpdateServiceCache("card_"+card.Id, bson.M{"$addToSet": bson.M{"val.idmembersvoted": wh.Action.IdMemberCreator}}, &card)
 		} else {
-			c.UpdateServiceCache("card_"+card.Id, bson.M{"$pull": bson.M{"val.idmembersvoted": wh.Action.IdMemberCreator}}, &uc)
+			c.UpdateServiceCache("card_"+card.Id, bson.M{"$pull": bson.M{"val.idmembersvoted": wh.Action.IdMemberCreator}}, &card)
 		}
 
 		if cardMsg != nil {
