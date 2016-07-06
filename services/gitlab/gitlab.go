@@ -2,20 +2,14 @@ package gitlab
 
 import (
 	"fmt"
-	"io/ioutil"
 	"strconv"
 	"strings"
 	"time"
-
 	"net/url"
-
 	"errors"
-
 	"net/http"
-
 	"github.com/requilence/integram"
 	m "github.com/requilence/integram/html"
-
 	api "github.com/xanzy/go-gitlab"
 	"golang.org/x/oauth2"
 )
@@ -25,8 +19,6 @@ type Config struct {
 }
 
 const API_URI_SUFFIX = "/api/v3/"
-
-var config Config
 
 //var service integram.Service
 
@@ -103,28 +95,6 @@ func cacheNickMap(c *integram.Context) error {
 	return err
 }
 
-func accessTokenReceiver(c *integram.Context, r *http.Request) (token string, expiresAt *time.Time, refreshToken string, err error) {
-	code := r.FormValue("code")
-
-	if code == "" {
-		return "", nil, "", errors.New("Code is empty")
-	}
-
-	var otoken *oauth2.Token
-	otoken, err = c.OAuthProvider().OAuth2Client(c).Exchange(oauth2.NoContext, code)
-	if otoken != nil {
-		//domain, _ := getDomainFromUrl(baseURL)
-		token = otoken.AccessToken
-		refreshToken = otoken.RefreshToken
-		expiresAt = &otoken.Expiry
-
-		c.Service().SheduleJob(cacheNickMap, 0, time.Now().Add(time.Second*5), c)
-		c.NewMessage().SetText("Great! Now you can reply issues, commits, merge requests and snippets").Send()
-	}
-
-	return
-}
-
 type Repository struct {
 	Name        string
 	Url         string
@@ -160,8 +130,8 @@ type Attributes struct {
 	Assignee_id   int
 	Author_id     int
 	Project_id    int
-	Created_at    time.Time
-	Updated_at    time.Time
+	Created_at    string
+	Updated_at    string
 	Commit_id     string
 	Position      int
 	Branch_name   string
@@ -336,8 +306,8 @@ func mustBeAuthed(c *integram.Context) (bool, error) {
 	return true, nil
 
 }
-func noteUniqueID(projectId int, noteId int) string {
-	return "note_" + strconv.Itoa(projectId) + "_" + strconv.Itoa(noteId)
+func noteUniqueID(projectId int, noteId string) string {
+	return "note_" + strconv.Itoa(projectId) + "_" + noteId
 }
 
 func getDomainFromUrl(s string) (string, error) {
@@ -370,7 +340,7 @@ func sendMRComment(c *integram.Context, projectID int, MergeRequestID int, text 
 	note, _, err := Api(c).Notes.CreateMergeRequestNote(projectID, MergeRequestID, &api.CreateMergeRequestNoteOptions{Body: text})
 
 	if note != nil {
-		c.Message.UpdateEventsID(c.Db(), noteUniqueID(projectID, note.ID))
+		c.Message.UpdateEventsID(c.Db(), noteUniqueID(projectID, strconv.Itoa(note.ID)))
 	}
 
 	return err
@@ -379,7 +349,7 @@ func sendMRComment(c *integram.Context, projectID int, MergeRequestID int, text 
 func sendSnippetComment(c *integram.Context, projectID int, SnippetID int, text string) error {
 	note, _, err := Api(c).Notes.CreateSnippetNote(projectID, SnippetID, &api.CreateSnippetNoteOptions{Body: text})
 	if note != nil {
-		c.Message.UpdateEventsID(c.Db(), noteUniqueID(projectID, note.ID))
+		c.Message.UpdateEventsID(c.Db(), noteUniqueID(projectID, strconv.Itoa(note.ID)))
 	}
 
 	return err
@@ -399,7 +369,7 @@ func sendCommitComment(c *integram.Context, projectID int, commitID string, msg 
 		return err
 	}
 	// note id not availble for commit comment. So use the date. Collisions are unlikely here...
-	c.Message.UpdateEventsID(c.Db(), noteUniqueID(projectID, int(note.CreatedAt.Unix())))
+	c.Message.UpdateEventsID(c.Db(), noteUniqueID(projectID, note.CreatedAt))
 
 	return err
 }
@@ -504,15 +474,13 @@ func snippetReplied(c *integram.Context, baseURL string, projectID int, snippetI
 
 func WebhookHandler(c *integram.Context, request *integram.WebhookContext) (err error) {
 	wh := &Webhook{}
-	b, _ := request.RAW()
 
-	ioutil.WriteFile(fmt.Sprintf("gitlab/%d.json", time.Now().Unix()), *b, 0644)
+	err=request.JSON(wh)
 
-	request.JSON(wh)
-
-	if wh.Object_kind == "" {
-		return errors.New("Bad JSON")
+	if err!=nil{
+		return
 	}
+
 	msg := c.NewMessage()
 
 	if wh.Repository.Homepage != "" {
@@ -641,10 +609,10 @@ func WebhookHandler(c *integram.Context, request *integram.WebhookContext) (err 
 		wp := ""
 		noteType := ""
 		originMsg := &integram.Message{}
-		noteID := wh.Object_attributes.Id
+		noteID := strconv.Itoa(wh.Object_attributes.Id)
 		if wh.Object_attributes.Note == "Commit" {
 			// collisions by date are unlikely here
-			noteID = int(wh.Object_attributes.Created_at.Unix())
+			noteID = wh.Object_attributes.Created_at
 		}
 		if msg, _ := c.FindMessageByEventID(noteUniqueID(wh.Object_attributes.Project_id, noteID)); msg != nil {
 			return nil
