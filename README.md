@@ -11,6 +11,8 @@ Just use this links to add integrations you are interested in
 * [Bitbucket](https://telegram.me/bitbucket_bot?start=f_github)
 * [Simple webhook bot](https://telegram.me/Bullhorn_bot?start=f_github)
 
+* [GitHub](https://telegram.me/githubbot) – GitHub bot was developed by [Igor Zhukov](https://github.com/zhukov) and it is not the part of Integram
+
 Running Integram on your side
 ------------------
 You can run Integram on your own server. 
