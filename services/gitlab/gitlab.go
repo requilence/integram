@@ -7,7 +7,6 @@ import (
 	"time"
 	"net/url"
 	"errors"
-	"net/http"
 	"github.com/requilence/integram"
 	m "github.com/requilence/integram/html"
 	api "github.com/xanzy/go-gitlab"
