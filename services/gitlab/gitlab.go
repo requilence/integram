@@ -600,7 +600,8 @@ func WebhookHandler(c *integram.Context, request *integram.WebhookContext) (err 
 			} else {
 				// original message not found. Send WebPreview
 				wp := c.WebPreview("Issue", wh.Object_attributes.Title, wh.User.Username+" / "+wh.Repository.Name, wh.Object_attributes.Url, "")
-				return msg.SetText(fmt.Sprintf("%s by %s", m.URL(action, wp), Mention(c, wh.User.Username, ""))).Send()
+
+				return msg.SetText(fmt.Sprintf("%s by %s", m.URL(action, wp), Mention(c, wh.User.Username, ""))).EnableHTML().Send()
 			}
 		}
 
