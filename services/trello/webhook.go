@@ -359,6 +359,10 @@ func WebhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 			return err
 		}
 
+		if !bs.Filter.Checklisted {
+			return nil
+		}
+
 		msg.SetTextFmt("%s adds the checklist %s", Mention(c, byMember), m.Bold(wh.Action.Data.Checklist.Name)).
 			EnableHTML().
 			SetReplyAction(cardReplied, card.Id)
@@ -411,6 +415,10 @@ func WebhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 		updateCardMessages(c, wc, card)
 
 		if cardMsgJustPosted {
+			return
+		}
+
+		if !bs.Filter.Checklisted {
 			return
 		}
 
@@ -508,6 +516,9 @@ func WebhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 			if cardMsgJustPosted && err == nil {
 				return
 			}
+			if !bs.Filter.CardMoved {
+				return
+			}
 			msg.EnableHTML()
 			msg.Text = fmt.Sprintf("%s moved card to %s", Mention(c, byMember), m.Fixed(wh.Action.Data.ListAfter.Name))
 		} else if oldCard.Name != "" {
@@ -531,6 +542,9 @@ func WebhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 			if cardMsgJustPosted && err == nil {
 				return
 			}
+			if !bs.Filter.Archived {
+				return
+			}
 			// archived/unarchived
 			un := ""
 			if card.Closed == false {
@@ -546,6 +560,11 @@ func WebhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 			if cardMsgJustPosted && err == nil {
 				return
 			}
+
+			if !bs.Filter.Due {
+				return
+			}
+
 			msg.SetSilent(true)
 
 			if card.Due != nil && !card.Due.IsZero() {
