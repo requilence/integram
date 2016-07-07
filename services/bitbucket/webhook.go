@@ -418,16 +418,25 @@ func WebhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 		if err != nil {
 			return err
 		}
-
-		rm, _ := c.FindMessageByEventID(issueUniqueID(event.Repository.FullName, event.Issue.ID))
+		eventID:=issueUniqueID(event.Repository.FullName, event.Issue.ID)
+		rm, _ := c.FindMessageByEventID(eventID)
 
 		msg := c.NewMessage().AddEventID(issueCommentUniqueID(event.Repository.FullName, event.Issue.ID, event.Comment.ID)).EnableHTML()
 
+		if event.Comment.Content.Raw!=""{
+			event.Comment.Content.Raw=": "+event.Comment.Content.Raw
+		}
+
 		if rm != nil {
-			return msg.SetReplyToMsgID(rm.MsgID).SetText(fmt.Sprintf("%s: %s", mention(c, &event.Actor), event.Comment.Content.Raw)).Send()
+			c.EditMessagesTextWithEventID(c.Bot().ID, eventID, issueText(c, &event.Issue))
+			// if last Issue message just posted
+			if err == nil && time.Now().Sub(rm.Date).Seconds() < 60 {
+				return nil
+			}
+
+			return msg.SetReplyToMsgID(rm.MsgID).SetText(fmt.Sprintf("%s update the issue%s", mention(c, &event.Actor), event.Comment.Content.Raw)).Send()
 		} else {
-			wp := c.WebPreview("Issue", event.Issue.Title, event.Repository.FullName, event.Comment.Links.HTML.Href, "")
-			return msg.SetText(fmt.Sprintf("%s %s an issue: %s", mention(c, &event.Actor), m.URL(issueDecentState(event.Issue.State), wp), event.Comment.Content.Raw)).Send()
+			return msg.SetText(fmt.Sprintf("%s updated an issue%s\n%s", mention(c, &event.Actor), event.Comment.Content.Raw,issueText(c, &event.Issue))).Send()
 		}
 
 	case "pullrequest:updated":
