@@ -28,11 +28,11 @@ import (
 	"github.com/requilence/integram"
 	"github.com/requilence/integram/decent"
 	m "github.com/requilence/integram/html"
+	tg "gopkg.in/telegram-bot-api.v3"
 	"io"
 	"mime/multipart"
 	"os"
 	"path/filepath"
-	tg "gopkg.in/telegram-bot-api.v3"
 )
 
 type Config struct {

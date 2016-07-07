@@ -418,13 +418,13 @@ func WebhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 		if err != nil {
 			return err
 		}
-		eventID:=issueUniqueID(event.Repository.FullName, event.Issue.ID)
+		eventID := issueUniqueID(event.Repository.FullName, event.Issue.ID)
 		rm, _ := c.FindMessageByEventID(eventID)
 
 		msg := c.NewMessage().AddEventID(issueCommentUniqueID(event.Repository.FullName, event.Issue.ID, event.Comment.ID)).EnableHTML()
 
-		if event.Comment.Content.Raw!=""{
-			event.Comment.Content.Raw=": "+event.Comment.Content.Raw
+		if event.Comment.Content.Raw != "" {
+			event.Comment.Content.Raw = ": " + event.Comment.Content.Raw
 		}
 
 		if rm != nil {
@@ -436,7 +436,7 @@ func WebhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 
 			return msg.SetReplyToMsgID(rm.MsgID).SetText(fmt.Sprintf("%s update the issue%s", mention(c, &event.Actor), event.Comment.Content.Raw)).Send()
 		} else {
-			return msg.SetText(fmt.Sprintf("%s updated an issue%s\n%s", mention(c, &event.Actor), event.Comment.Content.Raw,issueText(c, &event.Issue))).Send()
+			return msg.SetText(fmt.Sprintf("%s updated an issue%s\n%s", mention(c, &event.Actor), event.Comment.Content.Raw, issueText(c, &event.Issue))).Send()
 		}
 
 	case "pullrequest:updated":

@@ -48,8 +48,8 @@ type Note struct {
 		CreatedAt time.Time `json:"created_at"`
 	} `json:"author"`
 	ExpiresAt *time.Time `json:"expires_at"`
-	UpdatedAt string  `json:"updated_at"`
-	CreatedAt string  `json:"created_at"`
+	UpdatedAt string     `json:"updated_at"`
+	CreatedAt string     `json:"created_at"`
 }
 
 func (n Note) String() string {

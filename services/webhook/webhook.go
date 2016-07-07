@@ -57,9 +57,9 @@ func Update(c *integram.Context) error {
 func WebhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error) {
 
 	wh := Webhook{}
-	err=wc.JSON(&wh)
+	err = wc.JSON(&wh)
 
-	if err!=nil{
+	if err != nil {
 		return
 	}
 

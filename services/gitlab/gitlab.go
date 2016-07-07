@@ -1,16 +1,16 @@
 package gitlab
 
 import (
-	"fmt"
-	"strconv"
-	"strings"
-	"time"
-	"net/url"
 	"errors"
+	"fmt"
 	"github.com/requilence/integram"
 	m "github.com/requilence/integram/html"
 	api "github.com/xanzy/go-gitlab"
 	"golang.org/x/oauth2"
+	"net/url"
+	"strconv"
+	"strings"
+	"time"
 )
 
 type Config struct {
@@ -474,9 +474,9 @@ func snippetReplied(c *integram.Context, baseURL string, projectID int, snippetI
 func WebhookHandler(c *integram.Context, request *integram.WebhookContext) (err error) {
 	wh := &Webhook{}
 
-	err=request.JSON(wh)
+	err = request.JSON(wh)
 
-	if err!=nil{
+	if err != nil {
 		return
 	}
 
