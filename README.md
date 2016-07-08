@@ -3,6 +3,8 @@ Integram 2.0
 
 Framework and platform for integrating services into [Telegram](https://telegram.org) using official [Bot API](https://core.telegram.org/bots/api)
 
+![Screencast](https://1153359166.rsc.cdn77.org/integram/img/screencast4.gif)
+
 How to use Integram
 ------------------
 Just use this links to add integrations you are interested in
