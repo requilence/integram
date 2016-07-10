@@ -3,22 +3,17 @@ package integram
 import (
 	"errors"
 	"fmt"
-	"os"
-	"reflect"
-	"strings"
-	"time"
-
+	log "github.com/Sirupsen/logrus"
+	"github.com/requilence/integram/url"
+	"golang.org/x/oauth2"
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
-
-	"runtime"
-
-	"github.com/requilence/integram/url"
-
 	"net/http"
-
-	log "github.com/Sirupsen/logrus"
-	"golang.org/x/oauth2"
+	"os"
+	"reflect"
+	"runtime"
+	"strings"
+	"time"
 )
 
 var (
@@ -100,11 +95,11 @@ func bindInterfaceToInterface(in interface{}, out interface{}, path ...string) e
 	for _, pathel := range path {
 		m, ok = inner.(bson.M)
 		if !ok {
-			return errors.New(fmt.Sprintf("Can't assert bson.M on %v in %v", pathel, path))
+			return fmt.Errorf("Can't assert bson.M on %v in %v", pathel, path)
 		}
 		inner, ok = m[pathel]
 		if !ok {
-			return errors.New(fmt.Sprintf("Can't get nested level %v in %v", pathel, path))
+			return fmt.Errorf("Can't get nested level %v in %v", pathel, path)
 		}
 	}
 	innerType := reflect.TypeOf(inner).Kind()
@@ -128,7 +123,7 @@ func bindInterfaceToInterface(in interface{}, out interface{}, path ...string) e
 	return nil
 }
 
-func findUsernameById(db *mgo.Database, id int64) string {
+func findUsernameByID(db *mgo.Database, id int64) string {
 	d := struct{ Username string }{}
 	db.C("chats").FindId(id).Select(bson.M{"username": 1}).One(&d)
 	return d.Username
@@ -171,21 +166,21 @@ func (c *Context) findUser(query bson.M) (userData, error) {
 	return user, nil
 }
 
-func (ctx *Context) updateCacheVal(cacheType string, key string, update interface{}, res interface{}) (exists bool) {
+func (c *Context) updateCacheVal(cacheType string, key string, update interface{}, res interface{}) (exists bool) {
 
 	KeyType := reflect.TypeOf("1")
 	ElemType := reflect.ValueOf(res).Elem().Type()
-	serviceID := ctx.getServiceID()
+	serviceID := c.getServiceID()
 
 	mi := reflect.MakeMap(reflect.MapOf(KeyType, ElemType)).Interface()
 	var err error
 	//var info *mgo.ChangeInfo
 	if cacheType == "user" {
-		_, err = ctx.db.C("users_cache").Find(bson.M{"userid": ctx.User.ID, "service": serviceID, "key": strings.ToLower(key)}).Select(bson.M{"_id": 0, "val": 1}).Limit(1).Apply(mgo.Change{Update: update, ReturnNew: true}, mi)
+		_, err = c.db.C("users_cache").Find(bson.M{"userid": c.User.ID, "service": serviceID, "key": strings.ToLower(key)}).Select(bson.M{"_id": 0, "val": 1}).Limit(1).Apply(mgo.Change{Update: update, ReturnNew: true}, mi)
 	} else if cacheType == "chat" {
-		_, err = ctx.db.C("chats_cache").Find(bson.M{"chatid": ctx.Chat.ID, "service": serviceID, "key": strings.ToLower(key)}).Select(bson.M{"_id": 0, "val": 1}).Limit(1).Apply(mgo.Change{Update: update, ReturnNew: true}, mi)
+		_, err = c.db.C("chats_cache").Find(bson.M{"chatid": c.Chat.ID, "service": serviceID, "key": strings.ToLower(key)}).Select(bson.M{"_id": 0, "val": 1}).Limit(1).Apply(mgo.Change{Update: update, ReturnNew: true}, mi)
 	} else if cacheType == "service" {
-		_, err = ctx.db.C("services_cache").Find(bson.M{"service": serviceID, "key": strings.ToLower(key)}).Select(bson.M{"_id": 0, "val": 1}).Limit(1).Apply(mgo.Change{Update: update, ReturnNew: true}, mi)
+		_, err = c.db.C("services_cache").Find(bson.M{"service": serviceID, "key": strings.ToLower(key)}).Select(bson.M{"_id": 0, "val": 1}).Limit(1).Apply(mgo.Change{Update: update, ReturnNew: true}, mi)
 	} else {
 		panic("updateCacheVal, type " + cacheType + " not exists")
 		return false
@@ -193,7 +188,7 @@ func (ctx *Context) updateCacheVal(cacheType string, key string, update interfac
 
 	//spew.Dump("updateCacheVal", info, err)
 	if err != nil {
-		log.WithField("service", serviceID).WithField("key", key).WithField("user", ctx.User.ID).WithField("chat", ctx.Chat.ID).Debugf(cacheType+" cache updating error: %v", err)
+		log.WithField("service", serviceID).WithField("key", key).WithField("user", c.User.ID).WithField("chat", c.Chat.ID).Debugf(cacheType+" cache updating error: %v", err)
 		return false
 	}
 
@@ -222,26 +217,26 @@ func (ctx *Context) updateCacheVal(cacheType string, key string, update interfac
 	return false
 }
 
-func (ctx *Context) getCacheVal(cacheType string, key string, res interface{}) (exists bool) {
+func (c *Context) getCacheVal(cacheType string, key string, res interface{}) (exists bool) {
 
 	KeyType := reflect.TypeOf("1")
 	ElemType := reflect.ValueOf(res).Elem().Type()
-	serviceID := ctx.getServiceID()
+	serviceID := c.getServiceID()
 	if serviceID == "" {
-		ctx.Log().Errorf("getCacheVal type %s, service not set", cacheType)
+		c.Log().Errorf("getCacheVal type %s, service not set", cacheType)
 		return false
 	}
 
 	mi := reflect.MakeMap(reflect.MapOf(KeyType, ElemType)).Interface()
 	var err error
 	if cacheType == "user" {
-		err = ctx.db.C("users_cache").Find(bson.M{"userid": ctx.User.ID, "service": serviceID, "key": strings.ToLower(key)}).Select(bson.M{"_id": 0, "val": 1}).One(mi)
+		err = c.db.C("users_cache").Find(bson.M{"userid": c.User.ID, "service": serviceID, "key": strings.ToLower(key)}).Select(bson.M{"_id": 0, "val": 1}).One(mi)
 	} else if cacheType == "chat" {
-		err = ctx.db.C("chats_cache").Find(bson.M{"chatid": ctx.Chat.ID, "service": serviceID, "key": strings.ToLower(key)}).Select(bson.M{"_id": 0, "val": 1}).One(mi)
+		err = c.db.C("chats_cache").Find(bson.M{"chatid": c.Chat.ID, "service": serviceID, "key": strings.ToLower(key)}).Select(bson.M{"_id": 0, "val": 1}).One(mi)
 	} else if cacheType == "service" {
-		err = ctx.db.C("services_cache").Find(bson.M{"service": serviceID, "key": strings.ToLower(key)}).Select(bson.M{"_id": 0, "val": 1}).One(mi)
+		err = c.db.C("services_cache").Find(bson.M{"service": serviceID, "key": strings.ToLower(key)}).Select(bson.M{"_id": 0, "val": 1}).One(mi)
 	} else {
-		ctx.Log().Panic("getCacheVal, type " + cacheType + " not exists")
+		c.Log().Panic("getCacheVal, type " + cacheType + " not exists")
 		return false
 	}
 
@@ -275,18 +270,22 @@ func (ctx *Context) getCacheVal(cacheType string, key string, res interface{}) (
 	return false
 }
 
+// Cache returns if User's cache for specific key exists and try to bind it to res
 func (user *User) Cache(key string, res interface{}) (exists bool) {
 	return user.ctx.getCacheVal("user", key, res)
 }
 
+// Cache returns if Chat's cache for specific key exists and try to bind it to res
 func (chat *Chat) Cache(key string, res interface{}) (exists bool) {
 	return chat.ctx.getCacheVal("chat", key, res)
 }
 
+// ServiceCache returns if Services's cache for specific key exists and try to bind it to res
 func (c *Context) ServiceCache(key string, res interface{}) (exists bool) {
 	return c.getCacheVal("service", key, res)
 }
 
+// IsPrivateStarted indicates if user started the private dialog with a bot (e.g. pressed the start button)
 func (user *User) IsPrivateStarted() bool {
 	p, _ := user.protectedSettings()
 	if p == nil {
@@ -294,6 +293,8 @@ func (user *User) IsPrivateStarted() bool {
 	}
 	return p.PrivateStarted
 }
+
+// SetCache set the User's cache with specific key and TTL
 func (user *User) SetCache(key string, val interface{}, ttl time.Duration) error {
 	expiresAt := time.Now().Add(ttl)
 
@@ -309,25 +310,7 @@ func (user *User) SetCache(key string, val interface{}, ttl time.Duration) error
 	return err
 }
 
-// This should be used to ignore possible incoming webhooks for events that were generated by user itself (from Telegram)
-// You need to use CheckWebhookIgnorable inside service's webhook handling
-// uniqueID must be unique for service (per host for hosted solutions)
-func (chat *Chat) IgnoreWebhooks(uniqueID string) error {
-	uniqueID = strings.ToLower(escapeDot(uniqueID))
-
-	fmt.Printf("chat.ctx.ServiceBaseURL.Host: " + chat.ctx.ServiceBaseURL.Host)
-
-	return chat.SetCache("ignore_wh_"+uniqueID, true, time.Hour)
-}
-
-// This should be using while handling webhooks that can be produced inside Telegram itself (f.e. commenting the issue by replying to it)
-func (chat *Chat) CheckWebhookIgnorable(uniqueID string) bool {
-	var b bool
-	uniqueID = strings.ToLower(escapeDot(uniqueID))
-	fmt.Printf("chat.ctx.ServiceBaseURL.Host: " + chat.ctx.ServiceBaseURL.Host)
-	return chat.Cache("ignore_wh_"+uniqueID, &b)
-}
-
+// SetCache set the Chats's cache with specific key and TTL
 func (chat *Chat) SetCache(key string, val interface{}, ttl time.Duration) error {
 	expiresAt := time.Now().Add(ttl)
 	serviceID := chat.ctx.getServiceID()
@@ -343,41 +326,28 @@ func (chat *Chat) SetCache(key string, val interface{}, ttl time.Duration) error
 	return err
 }
 
-func (chat *Chat) SetCacheSafe(key string, oldVal interface{}, newVal interface{}, ttl time.Duration) error {
+// SetServiceCache set the Services's cache with specific key and TTL
+func (c *Context) SetServiceCache(key string, val interface{}, ttl time.Duration) error {
 	expiresAt := time.Now().Add(ttl)
-	serviceID := chat.ctx.getServiceID()
-	if newVal == nil {
-		err := chat.ctx.db.C("chats_cache").Remove(bson.M{"chatid": chat.ID, "service": serviceID, "key": key})
-		return err
-	}
-	_, err := chat.ctx.db.C("chats_cache").Upsert(bson.M{"chatid": chat.ID, "service": serviceID, "key": key, "val": oldVal}, bson.M{"$set": bson.M{"val": newVal, "expiresat": expiresAt}})
-	if err != nil {
-		log.WithError(err).WithField("key", key).Error("Can't set user cache value")
-	}
-	return err
-}
-
-func (ctx *Context) SetServiceCache(key string, val interface{}, ttl time.Duration) error {
-	expiresAt := time.Now().Add(ttl)
-	serviceID := ctx.getServiceID()
+	serviceID := c.getServiceID()
 
 	if val == nil {
-		err := ctx.db.C("services_cache").Remove(bson.M{"service": serviceID, "key": key})
+		err := c.db.C("services_cache").Remove(bson.M{"service": serviceID, "key": key})
 		return err
 	}
 
-	_, err := ctx.db.C("services_cache").Upsert(bson.M{"service": serviceID, "key": key}, bson.M{"$set": bson.M{"val": val, "expiresat": expiresAt}})
+	_, err := c.db.C("services_cache").Upsert(bson.M{"service": serviceID, "key": key}, bson.M{"$set": bson.M{"val": val, "expiresat": expiresAt}})
 	if err != nil {
 		log.WithError(err).WithField("key", key).Error("Can't set sevices cache value")
 	}
 	return err
 }
 
-func (ctx *Context) UpdateServiceCache(key string, update interface{}, res interface{}) error {
+// UpdateServiceCache updates the Services's cache using MongoDB Update query (see trello service as example)
+func (c *Context) UpdateServiceCache(key string, update interface{}, res interface{}) error {
 
-	exists := ctx.updateCacheVal("service", key, update, res)
+	exists := c.updateCacheVal("service", key, update, res)
 
-	//spew.Dump("UpdateServiceCache", update, exists)
 	if !exists {
 		log.WithField("key", key).Error("Can't update sevices cache value")
 	}
@@ -488,6 +458,7 @@ func (user *User) protectedSettings() (*userProtected, error) {
 	return data.Protected[serviceID], err
 }
 
+// Settings bind User's settings for service to the interface
 func (user *User) Settings(out interface{}) error {
 	data, err := user.getData()
 
@@ -506,6 +477,7 @@ func (user *User) Settings(out interface{}) error {
 	return nil
 }
 
+// Settings bind Chat's settings for service to the interface
 func (chat *Chat) Settings(out interface{}) error {
 
 	data, err := chat.getData()
@@ -525,6 +497,7 @@ func (chat *Chat) Settings(out interface{}) error {
 	return nil
 }
 
+// Setting returns Chat's setting for service with specific key
 func (chat *Chat) Setting(key string) (result interface{}, exists bool) {
 	var settings map[string]interface{}
 
@@ -540,6 +513,7 @@ func (chat *Chat) Setting(key string) (result interface{}, exists bool) {
 	return nil, false
 }
 
+// Setting returns Chat's setting for service with specific key
 func (user *User) Setting(key string) (result interface{}, exists bool) {
 	var settings map[string]interface{}
 
@@ -555,6 +529,7 @@ func (user *User) Setting(key string) (result interface{}, exists bool) {
 	return nil, false
 }
 
+// SaveSettings save Chat's setting for service
 func (chat *Chat) SaveSettings(allSettings interface{}) error {
 
 	serviceID := chat.ctx.getServiceID()
@@ -570,6 +545,7 @@ func (chat *Chat) SaveSettings(allSettings interface{}) error {
 	return err
 }
 
+// SaveSettings save User's setting for service
 func (user *User) SaveSettings(allSettings interface{}) error {
 
 	serviceID := user.ctx.getServiceID()
@@ -598,6 +574,7 @@ func (chat *Chat) addHook(hook serviceHook) error {
 	return err
 }
 
+// ServiceHookToken returns User's hook token to use in webhook handling
 func (user *User) ServiceHookToken() string {
 	data, _ := user.getData()
 	//TODO: test backward compatibility cases
@@ -616,14 +593,7 @@ func (user *User) ServiceHookToken() string {
 	return token
 }
 
-func (user *User) ServiceHookURL() string {
-	return BaseURL + "/" + user.ServiceHookToken()
-}
-
-func (chat *Chat) ServiceHookURL() string {
-	return BaseURL + "/" + chat.ServiceHookToken()
-}
-
+// ServiceHookToken returns Chats's hook token to use in webhook handling
 func (chat *Chat) ServiceHookToken() string {
 	data, _ := chat.getData()
 	//TODO: test backward compatibility cases
@@ -643,6 +613,19 @@ func (chat *Chat) ServiceHookToken() string {
 	return token
 }
 
+// ServiceHookURL returns User's webhook URL for service to use in webhook handling
+// Used in case when incoming webhooks despatching on the user behalf to chats
+func (user *User) ServiceHookURL() string {
+	return BaseURL + "/" + user.ServiceHookToken()
+}
+
+// ServiceHookURL returns Chats's webhook URL for service to use in webhook handling
+// Used in case when user need to put webhook URL to receive notifications to chat
+func (chat *Chat) ServiceHookURL() string {
+	return BaseURL + "/" + chat.ServiceHookToken()
+}
+
+// AddChatToHook adds the target chat to user's existing hook
 func (user *User) AddChatToHook(chatID int64) error {
 	data, _ := user.getData()
 
@@ -721,6 +704,7 @@ func (user *User) saveProtectedSetting(key string, value interface{}) error {
 	return err
 }
 
+// SaveSetting sets Chat's setting for service with specific key
 func (chat *Chat) SaveSetting(key string, value interface{}) error {
 	serviceID := chat.ctx.getServiceID()
 
@@ -728,6 +712,7 @@ func (chat *Chat) SaveSetting(key string, value interface{}) error {
 	return err
 }
 
+// SaveSetting sets User's setting for service with specific key
 func (user *User) SaveSetting(key string, value interface{}) error {
 
 	if user.ID == 0 {
@@ -740,6 +725,7 @@ func (user *User) SaveSetting(key string, value interface{}) error {
 	return err
 }
 
+// AuthTempToken returns Auth token used in OAuth proccess to associate TG user with OAuth creditianals
 func (user *User) AuthTempToken() string {
 	host := user.ctx.ServiceBaseURL.Host
 	fmt.Println("host:" + host)
@@ -771,19 +757,13 @@ func (user *User) AuthTempToken() string {
 	return rnd
 }
 
+// OauthRedirectURL used in OAuth proccess as returning URL
 func (user *User) OauthRedirectURL() string {
-
 	providerID := user.ctx.OAuthProvider().internalID()
-	//authTempToken := user.AuthTempToken()
-
-	//if authTempToken != "" {
 	return BaseURL + "/auth/" + providerID
-	//} else {
-	//	user.ctx.Log().Error("authTempToken is empty")
-	//	return ""
-	//}
 }
 
+// OauthInitURL used in OAuth proccess as returning URL
 func (user *User) OauthInitURL() string {
 	authTempToken := user.AuthTempToken()
 	s := user.ctx.Service()
@@ -807,8 +787,8 @@ func escapeDot(s string) string {
 	return strings.Replace(s, ".", "_", -1)
 }
 
-// Returns HTTP client with Bearer authorization headers
-func (user *User) OAuthHttpClient() *http.Client {
+// OAuthHTTPClient returns HTTP client with Bearer authorization headers
+func (user *User) OAuthHTTPClient() *http.Client {
 
 	ps, _ := user.protectedSettings()
 
@@ -839,6 +819,8 @@ func (user *User) OAuthHttpClient() *http.Client {
 	}
 	return nil
 }
+
+// OAuthValid checks if OAuthToken for service is set
 func (user *User) OAuthValid() bool {
 	ps, _ := user.protectedSettings()
 
@@ -852,6 +834,7 @@ func (user *User) OAuthValid() bool {
 	return true
 }
 
+// OAuthToken returns OAuthToken for service
 func (user *User) OAuthToken() string {
 	// todo: oauthtoken per host?
 	/*
@@ -882,6 +865,7 @@ func (user *User) OAuthToken() string {
 	return ""
 }
 
+// ResetOAuthToken reset OAuthToken for service
 func (user *User) ResetOAuthToken() error {
 	err := user.saveProtectedSetting("OAuthToken", "")
 	if err != nil {
@@ -890,7 +874,7 @@ func (user *User) ResetOAuthToken() error {
 	return err
 }
 
-// Set the handlerFunc and it's args that will be triggered on success user Auth.
+// SetAfterAuthAction sets the handlerFunc and it's args that will be triggered on success user Auth.
 // F.e. you can use it to resume action interrupted because user didn't authed
 // !!! Please note that you must ommit first arg *integram.Context, because it will be automatically prepended on auth success and will contains actual action context
 func (user *User) SetAfterAuthAction(handlerFunc interface{}, args ...interface{}) error {
@@ -941,7 +925,8 @@ func findOauthProviderByHost(db *mgo.Database, host string) (*OAuthProvider, err
 	return &oap, nil
 }
 
-func (c *Context) WebPreview(title string, headline string, text string, serviceUrl string, imageURL string) (WebPreviewURL string) {
+// WebPreview generate fake webpreview and store it in DB. Telegram will resolve it as we need
+func (c *Context) WebPreview(title string, headline string, text string, serviceURL string, imageURL string) (WebPreviewURL string) {
 	token := randString(10)
 	if title == "" {
 		title = c.Service().NameToPrint
@@ -957,7 +942,7 @@ func (c *Context) WebPreview(title string, headline string, text string, service
 		title,
 		headline,
 		text,
-		serviceUrl,
+		serviceURL,
 		imageURL,
 		token,
 		0,
@@ -965,7 +950,7 @@ func (c *Context) WebPreview(title string, headline string, text string, service
 	}
 
 	var wpExists webPreview
-	c.db.C("previews").Find(bson.M{"title": title, "headline": headline, "text": text, "url": serviceUrl, "imageurl": imageURL}).One(&wpExists)
+	c.db.C("previews").Find(bson.M{"title": title, "headline": headline, "text": text, "url": serviceURL, "imageurl": imageURL}).One(&wpExists)
 
 	if wpExists.Token != "" {
 		wp = wpExists

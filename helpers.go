@@ -3,22 +3,18 @@ package integram
 import (
 	"bytes"
 	"crypto/md5"
+	"encoding/base64"
+	"encoding/binary"
 	"fmt"
+	log "github.com/Sirupsen/logrus"
+	"github.com/requilence/integram/url"
+	"github.com/vova616/xxhash"
 	"io/ioutil"
 	"math/rand"
 	"reflect"
 	"runtime"
-	"time"
-
 	"strings"
-
-	"encoding/base64"
-
-	"encoding/binary"
-
-	log "github.com/Sirupsen/logrus"
-	"github.com/requilence/integram/url"
-	"github.com/vova616/xxhash"
+	"time"
 )
 
 const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-0123456789"
@@ -121,6 +117,8 @@ func randomInRange(min, max int) int {
 	rand.Seed(time.Now().UnixNano())
 	return rand.Intn(max-min) + min
 }
+
+// SliceContainsString returns true if []string contains string
 func SliceContainsString(s []string, e string) bool {
 	for _, a := range s {
 		if a == e {
@@ -153,10 +151,12 @@ func randString(n int) string {
 	}
 	return string(b)
 }
-func UrlMustParse(s string) *url.URL {
+
+// URLMustParse returns url.URL from static string. Don't use it with a dynamic param
+func URLMustParse(s string) *url.URL {
 	u, err := url.Parse(s)
 	if err != nil {
-		log.Fatalf("Expected URL to parse: %q, got error: %v", s, err)
+		log.Errorf("Expected URL to parse: %q, got error: %v", s, err)
 	}
 	return u
 }

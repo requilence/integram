@@ -2,14 +2,16 @@ package webhook
 
 import (
 	"errors"
+
 	"github.com/requilence/integram"
-	m "github.com/requilence/integram/html"
 )
 
-type Config struct {
-}
+var m = integram.HTMLRichText{}
 
-type Webhook struct {
+// Config is empty because no need in it here
+type Config struct{}
+
+type webhook struct {
 	Text        string
 	Channel     string
 	Attachments []struct {
@@ -25,15 +27,16 @@ type Webhook struct {
 	} `json:"attachments"`
 }
 
+// Service returns *integram.Service
 func (c Config) Service() *integram.Service {
 	return &integram.Service{
 		Name:                "webhook",
 		NameToPrint:         "Webhook",
-		WebhookHandler:      WebhookHandler,
-		TGNewMessageHandler: Update,
+		WebhookHandler:      webhookHandler,
+		TGNewMessageHandler: update,
 	}
 }
-func Update(c *integram.Context) error {
+func update(c *integram.Context) error {
 
 	command, param := c.Message.GetCommand()
 
@@ -54,9 +57,9 @@ func Update(c *integram.Context) error {
 	return nil
 }
 
-func WebhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error) {
+func webhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error) {
 
-	wh := Webhook{}
+	wh := webhook{}
 	err = wc.JSON(&wh)
 
 	if err != nil {

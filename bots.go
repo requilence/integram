@@ -1,41 +1,36 @@
 package integram
 
 import (
+	"encoding/gob"
+	"errors"
 	"fmt"
+	"math/rand"
+	"net/url"
+	"os"
+	"reflect"
+	"regexp"
+	"runtime"
+	"strconv"
+	"strings"
 	"time"
 
-	"reflect"
-	"runtime"
-
-	"encoding/gob"
-
-	"errors"
-
-	"regexp"
-
-	"net/url"
-
-	"os"
-	"strconv"
-
 	log "github.com/Sirupsen/logrus"
+	"github.com/kennygrant/sanitize"
 	"github.com/requilence/jobs"
 	mgo "gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
-
-	"github.com/kennygrant/sanitize"
 	tg "gopkg.in/telegram-bot-api.v3"
-	"math/rand"
-	"strings"
 )
 
-const INLINE_BUTTON_STATE_KEYWORD = '`'
+const inlineButtonStateKeyword = '`'
+const antiFloodTimeout = 60
 
 var botPerID = make(map[int64]*Bot)
 var botPerService = make(map[string]*Bot)
 
 var botTokenRE = regexp.MustCompile("([0-9]*):([0-9a-zA-Z_-]*)")
 
+// Bot represents parsed auth data & API reference
 type Bot struct {
 	// Bot Telegram user id
 	ID int64
@@ -54,369 +49,7 @@ type Bot struct {
 	API         *tg.BotAPI
 }
 
-/*// Struct for TG BOT data
-type BotConfig struct {
-	// Bot Telegram user id
-	ID int
-
-	// Bot Telegram username
-	Username string
-
-	// Bot Telegram token
-	Token string
-
-	// If bot is not shared and only used for one service connection
-	service string
-
-	webhook bool
-}*/
-
-func (c *Bot) tgToken() string {
-	return fmt.Sprintf("%d:%s", c.ID, c.token)
-}
-
-func (c *Bot) PMURL(param string) string {
-	if param == "" {
-		return fmt.Sprintf("https://telegram.me/%v", c.Username)
-	} else {
-		return fmt.Sprintf("https://telegram.me/%v?start=%v", c.Username, param)
-	}
-}
-
-func (c *Bot) webhookUrl() *url.URL {
-	url, _ := url.Parse(fmt.Sprintf("%s/tg/%d/%s", BaseURL, c.ID, compactHash(c.token)))
-	return url
-}
-
-func (service *Service) registerBot(fullTokenWithID string) error {
-
-	s := botTokenRE.FindStringSubmatch(fullTokenWithID)
-
-	if len(s) < 3 {
-		return errors.New("Can't parse token")
-	}
-	id, err := strconv.ParseInt(s[1], 10, 64)
-	if err != nil {
-		return err
-	}
-	if _, exists := botPerID[id]; !exists {
-		bot := Bot{ID: id, token: s[2], services: []*Service{service}}
-		botPerID[id] = &bot
-
-		token := bot.tgToken()
-		bot.API, err = tg.NewBotAPI(token)
-
-		if err != nil {
-			log.WithError(err).WithField("token", token).Error("NewBotAPI returned error")
-			return err
-		}
-
-		me, err := bot.API.GetMe()
-
-		if err != nil {
-			log.WithError(err).WithField("token", token).Error("GetMe returned error")
-			return err
-		}
-
-		bot.Username = me.UserName
-
-	} else {
-		botPerID[id].services = append(botPerID[id].services, service)
-	}
-	botPerService[service.Name] = botPerID[id]
-	return nil
-}
-
-type Keyboard []Buttons
-type Buttons []Button
-
-type InlineKeyboard struct {
-	Buttons    []InlineButtons
-	FixedWidth bool   `bson:",omitempty"` // will add right padding to match all buttons text width
-	State      string // determine the current keyboard's state. Useful to change the behavior for branch cases and make it little thread safe while it is using by several users
-	MaxRows    int    `bson:",omitempty"` // Will automatically add next/prev buttons. Zero means no limit
-	RowOffset  int    `bson:",omitempty"` // Current offset when using MaxRows
-}
-
-type InlineButtons []InlineButton
-
-type Button struct {
-	Data string
-	Text string
-}
-
-type InlineButton struct {
-	Text              string
-	State             int
-	Data              string `bson:",omitempty"` // maximum 64 bytes
-	URL               string `bson:",omitempty"`
-	SwitchInlineQuery string `bson:",omitempty"`
-	OutOfPagination   bool   `bson:",omitempty" json:"-"` // Only for the single button in first or last row. Use together with InlineKeyboard.MaxRows – for buttons outside of pagination list
-}
-
-type InlineKeyboardMarkup interface {
-	TG() [][]tg.InlineKeyboardButton
-	Keyboard() InlineKeyboard
-}
-
-type KeyboardMarkup interface {
-	TG() [][]tg.KeyboardButton
-	Keyboard() Keyboard
-	DB() map[string]string
-}
-
-func (keyboard *InlineKeyboard) Find(buttonData string) (i, j int, but *InlineButton) {
-	for i, buttonsRow := range keyboard.Buttons {
-		for j, button := range buttonsRow {
-			if button.Data == buttonData {
-				return i, j, &button
-			}
-		}
-	}
-	return -1, -1, nil
-}
-
-func (keyboard *InlineKeyboard) EditText(buttonData string, newText string) {
-	for i, buttonsRow := range keyboard.Buttons {
-		for j, button := range buttonsRow {
-			if button.Data == buttonData {
-				keyboard.Buttons[i][j].Text = newText
-				return
-			}
-		}
-	}
-}
-
-func (keyboard *InlineKeyboard) AddPMSwitchButton(c *Context, text string, param string) {
-	if len(keyboard.Buttons) > 0 && len(keyboard.Buttons[0]) > 0 && keyboard.Buttons[0][0].Text == text {
-		return
-	}
-	keyboard.PrependRows(InlineButtons{InlineButton{Text: text, URL: c.Bot().PMURL(param)}})
-}
-
-func (keyboard *InlineKeyboard) AppendRows(buttons ...InlineButtons) {
-	keyboard.Buttons = append(keyboard.Buttons, buttons...)
-}
-
-func (keyboard *InlineKeyboard) PrependRows(buttons ...InlineButtons) {
-	keyboard.Buttons = append(buttons, keyboard.Buttons...)
-}
-
-func (keyboard *Keyboard) AddRows(buttons ...Buttons) {
-	*keyboard = append(*keyboard, buttons...)
-}
-
-func (buttons *InlineButtons) Append(data string, text string) {
-	if len(data) > 64 {
-		log.WithField("text", text).Errorf("InlineButton data '%s' extends 64 bytes limit", data)
-	}
-	*buttons = append(*buttons, InlineButton{Data: data, Text: text})
-}
-
-func (buttons *InlineButtons) Prepend(data string, text string) {
-	if len(data) > 64 {
-		log.WithField("text", text).Errorf("InlineButton data '%s' extends 64 bytes limit", data)
-	}
-	*buttons = append([]InlineButton{InlineButton{Data: data, Text: text}}, *buttons...)
-}
-
-// append the InlineButton with state. Useful for checkbox or to revert the action
-func (buttons *InlineButtons) AppendWithState(state int, data string, text string) {
-	if len(data) > 64 {
-		log.WithField("text", text).Errorf("InlineButton data '%s' extends 64 bytes limit", data)
-	}
-	if state > 9 || state < 0 {
-		log.WithField("data", data).WithField("text", text).Errorf("AppendWithState – state must be [0-9], %s received", state)
-	}
-	*buttons = append(*buttons, InlineButton{Data: data, Text: text, State: state})
-}
-
-// append the InlineButton with state. Useful for checkbox or to revert the action
-func (buttons *InlineButtons) PrependWithState(state int, data string, text string) {
-	if len(data) > 64 {
-		log.WithField("text", text).Errorf("InlineButton data '%s' extends 64 bytes limit", data)
-	}
-	if state > 9 || state < 0 {
-		log.WithField("data", data).WithField("text", text).Errorf("PrependWithState – state must be [0-9], %s received", state)
-	}
-	*buttons = append([]InlineButton{InlineButton{Data: data, Text: text, State: state}}, *buttons...)
-}
-
-func (buttons *InlineButtons) AddURL(url string, text string) {
-	*buttons = append(*buttons, InlineButton{URL: url, Text: text})
-}
-
-func (buttons *Buttons) Prepend(data string, text string) {
-	*buttons = append([]Button{Button{Data: data, Text: text}}, *buttons...)
-}
-
-func (buttons *Buttons) Append(data string, text string) {
-	*buttons = append(*buttons, Button{Data: data, Text: text})
-}
-
-func (buttons *Buttons) InlineButtons() InlineButtons {
-	row := InlineButtons{}
-
-	for _, button := range *buttons {
-		row.Append(button.Data, button.Text)
-
-	}
-	return row
-}
-
-func (buttons *Buttons) Markup(columns int) Keyboard {
-	keyboard := Keyboard{}
-
-	col := 0
-
-	row := Buttons{}
-	len := len(*buttons)
-	for i, button := range *buttons {
-		row.Append(button.Data, button.Text)
-		col++
-		if col == columns || i == (len-1) {
-			col = 0
-			keyboard.AddRows(row)
-			row = Buttons{}
-		}
-	}
-
-	return keyboard
-}
-
-func (buttons *InlineButtons) Markup(columns int, state string) InlineKeyboard {
-	keyboard := InlineKeyboard{}
-
-	col := 0
-
-	row := InlineButtons{}
-	len := len(*buttons)
-	for i, button := range *buttons {
-		row = append(row, button)
-
-		col++
-		if col == columns || i == (len-1) {
-			col = 0
-			keyboard.AppendRows(row)
-			row = InlineButtons{}
-		}
-	}
-	keyboard.State = state
-	return keyboard
-}
-
-func (buttons Buttons) Keyboard() Keyboard {
-	return buttons.Markup(1)
-}
-
-func (buttons Buttons) TG() [][]tg.KeyboardButton {
-	return buttons.Keyboard().TG()
-}
-
-func (buttons Buttons) DB() map[string]string {
-	res := make(map[string]string)
-	for _, button := range buttons {
-		res[checksumString(button.Text)] = button.Data
-	}
-	return res
-}
-
-func (button Button) Keyboard() Keyboard {
-	btns := Buttons{button}
-	return btns.Keyboard()
-}
-
-func (button Button) TG() [][]tg.KeyboardButton {
-	btns := Buttons{button}
-	return btns.Keyboard().TG()
-}
-
-func (button Button) DB() map[string]string {
-	res := make(map[string]string)
-	res[checksumString(button.Text)] = button.Data
-
-	return res
-}
-
-func (rows Keyboard) DB() map[string]string {
-	res := make(map[string]string)
-	for _, columns := range rows {
-		for _, button := range columns {
-			res[checksumString(button.Text)] = button.Data
-		}
-	}
-	return res
-}
-
-func (rows InlineKeyboard) Keyboard() InlineKeyboard {
-	return rows
-}
-
-func (button InlineButton) Keyboard() InlineKeyboard {
-	return InlineKeyboard{Buttons: []InlineButtons{InlineButtons{button}}}
-}
-
-func (button InlineButton) TG() [][]tg.InlineKeyboardButton {
-	return button.Keyboard().TG()
-}
-
-func (rows Keyboard) Keyboard() Keyboard {
-	return rows
-}
-
-func (kb InlineKeyboard) TG() [][]tg.InlineKeyboardButton {
-	res := make([][]tg.InlineKeyboardButton, len(kb.Buttons))
-
-	maxWidth := 0
-	if kb.FixedWidth {
-
-		for _, columns := range kb.Buttons {
-			for _, button := range columns {
-				if len(button.Text) > maxWidth {
-					maxWidth = len(button.Text)
-				}
-			}
-		}
-	}
-	for r, columns := range kb.Buttons {
-		res[r] = make([]tg.InlineKeyboardButton, len(kb.Buttons[r]))
-		c := 0
-		for _, button := range columns {
-			if kb.FixedWidth {
-				button.Text = button.Text + strings.Repeat(" ", maxWidth-len(button.Text))
-			}
-
-			if button.State != 0 {
-				button.Data = fmt.Sprintf("%c%d%s", INLINE_BUTTON_STATE_KEYWORD, button.State, button.Data)
-			}
-
-			if button.URL != "" {
-				res[r][c] = tg.InlineKeyboardButton{Text: button.Text, URL: button.URL}
-			} else if button.Data != "" {
-				res[r][c] = tg.InlineKeyboardButton{Text: button.Text, CallbackData: button.Data}
-			} else {
-				res[r][c] = tg.InlineKeyboardButton{Text: button.Text, SwitchInlineQuery: &button.SwitchInlineQuery}
-			}
-			c++
-		}
-	}
-	return res
-}
-
-func (rows Keyboard) TG() [][]tg.KeyboardButton {
-	res := make([][]tg.KeyboardButton, len(rows))
-
-	for r, columns := range rows {
-		res[r] = make([]tg.KeyboardButton, len(rows[r]))
-		c := 0
-		for _, button := range columns {
-			res[r][c] = tg.KeyboardButton{Text: button.Text}
-			c++
-		}
-	}
-	return res
-}
-
+// Message represent both outgoing and incoming message data
 type Message struct {
 	ID               bson.ObjectId `bson:"_id,omitempty"` // Internal unique BSON ID
 	EventID          []string      `bson:",omitempty"`
@@ -438,29 +71,14 @@ type Message struct {
 	om               *OutgoingMessage // Cache when retreiving original replied message
 }
 
+// IncomingMessage specifies data that available for incoming message
 type IncomingMessage struct {
-	Message        `bson:",inline"`
-	From           User
-	Chat           Chat
-	ForwardFrom    *User
-	ForwardDate    time.Time
-	ReplyToMessage *Message `bson:"-"`
-	/*Audio               *tg.Audio
-	Document            *tg.Document
-	Entities             *[]tg.MessageEntity `json:"entities"`                // optional
-	Photo               *[]tg.PhotoSize
-	Sticker             *tg.Sticker
-	Video               *tg.Video
-	Voice               *tg.Voice
-	Caption             string
-	Contact             *tg.Contact
-	Location            *tg.Location
-	NewChatMember  User
-	LeftChatMember User
-	NewChatTitle        string
-	NewChatPhoto        *[]tg.PhotoSize
-	DeleteChatPhoto     bool
-	GroupChatCreated    bool*/
+	Message               `bson:",inline"`
+	From                  User
+	Chat                  Chat
+	ForwardFrom           *User
+	ForwardDate           time.Time
+	ReplyToMessage        *Message            `bson:"-"`
 	ForwardFromChat       *Chat               `json:"forward_from_chat"`       // optional
 	EditDate              int                 `json:"edit_date"`               // optional
 	Entities              *[]tg.MessageEntity `json:"entities"`                // optional
@@ -490,6 +108,7 @@ type IncomingMessage struct {
 	needToUpdateDB bool
 }
 
+// OutgoingMessage specispecifiesfy data of performing or performed outgoing message
 type OutgoingMessage struct {
 	Message              `bson:",inline"`
 	KeyboardHide         bool           `bson:",omitempty"`
@@ -509,6 +128,399 @@ type OutgoingMessage struct {
 	processed            bool
 }
 
+// Keyboard is a Shorthand for [][]Button
+type Keyboard []Buttons
+
+// Buttons is a Shorthand for []Button
+type Buttons []Button
+
+// InlineKeyboard contains the data to create the Inline keyboard for Telegram and store it in DB
+type InlineKeyboard struct {
+	Buttons    []InlineButtons // You must specify at least 1 InlineButton in slice
+	FixedWidth bool            `bson:",omitempty"` // will add right padding to match all buttons text width
+	State      string          // determine the current keyboard's state. Useful to change the behavior for branch cases and make it little thread safe while it is using by several users
+	MaxRows    int             `bson:",omitempty"` // Will automatically add next/prev buttons. Zero means no limit
+	RowOffset  int             `bson:",omitempty"` // Current offset when using MaxRows
+}
+
+// InlineButtons is a Shorthand for []InlineButton
+type InlineButtons []InlineButton
+
+// Button contains the data to create Keyboard
+type Button struct {
+	Data string // data is stored in the DB. May be collisions if button text is not unique per keyboard
+	Text string // should be unique per keyboard
+}
+
+// InlineButton contains the data to create InlineKeyboard
+// One of URL, Data, SwitchInlineQuery must be specified
+// If more than one specified the first in order of (URL, Data, SwitchInlineQuery) will be used
+type InlineButton struct {
+	Text              string
+	State             int
+	URL               string `bson:",omitempty"`
+	Data              string `bson:",omitempty"`          // maximum 64 bytes
+	SwitchInlineQuery string `bson:",omitempty"`          //
+	OutOfPagination   bool   `bson:",omitempty" json:"-"` // Only for the single button in first or last row. Use together with InlineKeyboard.MaxRows – for buttons outside of pagination list
+}
+
+// InlineKeyboardMarkup allow to generate TG and DB data from different states - (InlineButtons, []InlineButtons and InlineKeyboard)
+type InlineKeyboardMarkup interface {
+	tg() [][]tg.InlineKeyboardButton
+	Keyboard() InlineKeyboard
+}
+
+// KeyboardMarkup allow to generate TG and DB data from different states - (Buttons and Keyboard)
+type KeyboardMarkup interface {
+	tg() [][]tg.KeyboardButton
+	Keyboard() Keyboard
+	db() map[string]string
+}
+
+func (c *Bot) tgToken() string {
+	return fmt.Sprintf("%d:%s", c.ID, c.token)
+}
+
+// PMURL return URL to private messaging with the bot like https://telegram.me/trello_bot?start=param
+func (c *Bot) PMURL(param string) string {
+	if param == "" {
+		return fmt.Sprintf("https://telegram.me/%v", c.Username)
+	}
+
+	return fmt.Sprintf("https://telegram.me/%v?start=%v", c.Username, param)
+}
+
+func (c *Bot) webhookURL() *url.URL {
+	url, _ := url.Parse(fmt.Sprintf("%s/tg/%d/%s", BaseURL, c.ID, compactHash(c.token)))
+	return url
+}
+
+func (service *Service) registerBot(fullTokenWithID string) error {
+
+	s := botTokenRE.FindStringSubmatch(fullTokenWithID)
+
+	if len(s) < 3 {
+		return errors.New("can't parse token")
+	}
+	id, err := strconv.ParseInt(s[1], 10, 64)
+	if err != nil {
+		return err
+	}
+	if _, exists := botPerID[id]; !exists {
+		bot := Bot{ID: id, token: s[2], services: []*Service{service}}
+		botPerID[id] = &bot
+
+		token := bot.tgToken()
+		bot.API, err = tg.NewBotAPI(token)
+
+		if err != nil {
+			log.WithError(err).WithField("token", token).Error("NewBotAPI returned error")
+			return err
+		}
+
+		me, err := bot.API.GetMe()
+
+		if err != nil {
+			log.WithError(err).WithField("token", token).Error("GetMe returned error")
+			return err
+		}
+
+		bot.Username = me.UserName
+
+	} else {
+		b := botPerID[id]
+		b.services = append(b.services, service)
+		botPerID[id] = b
+	}
+	botPerService[service.Name] = botPerID[id]
+	return nil
+}
+
+// Find the InlineButton in Keyboard by the Data
+func (keyboard *InlineKeyboard) Find(buttonData string) (i, j int, but *InlineButton) {
+	for i, buttonsRow := range keyboard.Buttons {
+		for j, button := range buttonsRow {
+			if button.Data == buttonData {
+				return i, j, &button
+			}
+		}
+	}
+	return -1, -1, nil
+}
+
+// EditText find the InlineButton in Keyboard by the Data and change the text of that button
+func (keyboard *InlineKeyboard) EditText(buttonData string, newText string) {
+	for i, buttonsRow := range keyboard.Buttons {
+		for j, button := range buttonsRow {
+			if button.Data == buttonData {
+				keyboard.Buttons[i][j].Text = newText
+				return
+			}
+		}
+	}
+}
+
+// AddPMSwitchButton add the button to switch to PM as a first row in the InlineKeyboard
+func (keyboard *InlineKeyboard) AddPMSwitchButton(c *Context, text string, param string) {
+	if len(keyboard.Buttons) > 0 && len(keyboard.Buttons[0]) > 0 && keyboard.Buttons[0][0].Text == text {
+		return
+	}
+	keyboard.PrependRows(InlineButtons{InlineButton{Text: text, URL: c.Bot().PMURL(param)}})
+}
+
+// AppendRows adds 1 or more InlineButtons (rows) to the end of InlineKeyboard
+func (keyboard *InlineKeyboard) AppendRows(buttons ...InlineButtons) {
+	keyboard.Buttons = append(keyboard.Buttons, buttons...)
+}
+
+// PrependRows adds 1 or more InlineButtons (rows) to the begin of InlineKeyboard
+func (keyboard *InlineKeyboard) PrependRows(buttons ...InlineButtons) {
+	keyboard.Buttons = append(buttons, keyboard.Buttons...)
+}
+
+// Append adds 1 or more InlineButton (column) to the end of InlineButtons(row)
+func (buttons *InlineButtons) Append(data string, text string) {
+	if len(data) > 64 {
+		log.WithField("text", text).Errorf("InlineButton data '%s' extends 64 bytes limit", data)
+	}
+	*buttons = append(*buttons, InlineButton{Data: data, Text: text})
+}
+
+// Prepend adds 1 or more InlineButton (column) to the begin of InlineButtons(row)
+func (buttons *InlineButtons) Prepend(data string, text string) {
+	if len(data) > 64 {
+		log.WithField("text", text).Errorf("InlineButton data '%s' extends 64 bytes limit", data)
+	}
+	*buttons = append([]InlineButton{InlineButton{Data: data, Text: text}}, *buttons...)
+}
+
+// AppendWithState add the InlineButton with state to the end of InlineButtons(row)
+// Useful for checkbox or to revert the action
+func (buttons *InlineButtons) AppendWithState(state int, data string, text string) {
+	if len(data) > 64 {
+		log.WithField("text", text).Errorf("InlineButton data '%s' extends 64 bytes limit", data)
+	}
+	if state > 9 || state < 0 {
+		log.WithField("data", data).WithField("text", text).Errorf("AppendWithState – state must be [0-9], %s received", state)
+	}
+	*buttons = append(*buttons, InlineButton{Data: data, Text: text, State: state})
+}
+
+// PrependWithState add the InlineButton with state to the begin of InlineButtons(row)
+// Useful for checkbox or to revert the action
+func (buttons *InlineButtons) PrependWithState(state int, data string, text string) {
+	if len(data) > 64 {
+		log.WithField("text", text).Errorf("InlineButton data '%s' extends 64 bytes limit", data)
+	}
+	if state > 9 || state < 0 {
+		log.WithField("data", data).WithField("text", text).Errorf("PrependWithState – state must be [0-9], %s received", state)
+	}
+	*buttons = append([]InlineButton{InlineButton{Data: data, Text: text, State: state}}, *buttons...)
+}
+
+// AddURL adds InlineButton with URL to the end of InlineButtons(row)
+func (buttons *InlineButtons) AddURL(url string, text string) {
+	*buttons = append(*buttons, InlineButton{URL: url, Text: text})
+}
+
+// Markup generate InlineKeyboard from InlineButtons ([]Button), chunking buttons by columns number, and specifying current keyboard state
+// Keyboard state useful for nested levels to determine current position
+func (buttons *InlineButtons) Markup(columns int, state string) InlineKeyboard {
+	keyboard := InlineKeyboard{}
+
+	col := 0
+
+	row := InlineButtons{}
+	len := len(*buttons)
+	for i, button := range *buttons {
+		row = append(row, button)
+
+		col++
+		if col == columns || i == (len-1) {
+			col = 0
+			keyboard.AppendRows(row)
+			row = InlineButtons{}
+		}
+	}
+	keyboard.State = state
+	return keyboard
+}
+
+// Keyboard generates inline keyboard from inline keyboard  :-D
+func (keyboard InlineKeyboard) Keyboard() InlineKeyboard {
+	return keyboard
+}
+
+// Keyboard generates inline keyboard with 1 button
+func (button InlineButton) Keyboard() InlineKeyboard {
+	return InlineKeyboard{Buttons: []InlineButtons{{button}}}
+}
+
+// Keyboard generates inline keyboard with 1 column
+func (buttons InlineButtons) Keyboard() InlineKeyboard {
+	return buttons.Markup(1, "")
+}
+
+func (button InlineButton) tg() [][]tg.InlineKeyboardButton {
+	return button.Keyboard().tg()
+}
+
+func (buttons InlineButtons) tg() [][]tg.InlineKeyboardButton {
+	return buttons.Keyboard().tg()
+}
+
+func (keyboard InlineKeyboard) tg() [][]tg.InlineKeyboardButton {
+	res := make([][]tg.InlineKeyboardButton, len(keyboard.Buttons))
+
+	maxWidth := 0
+	if keyboard.FixedWidth {
+
+		for _, columns := range keyboard.Buttons {
+			for _, button := range columns {
+				if len(button.Text) > maxWidth {
+					maxWidth = len(button.Text)
+				}
+			}
+		}
+	}
+	for r, columns := range keyboard.Buttons {
+		res[r] = make([]tg.InlineKeyboardButton, len(keyboard.Buttons[r]))
+		c := 0
+		for _, button := range columns {
+			if keyboard.FixedWidth {
+				button.Text = button.Text + strings.Repeat(" ", maxWidth-len(button.Text))
+			}
+
+			if button.State != 0 {
+				button.Data = fmt.Sprintf("%c%d%s", inlineButtonStateKeyword, button.State, button.Data)
+			}
+
+			if button.URL != "" {
+				res[r][c] = tg.InlineKeyboardButton{Text: button.Text, URL: button.URL}
+			} else if button.Data != "" {
+				res[r][c] = tg.InlineKeyboardButton{Text: button.Text, CallbackData: button.Data}
+			} else {
+				res[r][c] = tg.InlineKeyboardButton{Text: button.Text, SwitchInlineQuery: &button.SwitchInlineQuery}
+			}
+			c++
+		}
+	}
+	return res
+}
+
+// AddRows adds 1 or more Buttons (rows) to the end of InlineKeyboard
+func (keyboard *Keyboard) AddRows(buttons ...Buttons) {
+	*keyboard = append(*keyboard, buttons...)
+}
+
+// Prepend adds InlineButton with URL to the begin of InlineButtons(row)
+func (buttons *Buttons) Prepend(data string, text string) {
+	*buttons = append([]Button{Button{Data: data, Text: text}}, *buttons...)
+}
+
+// Append adds Button with URL to the end of Buttons(row)
+func (buttons *Buttons) Append(data string, text string) {
+	*buttons = append(*buttons, Button{Data: data, Text: text})
+}
+
+// InlineButtons converts Buttons to InlineButtons
+// useful with universal methods that create keyboard (f.e. settigns) for both usual and inline keyboard
+func (buttons *Buttons) InlineButtons() InlineButtons {
+	row := InlineButtons{}
+
+	for _, button := range *buttons {
+		row.Append(button.Data, button.Text)
+
+	}
+	return row
+}
+
+// Markup generate Keyboard from Buttons ([]Button), chunking buttons by columns number
+func (buttons *Buttons) Markup(columns int) Keyboard {
+	keyboard := Keyboard{}
+
+	col := 0
+
+	row := Buttons{}
+	len := len(*buttons)
+	for i, button := range *buttons {
+		row.Append(button.Data, button.Text)
+		col++
+		if col == columns || i == (len-1) {
+			col = 0
+			keyboard.AddRows(row)
+			row = Buttons{}
+		}
+	}
+
+	return keyboard
+}
+
+// Keyboard is generating Keyboard with 1 column
+func (buttons Buttons) Keyboard() Keyboard {
+	return buttons.Markup(1)
+}
+
+func (buttons Buttons) tg() [][]tg.KeyboardButton {
+	return buttons.Keyboard().tg()
+}
+
+func (buttons Buttons) db() map[string]string {
+	res := make(map[string]string)
+	for _, button := range buttons {
+		res[checksumString(button.Text)] = button.Data
+	}
+	return res
+}
+
+// Keyboard generates keyboard from 1 button
+func (button Button) Keyboard() Keyboard {
+	btns := Buttons{button}
+	return btns.Keyboard()
+}
+
+func (button Button) tg() [][]tg.KeyboardButton {
+	btns := Buttons{button}
+	return btns.Keyboard().tg()
+}
+
+func (button Button) db() map[string]string {
+	res := make(map[string]string)
+	res[checksumString(button.Text)] = button.Data
+
+	return res
+}
+
+func (keyboard Keyboard) db() map[string]string {
+	res := make(map[string]string)
+	for _, columns := range keyboard {
+		for _, button := range columns {
+			res[checksumString(button.Text)] = button.Data
+		}
+	}
+	return res
+}
+
+// Keyboard generate keyboard for keyboard – just to match the KeyboardMarkup interface
+func (keyboard Keyboard) Keyboard() Keyboard {
+	return keyboard
+}
+
+func (keyboard Keyboard) tg() [][]tg.KeyboardButton {
+	res := make([][]tg.KeyboardButton, len(keyboard))
+
+	for r, columns := range keyboard {
+		res[r] = make([]tg.KeyboardButton, len(keyboard[r]))
+		c := 0
+		for _, button := range columns {
+			res[r][c] = tg.KeyboardButton{Text: button.Text}
+			c++
+		}
+	}
+	return res
+}
+
+// FindOutgoingMessage retrieve the message that was sent by bot. Useful to change callbacks, eventid and to edit the message
 func (m *Message) FindOutgoingMessage(db *mgo.Database) (*OutgoingMessage, error) {
 	if m.om != nil {
 		return m.om, nil
@@ -527,19 +539,21 @@ func (m *Message) FindOutgoingMessage(db *mgo.Database) (*OutgoingMessage, error
 	return &om, nil
 }
 
+// FindMessageByBsonID find message by Mongo Object ID
 func (c *Context) FindMessageByBsonID(id bson.ObjectId) (*Message, error) {
 	return findMessageByBsonID(c.db, id)
 }
 
+// FindMessageByEventID find message by event id
 func (c *Context) FindMessageByEventID(id string) (*Message, error) {
 	return findMessageByEventID(c.db, c.Chat.ID, c.Bot().ID, id)
 }
 
-func findMessageByEventID(db *mgo.Database, chatId int64, botId int64, eventId string) (*Message, error) {
+func findMessageByEventID(db *mgo.Database, chatID int64, botID int64, eventID string) (*Message, error) {
 	msg := OutgoingMessage{}
-	fmt.Printf("chaid=%v, botid=%v, eventid=%v\n", chatId, botId, eventId)
+	fmt.Printf("chaid=%v, botid=%v, eventid=%v\n", chatID, botID, eventID)
 
-	err := db.C("messages").Find(bson.M{"chatid": chatId, "botid": botId, "eventid": eventId}).Sort("-_id").One(&msg)
+	err := db.C("messages").Find(bson.M{"chatid": chatID, "botid": botID, "eventid": eventID}).Sort("-_id").One(&msg)
 	if err != nil {
 		return nil, err
 	}
@@ -569,6 +583,7 @@ func findMessage(db *mgo.Database, chatID int64, botID int64, msgID int) (*Messa
 	msg.Message.om = &msg
 	return &msg.Message, nil
 }
+
 func findInlineMessage(db *mgo.Database, botID int64, inlineMsgID string) (*Message, error) {
 	msg := OutgoingMessage{}
 	err := db.C("messages").Find(bson.M{"botid": botID, "inlinemsgid": inlineMsgID}).One(&msg)
@@ -591,23 +606,27 @@ func findLastOutgoingMessageInChat(db *mgo.Database, botID int64, chatID int64) 
 	return &msg.Message, nil
 }
 
+// SetChat sets the target chat to send the message
 func (m *OutgoingMessage) SetChat(id int64) *OutgoingMessage {
 	m.ChatID = id
 	return m
 }
 
-// in case message failed to sent to private chat (bot stopped or not initialized)
+// SetBackupChat set backup chat id that will be used in case message failed to sent to private chat (f.e. bot stopped or not initialized)
 func (m *OutgoingMessage) SetBackupChat(id int64) *OutgoingMessage {
 	m.BackupChatID = id
 	return m
 }
 
+// SetDocument adds the file located at localPath with name fileName to the message
 func (m *OutgoingMessage) SetDocument(localPath string, fileName string) *OutgoingMessage {
 	m.FilePath = localPath
 	m.FileName = fileName
 	m.FileType = "document"
 	return m
 }
+
+// SetImage adds the image file located at localPath with name fileName to the message
 func (m *OutgoingMessage) SetImage(localPath string, fileName string) *OutgoingMessage {
 	m.FilePath = localPath
 	m.FileName = fileName
@@ -615,7 +634,7 @@ func (m *OutgoingMessage) SetImage(localPath string, fileName string) *OutgoingM
 	return m
 }
 
-// Set keyboard markup and Selective bool. If Selective is true leyboard will sent only for target users that you must @mention people in text or specify with SetReplyToMsgID
+// SetKeyboard sets the keyboard markup and Selective bool. If Selective is true keyboard will sent only for target users that you must @mention people in text or specify with SetReplyToMsgID
 func (m *OutgoingMessage) SetKeyboard(k KeyboardMarkup, selective bool) *OutgoingMessage {
 	m.Keyboard = true
 	m.KeyboardMarkup = k.Keyboard()
@@ -624,32 +643,38 @@ func (m *OutgoingMessage) SetKeyboard(k KeyboardMarkup, selective bool) *Outgoin
 	return m
 }
 
-// Set keyboard markup and Selective bool. If Selective is true leyboard will sent only for target users that you must @mention people in text or specify with SetReplyToMsgID
+// SetInlineKeyboard sets the inline keyboard markup
 func (m *OutgoingMessage) SetInlineKeyboard(k InlineKeyboardMarkup) *OutgoingMessage {
 	m.InlineKeyboardMarkup = k.Keyboard()
 	return m
 }
 
+// SetSelective sets the Selective mode for the keyboard. If Selective is true keyboard make sure to @mention people in text or specify message to reply with SetReplyToMsgID
 func (m *OutgoingMessage) SetSelective(b bool) *OutgoingMessage {
 	m.Selective = b
 	return m
 }
 
+// SetSilent turns off notifications on iOS and make it silent on Android
 func (m *OutgoingMessage) SetSilent(b bool) *OutgoingMessage {
 	m.Silent = b
 	return m
 }
 
+// SetOneTimeKeyboard sets the Onetime mode for keyboard. Keyboard will be hided after 1st use
 func (m *OutgoingMessage) SetOneTimeKeyboard(b bool) *OutgoingMessage {
 	m.OneTimeKeyboard = b
 	return m
 }
 
+// SetResizeKeyboard sets the ResizeKeyboard to collapse keyboard wrapper to match the actual underneath keyboard
 func (m *OutgoingMessage) SetResizeKeyboard(b bool) *OutgoingMessage {
 	m.ResizeKeyboard = b
 	return m
 }
 
+// SetCallbackAction sets the callback func that will be called when user press inline button with Data field
+// !!! Please note that you must omit first arg *integram.Context, because it will be automatically prepended as message reply received and will contain actual context
 func (m *IncomingMessage) SetCallbackAction(handlerFunc interface{}, args ...interface{}) *IncomingMessage {
 	m.Message.SetCallbackAction(handlerFunc, args...)
 	//TODO: save reply action
@@ -657,11 +682,14 @@ func (m *IncomingMessage) SetCallbackAction(handlerFunc interface{}, args ...int
 	return m
 }
 
+// SetCallbackAction sets the callback func that will be called when user press inline button with Data field
 func (m *OutgoingMessage) SetCallbackAction(handlerFunc interface{}, args ...interface{}) *OutgoingMessage {
 	m.Message.SetCallbackAction(handlerFunc, args...)
 	return m
 }
 
+// SetReplyAction sets the reply func that will be called when user reply the message
+// !!! Please note that you must omit first arg *integram.Context, because it will be automatically prepended as message reply received and will contain actual context
 func (m *IncomingMessage) SetReplyAction(handlerFunc interface{}, args ...interface{}) *IncomingMessage {
 	m.Message.SetReplyAction(handlerFunc, args...)
 	//TODO: save reply action
@@ -669,13 +697,14 @@ func (m *IncomingMessage) SetReplyAction(handlerFunc interface{}, args ...interf
 	return m
 }
 
+// SetReplyAction sets the reply func that will be called when user reply the message
+// !!! Please note that you must omit first arg *integram.Context, because it will be automatically prepended as message reply received and will contain actual context
 func (m *OutgoingMessage) SetReplyAction(handlerFunc interface{}, args ...interface{}) *OutgoingMessage {
 	m.Message.SetReplyAction(handlerFunc, args...)
 	return m
 }
 
-// Set the handlerFunc and it's args that will be triggered on inline button press.
-// F.e. you can add edi
+// SetCallbackAction sets the reply func that will be called when user reply the message
 // !!! Please note that you must omit first arg *integram.Context, because it will be automatically prepended as message reply received and will contain actual context
 func (m *Message) SetCallbackAction(handlerFunc interface{}, args ...interface{}) *Message {
 	funcName := runtime.FuncForPC(reflect.ValueOf(handlerFunc).Pointer()).Name()
@@ -705,8 +734,7 @@ func (m *Message) SetCallbackAction(handlerFunc interface{}, args ...interface{}
 	return m
 }
 
-// Set the handlerFunc and it's args that will be triggered on message reply.
-// F.e. you can allow commenting of card/task/issue
+// SetReplyAction sets the reply func that will be called when user reply the message
 // !!! Please note that you must omit first arg *integram.Context, because it will be automatically prepended as message reply received and will contain actual context
 func (m *Message) SetReplyAction(handlerFunc interface{}, args ...interface{}) *Message {
 	funcName := runtime.FuncForPC(reflect.ValueOf(handlerFunc).Pointer()).Name()
@@ -736,17 +764,19 @@ func (m *Message) SetReplyAction(handlerFunc interface{}, args ...interface{}) *
 	return m
 }
 
+// HideKeyboard will hide existing keyboard in the chat where message will be sent
 func (m *OutgoingMessage) HideKeyboard() *OutgoingMessage {
 	m.KeyboardHide = true
 	return m
 }
 
+// EnableForceReply will automatically set the reply to this message and focus on the input field
 func (m *OutgoingMessage) EnableForceReply() *OutgoingMessage {
 	m.ForceReply = true
 	return m
 }
 
-type MessageSender interface {
+type messageSender interface {
 	Send(m *OutgoingMessage) error
 }
 
@@ -762,7 +792,7 @@ func (t *scheduleMessageSender) Send(m *OutgoingMessage) error {
 		db := mongoSession.Clone().DB(mongo.Database)
 		defer db.Session.Close()
 		msg, _ := findLastOutgoingMessageInChat(db, m.BotID, m.ChatID)
-		if msg != nil && msg.Text == m.Text && time.Now().Sub(msg.Date).Minutes() < 1 {
+		if msg != nil && msg.Text == m.Text && time.Now().Sub(msg.Date).Seconds() < antiFloodTimeout {
 			log.Errorf("flood. mins %v", time.Now().Sub(msg.Date).Minutes())
 			return nil
 		}
@@ -807,68 +837,80 @@ func (t *scheduleMessageSender) Send(m *OutgoingMessage) error {
 	return err
 }
 
+// Send put the message to the jobs queue
 func (m *OutgoingMessage) Send() error {
 	return activeMessageSender.Send(m)
 }
 
+// SendAndGetID put the message to the jobs queue and return the message's BSON Object ID
 func (m *OutgoingMessage) SendAndGetID() (bson.ObjectId, error) {
 	err := activeMessageSender.Send(m)
 	return m.ID, err
 }
 
-// You can set multiple event ID to edit the message in case of additional webhook received or to ignore the previosly received
+// AddEventID attach one or more event ID. You can use eventid to edit the message in case of additional webhook received or to ignore in case of duplicate
 func (m *OutgoingMessage) AddEventID(id ...string) *OutgoingMessage {
 	m.EventID = append(m.EventID, id...)
 	return m
 }
 
+// EnableAntiFlood will check if the message wasn't already sent within last antiFloodTimeout seconds
 func (m *OutgoingMessage) EnableAntiFlood() *OutgoingMessage {
 	m.AntiFlood = true
 
 	return m
 }
 
+// SetTextFmt is a shorthand for SetText(fmt.Sprintf("%s %s %s", a, b, c))
 func (m *OutgoingMessage) SetTextFmt(text string, a ...interface{}) *OutgoingMessage {
 	m.Text = fmt.Sprintf(text, a...)
 	return m
 }
 
+// SetText set the text of message to sent
+// In case of documents and photo messages this text will be used in the caption
 func (m *OutgoingMessage) SetText(text string) *OutgoingMessage {
 	m.Text = text
 	return m
 }
 
+// DisableWebPreview indicates TG clients to not trying to resolve the URL's in the message
 func (m *OutgoingMessage) DisableWebPreview() *OutgoingMessage {
 	m.WebPreview = false
 	return m
 }
 
+// EnableMarkdown sets parseMode to Markdown
 func (m *OutgoingMessage) EnableMarkdown() *OutgoingMessage {
 	m.ParseMode = "Markdown"
 	return m
 }
 
+// EnableHTML sets parseMode to HTML
 func (m *OutgoingMessage) EnableHTML() *OutgoingMessage {
 	m.ParseMode = "HTML"
 	return m
 }
 
+// SetParseMode sets parseMode: 'HTML' and 'markdown' supporting for now
 func (m *OutgoingMessage) SetParseMode(s string) *OutgoingMessage {
 	m.ParseMode = s
 	return m
 }
 
+// SetReplyToMsgID sets parseMode: 'HTML' and 'markdown' supporting for now
 func (m *OutgoingMessage) SetReplyToMsgID(id int) *OutgoingMessage {
 	m.ReplyToMsgID = id
 	return m
 }
 
-// set the event id and update message in DB
+// UpdateEventsID sets the event id and update it in DB
 func (m *Message) UpdateEventsID(db *mgo.Database, eventID ...string) error {
 	m.EventID = append(m.EventID, eventID...)
 	return db.C("messages").Update(bson.M{"chatid": m.ChatID, "botid": m.BotID, "msgid": m.MsgID}, bson.M{"$set": bson.M{"eventid": eventID}})
 }
 
+// Update will update existing message in DB
 func (m *Message) Update(db *mgo.Database) error {
 
 	if m.ID.Valid() {
@@ -898,10 +940,10 @@ func initBots() error {
 
 	if err != nil {
 		return err
-	} else {
-		pool.SetMiddleware(beforeJob)
-		pool.SetAfterFunc(afterJob)
 	}
+
+	pool.SetMiddleware(beforeJob)
+	pool.SetAfterFunc(afterJob)
 
 	err = pool.Start()
 	if err != nil {
@@ -921,12 +963,12 @@ func initBots() error {
 		if !service.UseWebhookInsteadOfLongPolling {
 			bot.listen()
 		} else {
-			_, err := bot.API.SetWebhook(tg.WebhookConfig{URL: bot.webhookUrl()})
+			_, err := bot.API.SetWebhook(tg.WebhookConfig{URL: bot.webhookURL()})
 			if err != nil {
 				log.WithError(err).WithField("botID", bot.ID).Error("Error on initial SetWebhook")
 			}
 		}
-		log.Infof("@%v added for %v", bot.Username, service)
+		log.Infof("@%v added for %v", bot.Username, service.Name)
 	}
 
 	return nil
@@ -944,6 +986,7 @@ func (m *Message) findUsernames() []string {
 	return usernames
 
 }
+
 func detectTargetUsersID(db *mgo.Database, m *Message) []int64 {
 	if m.ChatID > 0 {
 		return []int64{m.ChatID}
@@ -975,12 +1018,12 @@ func detectTargetUsersID(db *mgo.Database, m *Message) []int64 {
 	return usersID
 }
 
-func botById(Id int64) *Bot {
-	if bot, exists := botPerID[Id]; exists {
+func botByID(ID int64) *Bot {
+	if bot, exists := botPerID[ID]; exists {
 		return bot
-	} else {
-		return nil
 	}
+
+	return nil
 }
 
 func sendMessage(m *OutgoingMessage) error {
@@ -1000,7 +1043,7 @@ func sendMessage(m *OutgoingMessage) error {
 			if m.ReplyToMsgID != 0 {
 				msg.BaseChat.ReplyToMessageID = m.ReplyToMsgID
 			}
-			tgMsg, err = botById(m.BotID).API.Send(msg)
+			tgMsg, err = botByID(m.BotID).API.Send(msg)
 
 		} else {
 			msg := tg.NewDocumentUpload(m.ChatID, m.FilePath)
@@ -1009,7 +1052,7 @@ func sendMessage(m *OutgoingMessage) error {
 			if m.ReplyToMsgID != 0 {
 				msg.BaseChat.ReplyToMessageID = m.ReplyToMsgID
 			}
-			tgMsg, err = botById(m.BotID).API.Send(msg)
+			tgMsg, err = botByID(m.BotID).API.Send(msg)
 
 		}
 
@@ -1024,11 +1067,11 @@ func sendMessage(m *OutgoingMessage) error {
 		}
 		// Keyboard will overridde HideKeyboard
 		if m.KeyboardMarkup != nil && len(m.KeyboardMarkup) > 0 {
-			msg.ReplyMarkup = tg.ReplyKeyboardMarkup{Keyboard: m.KeyboardMarkup.TG(), OneTimeKeyboard: m.OneTimeKeyboard, Selective: m.Selective, ResizeKeyboard: m.ResizeKeyboard}
+			msg.ReplyMarkup = tg.ReplyKeyboardMarkup{Keyboard: m.KeyboardMarkup.tg(), OneTimeKeyboard: m.OneTimeKeyboard, Selective: m.Selective, ResizeKeyboard: m.ResizeKeyboard}
 		}
 
 		if len(m.InlineKeyboardMarkup.Buttons) > 0 {
-			msg.ReplyMarkup = tg.InlineKeyboardMarkup{InlineKeyboard: m.InlineKeyboardMarkup.TG()}
+			msg.ReplyMarkup = tg.InlineKeyboardMarkup{InlineKeyboard: m.InlineKeyboardMarkup.tg()}
 		}
 
 		msg.DisableWebPagePreview = !m.WebPreview
@@ -1042,7 +1085,7 @@ func sendMessage(m *OutgoingMessage) error {
 		if m.ParseMode != "" {
 			msg.ParseMode = m.ParseMode
 		}
-		tgMsg, err = botById(m.BotID).API.Send(msg)
+		tgMsg, err = botByID(m.BotID).API.Send(msg)
 	}
 
 	if err == nil {
@@ -1064,117 +1107,117 @@ func sendMessage(m *OutgoingMessage) error {
 			log.WithError(err).Error("Error processing keyboard")
 		}
 		return nil
-	} else {
-		if tgErr, ok := err.(tg.Error); ok {
-			//  Todo: Bad workaround to catch network errors
-			if tgErr.Code == 0 {
-				log.WithError(err).Warn("Network error while sending a message")
-				// pass through the error so the job will be rescheduled
-				return err
-			} else if tgErr.Code == 500 {
-				log.WithError(err).Warn("TG dc is down while sending a message")
-				// pass through the error so the job will be rescheduled
-				return err
-			} else if tgErr.IsMessageNotFound() {
+	}
 
-				log.WithError(err).WithFields(log.Fields{"msgid": m.ReplyToMsgID, "chat": m.ChatID, "bot": m.BotID}).Warn("TG message we are replying on is no longer exists")
-				// looks like the message we replying on is no longer exists...
-				m.ReplyToMsgID = 0
-				_, err := sendMessageJob.Schedule(0, time.Now(), &m)
-				if err != nil {
-					log.WithField("message", m).WithError(err).Error("Can't reschedule sendMessageJob")
-				}
-				return nil
-			} else if chatId := tgErr.ChatMigratedToChatID(); chatId != 0 {
-				// looks like the the chat we trying to send the message is migrated to supergroup
-				log.Warnf("sendMessage error: Migrated to %v", chatId)
+	if tgErr, ok := err.(tg.Error); ok {
+		//  Todo: Bad workaround to catch network errors
+		if tgErr.Code == 0 {
+			log.WithError(err).Warn("Network error while sending a message")
+			// pass through the error so the job will be rescheduled
+			return err
+		} else if tgErr.Code == 500 {
+			log.WithError(err).Warn("TG dc is down while sending a message")
+			// pass through the error so the job will be rescheduled
+			return err
+		} else if tgErr.IsMessageNotFound() {
 
-				db := mongoSession.Clone().DB(mongo.Database)
-				defer db.Session.Close()
-				migrateToSuperGroup(db, m.ChatID, chatId)
+			log.WithError(err).WithFields(log.Fields{"msgid": m.ReplyToMsgID, "chat": m.ChatID, "bot": m.BotID}).Warn("TG message we are replying on is no longer exists")
+			// looks like the message we replying on is no longer exists...
+			m.ReplyToMsgID = 0
+			_, err := sendMessageJob.Schedule(0, time.Now(), &m)
+			if err != nil {
+				log.WithField("message", m).WithError(err).Error("Can't reschedule sendMessageJob")
+			}
+			return nil
+		} else if chatID := tgErr.ChatMigratedToChatID(); chatID != 0 {
+			// looks like the the chat we trying to send the message is migrated to supergroup
+			log.Warnf("sendMessage error: Migrated to %v", chatID)
 
-				// todo: in rare case this can produce duplicate messages for incoming webhooks
-				m.ChatID = chatId
-				//_, err := sendMessageJob.Schedule(0, time.Now(), &m)
-				if err != nil {
-					log.WithField("message", m).WithError(err).Error("Can't reschedule sendMessageJob")
-				}
+			db := mongoSession.Clone().DB(mongo.Database)
+			defer db.Session.Close()
+			migrateToSuperGroup(db, m.ChatID, chatID)
 
-				return nil
-			} else if tgErr.BotStoppedForUser() {
-				// Todo: Problems can appear when we rely on this user message (e.g. not webhook msg)
-				log.WithField("chat", m.ChatID).WithField("bot", m.BotID).Warn("sendMessage error: Bot stopped by user")
-				if m.BackupChatID != 0 {
-					if m.BackupChatID != m.ChatID {
-						// if this fall from private messages - add the mention and selective to grace notifications and protect the keyboard
-						if m.ChatID > 0 && m.BackupChatID < 0 {
-							db := mongoSession.Clone().DB(mongo.Database)
-							defer db.Session.Close()
-							username := findUsernameById(db, m.ChatID)
-							if username != "" {
-								m.Text = "@" + username + " " + m.Text
-								m.Selective = true
-							}
-						}
-						m.ChatID = m.BackupChatID
-						_, err := sendMessageJob.Schedule(0, time.Now(), &m)
-						return err
-					} else {
-						return errors.New("BackupChatID failed")
-					}
-				}
-				return nil
-			} else if tgErr.ChatNotFound() {
-				// usually this means that user not initialized the private chat with the bot
-				log.WithField("chat", m.ChatID).WithField("bot", m.BotID).Warn("sendMessage error: Chat not found")
-				if m.BackupChatID != 0 {
-					if m.BackupChatID != m.ChatID {
-						// if this fall from private messages - add the mention and selective to grace notifications and protect the keyboard
-						if m.ChatID > 0 && m.BackupChatID < 0 {
-							db := mongoSession.Clone().DB(mongo.Database)
-							defer db.Session.Close()
-							username := findUsernameById(db, m.ChatID)
-							if username != "" {
-								m.Text = "@" + username + " " + m.Text
-								m.Selective = true
-							}
-						}
-						m.ChatID = m.BackupChatID
-						_, err := sendMessageJob.Schedule(0, time.Now(), &m)
-						return err
-					} else {
-						return errors.New("BackupChatID failed")
-					}
-				}
-				return nil
-			} else if tgErr.BotKicked() {
-
-				db := mongoSession.Clone().DB(mongo.Database)
-				defer db.Session.Close()
-				removeHooksForChat(db, m.ChatID)
-
-				log.WithField("chat", m.ChatID).WithField("bot", m.BotID).Warn("sendMessage error: Bot kicked")
-
-				return nil
-			} else if tgErr.ChatDiactivated() {
-				db := mongoSession.Clone().DB(mongo.Database)
-				defer db.Session.Close()
-				removeHooksForChat(db, m.ChatID)
-				db.C("chats").UpdateId(m.ChatID, bson.M{"$set": bson.M{"deactivated": true}})
-				log.WithField("chat", m.ChatID).WithField("bot", m.BotID).Warn("sendMessage error: Chat deactivated")
-				return nil
-			} else if tgErr.TooManyRequests() {
-				log.WithField("chat", m.ChatID).WithField("bot", m.BotID).Warn("sendMessage error: TooManyRequests")
-
-				_, err := sendMessageJob.Schedule(0, time.Now().Add(time.Duration(10+rand.Intn(30))*time.Second), &m)
-				return err
+			// todo: in rare case this can produce duplicate messages for incoming webhooks
+			m.ChatID = chatID
+			//_, err := sendMessageJob.Schedule(0, time.Now(), &m)
+			if err != nil {
+				log.WithField("message", m).WithError(err).Error("Can't reschedule sendMessageJob")
 			}
 
-			log.WithError(err).WithField("message", m).Error("TG error while sending a message")
 			return nil
-		} else {
-			log.WithError(err).WithField("message", m).Error("Error while sending a message")
+		} else if tgErr.BotStoppedForUser() {
+			// Todo: Problems can appear when we rely on this user message (e.g. not webhook msg)
+			log.WithField("chat", m.ChatID).WithField("bot", m.BotID).Warn("sendMessage error: Bot stopped by user")
+			if m.BackupChatID != 0 {
+				if m.BackupChatID != m.ChatID {
+					// if this fall from private messages - add the mention and selective to grace notifications and protect the keyboard
+					if m.ChatID > 0 && m.BackupChatID < 0 {
+						db := mongoSession.Clone().DB(mongo.Database)
+						defer db.Session.Close()
+						username := findUsernameByID(db, m.ChatID)
+						if username != "" {
+							m.Text = "@" + username + " " + m.Text
+							m.Selective = true
+						}
+					}
+					m.ChatID = m.BackupChatID
+					_, err := sendMessageJob.Schedule(0, time.Now(), &m)
+					return err
+				}
+
+				return errors.New("BackupChatID failed")
+
+			}
+			return nil
+		} else if tgErr.ChatNotFound() {
+			// usually this means that user not initialized the private chat with the bot
+			log.WithField("chat", m.ChatID).WithField("bot", m.BotID).Warn("sendMessage error: Chat not found")
+			if m.BackupChatID != 0 {
+				if m.BackupChatID != m.ChatID {
+					// if this fall from private messages - add the mention and selective to grace notifications and protect the keyboard
+					if m.ChatID > 0 && m.BackupChatID < 0 {
+						db := mongoSession.Clone().DB(mongo.Database)
+						defer db.Session.Close()
+						username := findUsernameByID(db, m.ChatID)
+						if username != "" {
+							m.Text = "@" + username + " " + m.Text
+							m.Selective = true
+						}
+					}
+					m.ChatID = m.BackupChatID
+					_, err := sendMessageJob.Schedule(0, time.Now(), &m)
+					return err
+				}
+
+				return errors.New("BackupChatID failed")
+			}
+			return nil
+		} else if tgErr.BotKicked() {
+
+			db := mongoSession.Clone().DB(mongo.Database)
+			defer db.Session.Close()
+			removeHooksForChat(db, m.ChatID)
+
+			log.WithField("chat", m.ChatID).WithField("bot", m.BotID).Warn("sendMessage error: Bot kicked")
+
+			return nil
+		} else if tgErr.ChatDiactivated() {
+			db := mongoSession.Clone().DB(mongo.Database)
+			defer db.Session.Close()
+			removeHooksForChat(db, m.ChatID)
+			db.C("chats").UpdateId(m.ChatID, bson.M{"$set": bson.M{"deactivated": true}})
+			log.WithField("chat", m.ChatID).WithField("bot", m.BotID).Warn("sendMessage error: Chat deactivated")
+			return nil
+		} else if tgErr.TooManyRequests() {
+			log.WithField("chat", m.ChatID).WithField("bot", m.BotID).Warn("sendMessage error: TooManyRequests")
+
+			_, err := sendMessageJob.Schedule(0, time.Now().Add(time.Duration(10+rand.Intn(30))*time.Second), &m)
 			return err
 		}
+
+		log.WithError(err).WithField("message", m).Error("TG error while sending a message")
+		return nil
 	}
+	log.WithError(err).WithField("message", m).Error("Error while sending a message")
+	return err
 }

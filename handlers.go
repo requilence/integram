@@ -1,36 +1,29 @@
-// Package main is the CLI.
-// You can use the CLI via Terminal.
 package integram
 
 import (
+	"errors"
+	"fmt"
+	log "github.com/Sirupsen/logrus"
+	"github.com/gin-gonic/gin"
+	"github.com/requilence/integram/url"
+	"github.com/weekface/mgorus"
+	"golang.org/x/oauth2"
+	"gopkg.in/mgo.v2"
+	"gopkg.in/mgo.v2/bson"
+	tg "gopkg.in/telegram-bot-api.v3"
+	"io/ioutil"
 	"net/http"
+	"os"
 	"path"
 	"runtime"
 	"strconv"
 	"strings"
-
-	"gopkg.in/mgo.v2"
-	"gopkg.in/mgo.v2/bson"
-
-	"errors"
-
-	"os"
-
-	log "github.com/Sirupsen/logrus"
-	tg "gopkg.in/telegram-bot-api.v3"
-
-	"github.com/requilence/integram/url"
-
-	"fmt"
-
-	"github.com/gin-gonic/gin"
-	"github.com/weekface/mgorus"
-	"golang.org/x/oauth2"
-	"io/ioutil"
 	"time"
 )
 
 var pwd string
+
+// Debug used to control logging verbose mode
 var Debug = false
 
 func getCurrentDir() string {
@@ -93,6 +86,7 @@ func ginRecovery(c *gin.Context) {
 	c.Next()
 }
 
+// Run initiates Integram to listen webhooks, TG updates and start the workers pool
 func Run() {
 	if Debug {
 		gin.SetMode(gin.DebugMode)
@@ -174,7 +168,7 @@ func webPreviewHandler(c *gin.Context) {
 
 	if !strings.Contains(c.Request.UserAgent(), "TelegramBot") {
 		db.C("previews").UpdateId(wp.Token, bson.M{"$inc": bson.M{"redirects": 1}})
-		c.Redirect(http.StatusMovedPermanently, wp.Url)
+		c.Redirect(http.StatusMovedPermanently, wp.URL)
 		return
 	}
 	if wp.Text == "" && wp.ImageURL == "" {
@@ -195,7 +189,7 @@ func tgwebhook(c *gin.Context) {
 	c.Bind(&u)
 	botID, _ := strconv.ParseInt(c.Param("param"), 10, 64)
 
-	bot := botById(botID)
+	bot := botByID(botID)
 	if compactHash(bot.token) != c.Query("secret") {
 		err := errors.New("Wrong secret provided for TG webhook")
 		log.WithField("botID", botID).Error(err)
@@ -244,13 +238,13 @@ func serviceHookHandler(c *gin.Context) {
 				if len(hook.Services) == 1 {
 					ctx.ServiceName = hook.Services[0]
 				}
-				for serviceName, _ := range user.Protected {
+				for serviceName := range user.Protected {
 					if !SliceContainsString(hook.Services, serviceName) {
 						delete(user.Protected, serviceName)
 					}
 				}
 
-				for serviceName, _ := range user.Settings {
+				for serviceName := range user.Settings {
 					if !SliceContainsString(hook.Services, serviceName) {
 						delete(user.Settings, serviceName)
 					}
@@ -478,9 +472,8 @@ func oAuthCallback(c *gin.Context) {
 
 		c.String(http.StatusForbidden, err.Error())
 		return
-	} else {
-
 	}
+
 	ps, err := ctx.User.protectedSettings()
 
 	ps.OAuthToken = accessToken

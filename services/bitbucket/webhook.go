@@ -1,20 +1,19 @@
 package bitbucket
 
 import (
-	"errors"
-	"github.com/requilence/integram"
-	"time"
-
 	"encoding/json"
+	"errors"
 	"fmt"
-	api "github.com/ktrysmt/go-bitbucket"
-	m "github.com/requilence/integram/html"
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
+
+	api "github.com/ktrysmt/go-bitbucket"
+	"github.com/requilence/integram"
 )
 
-type OldWebhook struct {
+type oldWebhook struct {
 	CanonURL string `json:"canon_url"`
 	Commits  []struct {
 		Author string `json:"author"`
@@ -70,6 +69,7 @@ var eventTypeMap = map[string]interface{}{
 func commitUniqueID(commitHash string) string {
 	return "commit_" + commitHash
 }
+
 func commitCommentUniqueID(commitHash string, commentID int) string {
 	return "commit_" + commitHash + "_" + strconv.Itoa(commentID)
 }
@@ -85,6 +85,7 @@ func prUniqueID(fullRepo string, prID int) string {
 func prCommentUniqueID(fullRepo string, prID int, commentID int) string {
 	return "pr_" + fullRepo + "_" + strconv.Itoa(prID) + "_" + strconv.Itoa(commentID)
 }
+
 func issueCommentUniqueID(fullRepo string, issueID int, commentID int) string {
 	return "issue_" + fullRepo + "_" + strconv.Itoa(issueID) + "_" + strconv.Itoa(commentID)
 }
@@ -184,6 +185,7 @@ func issueInlineKeyboard(issue *api.Issue) integram.InlineKeyboard {
 
 	return but.Markup(4, "actions")
 }
+
 func commitShort(hash string) string {
 	if len(hash) > 10 {
 		return hash[0:10]
@@ -193,7 +195,7 @@ func commitShort(hash string) string {
 
 func oldWebhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error) {
 
-	wh := OldWebhook{}
+	wh := oldWebhook{}
 
 	payload := wc.FormValue("payload")
 
@@ -262,7 +264,8 @@ func oldWebhookHandler(c *integram.Context, wc *integram.WebhookContext) (err er
 	return nil
 
 }
-func WebhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error) {
+
+func webhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error) {
 	eventKey := wc.Header("X-Event-Key")
 
 	if eventKey == "" {
@@ -384,10 +387,10 @@ func WebhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 
 		if rm != nil {
 			return msg.SetReplyToMsgID(rm.MsgID).SetText(fmt.Sprintf("%s: %s", mention(c, &event.Actor), event.Comment.Content.Raw)).Send()
-		} else {
-			wp := c.WebPreview("Issue", event.Issue.Title, event.Repository.FullName, event.Comment.Links.HTML.Href, "")
-			return msg.SetText(fmt.Sprintf("%s %s: %s", m.URL("💬", wp), mention(c, &event.Actor), event.Comment.Content.Raw)).Send()
 		}
+		wp := c.WebPreview("Issue", event.Issue.Title, event.Repository.FullName, event.Comment.Links.HTML.Href, "")
+		return msg.SetText(fmt.Sprintf("%s %s: %s", m.URL("💬", wp), mention(c, &event.Actor), event.Comment.Content.Raw)).Send()
+
 	case "repo:commit_comment_created":
 		event := api.RepoCommitCommentCreatedEvent{}
 		err := wc.JSON(&event)
@@ -408,10 +411,10 @@ func WebhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 
 		if rm != nil {
 			return msg.SetReplyToMsgID(rm.MsgID).SetText(fmt.Sprintf("%s: %s", mention(c, &event.Actor), event.Comment.Content.Raw)).Send()
-		} else {
-			wp := c.WebPreview("Commit", "@"+event.Commit.Hash[0:10], event.Repository.FullName, event.Comment.Links.HTML.Href, "")
-			return msg.SetText(fmt.Sprintf("%s %s: %s", m.URL("💬", wp), mention(c, &event.Actor), event.Comment.Content.Raw)).Send()
 		}
+		wp := c.WebPreview("Commit", "@"+event.Commit.Hash[0:10], event.Repository.FullName, event.Comment.Links.HTML.Href, "")
+		return msg.SetText(fmt.Sprintf("%s %s: %s", m.URL("💬", wp), mention(c, &event.Actor), event.Comment.Content.Raw)).Send()
+
 	case "issue:updated":
 		event := api.IssueUpdatedEvent{}
 		err := wc.JSON(&event)
@@ -435,9 +438,8 @@ func WebhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 			}
 
 			return msg.SetReplyToMsgID(rm.MsgID).SetText(fmt.Sprintf("%s update the issue%s", mention(c, &event.Actor), event.Comment.Content.Raw)).Send()
-		} else {
-			return msg.SetText(fmt.Sprintf("%s updated an issue%s\n%s", mention(c, &event.Actor), event.Comment.Content.Raw, issueText(c, &event.Issue))).Send()
 		}
+		return msg.SetText(fmt.Sprintf("%s updated an issue%s\n%s", mention(c, &event.Actor), event.Comment.Content.Raw, issueText(c, &event.Issue))).Send()
 
 	case "pullrequest:updated":
 		event := api.PullRequestCreatedEvent{}
@@ -495,10 +497,9 @@ func WebhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 
 		if rm != nil {
 			return msg.SetReplyToMsgID(rm.MsgID).SetText(fmt.Sprintf("✅ Approved by %s", mention(c, &event.Actor))).Send()
-		} else {
-			wp := c.WebPreview("Pull Request", event.PullRequest.Title, "by "+event.PullRequest.Author.DisplayName+" in "+event.Repository.FullName, event.PullRequest.Links.HTML.Href, "")
-			return msg.SetText(fmt.Sprintf("✅ %s by %s", m.URL("Approved", wp), mention(c, &event.Actor))).Send()
 		}
+		wp := c.WebPreview("Pull Request", event.PullRequest.Title, "by "+event.PullRequest.Author.DisplayName+" in "+event.Repository.FullName, event.PullRequest.Links.HTML.Href, "")
+		return msg.SetText(fmt.Sprintf("✅ %s by %s", m.URL("Approved", wp), mention(c, &event.Actor))).Send()
 
 	case "pullrequest:unapproved":
 		event := api.PullRequestApprovalRemovedEvent{}
@@ -512,10 +513,9 @@ func WebhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 
 		if rm != nil {
 			return msg.SetReplyToMsgID(rm.MsgID).SetText(fmt.Sprintf("❌ %s removed approval", mention(c, &event.Actor))).Send()
-		} else {
-			wp := c.WebPreview("Pull Request", event.PullRequest.Title, "by "+event.PullRequest.Author.DisplayName+" in "+event.Repository.FullName, event.PullRequest.Links.HTML.Href, "")
-			return msg.SetText(fmt.Sprintf("❌ %s %s", mention(c, &event.Actor), m.URL("removed approval", wp))).Send()
 		}
+		wp := c.WebPreview("Pull Request", event.PullRequest.Title, "by "+event.PullRequest.Author.DisplayName+" in "+event.Repository.FullName, event.PullRequest.Links.HTML.Href, "")
+		return msg.SetText(fmt.Sprintf("❌ %s %s", mention(c, &event.Actor), m.URL("removed approval", wp))).Send()
 
 	case "pullrequest:fulfilled":
 		event := api.PullRequestMergedEvent{}
@@ -529,10 +529,10 @@ func WebhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 
 		if rm != nil {
 			return msg.SetReplyToMsgID(rm.MsgID).SetText(fmt.Sprintf("✅ Merged by %s", mention(c, &event.Actor))).Send()
-		} else {
-			wp := c.WebPreview("Pull Request", event.PullRequest.Title, "by "+event.PullRequest.Author.DisplayName+" in "+event.Repository.FullName, event.PullRequest.Links.HTML.Href, "")
-			return msg.SetText(fmt.Sprintf("✅ %s by %s", m.URL("Merged", wp), mention(c, &event.Actor))).Send()
 		}
+		wp := c.WebPreview("Pull Request", event.PullRequest.Title, "by "+event.PullRequest.Author.DisplayName+" in "+event.Repository.FullName, event.PullRequest.Links.HTML.Href, "")
+		return msg.SetText(fmt.Sprintf("✅ %s by %s", m.URL("Merged", wp), mention(c, &event.Actor))).Send()
+
 	case "pullrequest:rejected":
 		event := api.PullRequestDeclinedEvent{}
 		err := wc.JSON(&event)
@@ -545,10 +545,10 @@ func WebhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 
 		if rm != nil {
 			return msg.SetReplyToMsgID(rm.MsgID).SetText(fmt.Sprintf("❌ Declined by %s: %s", mention(c, &event.Actor), event.PullRequest.Reason)).Send()
-		} else {
-			wp := c.WebPreview("Pull Request", event.PullRequest.Title, "by "+event.PullRequest.Author.DisplayName+" in "+event.Repository.FullName, event.PullRequest.Links.HTML.Href, "")
-			return msg.SetText(fmt.Sprintf("❌ %s by %s", m.URL("Declined", wp), mention(c, &event.Actor))).Send()
 		}
+		wp := c.WebPreview("Pull Request", event.PullRequest.Title, "by "+event.PullRequest.Author.DisplayName+" in "+event.Repository.FullName, event.PullRequest.Links.HTML.Href, "")
+		return msg.SetText(fmt.Sprintf("❌ %s by %s", m.URL("Declined", wp), mention(c, &event.Actor))).Send()
+
 	case "pullrequest:comment_created":
 		event := api.PullRequestCommentCreatedEvent{}
 		err := wc.JSON(&event)
@@ -562,10 +562,10 @@ func WebhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 
 		if rm != nil {
 			return msg.SetReplyToMsgID(rm.MsgID).SetText(fmt.Sprintf("%s: %s", mention(c, &event.Actor), event.Comment.Content.Raw)).Send()
-		} else {
-			wp := c.WebPreview("Pull Request", event.PullRequest.Title, event.Repository.FullName, event.PullRequest.Links.HTML.Href, "")
-			return msg.SetText(fmt.Sprintf("%s %s: %s", m.URL("💬", wp), mention(c, &event.Actor), event.Comment.Content.Raw)).Send()
 		}
+		wp := c.WebPreview("Pull Request", event.PullRequest.Title, event.Repository.FullName, event.PullRequest.Links.HTML.Href, "")
+		return msg.SetText(fmt.Sprintf("%s %s: %s", m.URL("💬", wp), mention(c, &event.Actor), event.Comment.Content.Raw)).Send()
+
 	}
 	return err
 

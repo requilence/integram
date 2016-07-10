@@ -5,6 +5,7 @@ import (
 	"time"
 )
 
+// Relative returns relative decent time
 func Relative(target time.Time) string {
 	now := time.Now()
 	day := ""
@@ -28,15 +29,13 @@ func Relative(target time.Time) string {
 	if day == "" {
 		day = target.Format("2 January")
 		return fmt.Sprintf("%s", day)
-	} else {
-		tz := target.Format("-07:00")
-		if tz[3:] == ":00" {
-			tz = tz[0:3]
-		}
-		if tz[1:2] == "0" {
-			tz = tz[0:1] + tz[2:]
-		}
-		return fmt.Sprintf("%s, %s (UTC%s)", day, target.Format("15:04"), tz)
 	}
-
+	tz := target.Format("-07:00")
+	if tz[3:] == ":00" {
+		tz = tz[0:3]
+	}
+	if tz[1:2] == "0" {
+		tz = tz[0:1] + tz[2:]
+	}
+	return fmt.Sprintf("%s, %s (UTC%s)", day, target.Format("15:04"), tz)
 }

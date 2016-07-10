@@ -2,32 +2,29 @@ package integram
 
 import (
 	"encoding/json"
-	"io/ioutil"
-
-	"golang.org/x/oauth2"
-
 	"errors"
 	"fmt"
-	"time"
-
-	"strings"
-
 	log "github.com/Sirupsen/logrus"
 	"github.com/gin-gonic/gin"
 	"github.com/mrjones/oauth"
 	"github.com/requilence/integram/url"
+	"golang.org/x/oauth2"
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 	tg "gopkg.in/telegram-bot-api.v3"
 	"io"
+	"io/ioutil"
 	"net/http"
 	uurl "net/url"
 	"runtime"
+	"strings"
+	"time"
 )
 
-const MAX_MSGS_TO_UPDATE_WITH_EVENTID = 10
+// MaxMsgsToUpdateWithEventID set the maximum number of last messages to update with EditMessagesTextWithEventID
+var MaxMsgsToUpdateWithEventID = 10
 
-// Per request context
+// Context of the current request
 type Context struct {
 	ServiceName        string              // Actual service's name. Use context's Service() method to receive full service config
 	ServiceBaseURL     url.URL             // Useful for self-hosted services. Default set to service's DefaultHost
@@ -37,18 +34,18 @@ type Context struct {
 	Chat               Chat                // Chat associated with current webhook or Telegram update
 	Message            *IncomingMessage    // Telegram incoming message if it triggired current request
 	InlineQuery        *tg.InlineQuery     // Telegram inline query if it triggired current request
-	ChosenInlineResult *ChosenInlineResult // Telegram chosen inline result if it triggired current request
+	ChosenInlineResult *chosenInlineResult // Telegram chosen inline result if it triggired current request
 
-	Callback              *Callback  // Telegram inline buttons callback if it it triggired current request
+	Callback              *callback  // Telegram inline buttons callback if it it triggired current request
 	inlineQueryAnsweredAt *time.Time // used to log slow inline responses
 }
 
-type ChosenInlineResult struct {
+type chosenInlineResult struct {
 	tg.ChosenInlineResult
 	Message *OutgoingMessage // generated message saved in DB
 }
 
-type Callback struct {
+type callback struct {
 	ID         string
 	Message    *OutgoingMessage // Where button was pressed
 	Data       string
@@ -56,6 +53,7 @@ type Callback struct {
 	State      int // state is used for checkbox buttons or for other switches
 }
 
+// SetServiceBaseURL set the baseURL for the current request. Useful when service can be self-hosted. The actual service URL can be foudn in the incoming webhook
 func (c *Context) SetServiceBaseURL(domainOrURL string) {
 	u, _ := getBaseURL(domainOrURL)
 
@@ -67,6 +65,8 @@ func (c *Context) SetServiceBaseURL(domainOrURL string) {
 		c.Log().Error("Can't use SetServiceHostFromURL with empty arg")
 	}
 }
+
+// SaveOAuthProvider add the OAuth client to DB. Useful when the new OAuth provider registred for self-hosted services
 func (c *Context) SaveOAuthProvider(baseURL url.URL, id string, secret string) (*OAuthProvider, error) {
 	if id == "" || secret == "" {
 		return nil, errors.New("id and secret must not be empty")
@@ -81,7 +81,7 @@ func (c *Context) SaveOAuthProvider(baseURL url.URL, id string, secret string) (
 	return &provider, nil
 }
 
-// return OAuthProvider details. Useful for services that can be installed on your own side
+// OAuthProvider details. Useful for services that can be installed on your own side
 func (c *Context) OAuthProvider() *OAuthProvider {
 
 	service := c.Service()
@@ -104,10 +104,10 @@ func (c *Context) OAuthProvider() *OAuthProvider {
 	return nil
 }
 
-func replaceBaseURL(oldUrl string, baseURL url.URL) string {
-	u, err := url.Parse(oldUrl)
+func replaceBaseURL(oldURL string, baseURL url.URL) string {
+	u, err := url.Parse(oldURL)
 	if err != nil {
-		return oldUrl
+		return oldURL
 	}
 
 	u.Host = baseURL.Host
@@ -119,6 +119,7 @@ func replaceBaseURL(oldUrl string, baseURL url.URL) string {
 	return u.String()
 }
 
+// OAuth1Client returns oauth.Consumer using OAuthProvider details
 func (o *OAuthProvider) OAuth1Client(c *Context) *oauth.Consumer {
 
 	if o.ID == "" {
@@ -137,23 +138,24 @@ func (o *OAuthProvider) OAuth1Client(c *Context) *oauth.Consumer {
 
 	config.Key = o.ID
 	config.Secret = o.Secret
-	config.AccessTokenUrl = replaceBaseURL(config.AccessTokenUrl, o.BaseURL)
-	config.AuthorizeTokenUrl = replaceBaseURL(config.AuthorizeTokenUrl, o.BaseURL)
-	config.RequestTokenUrl = replaceBaseURL(config.RequestTokenUrl, o.BaseURL)
+	config.AccessTokenURL = replaceBaseURL(config.AccessTokenURL, o.BaseURL)
+	config.AuthorizeTokenURL = replaceBaseURL(config.AuthorizeTokenURL, o.BaseURL)
+	config.RequestTokenURL = replaceBaseURL(config.RequestTokenURL, o.BaseURL)
 
 	consumer := oauth.NewConsumer(
 		o.ID,
 		o.Secret,
 		oauth.ServiceProvider{
-			RequestTokenUrl:   config.RequestTokenUrl,
-			AuthorizeTokenUrl: config.AuthorizeTokenUrl,
-			AccessTokenUrl:    config.AccessTokenUrl,
+			RequestTokenUrl:   config.RequestTokenURL,
+			AuthorizeTokenUrl: config.AuthorizeTokenURL,
+			AccessTokenUrl:    config.AccessTokenURL,
 		},
 	)
-	consumer.AdditionalAuthorizationUrlParams = service.DefaultOAuth1.AdditionalAuthorizationUrlParams
+	consumer.AdditionalAuthorizationUrlParams = service.DefaultOAuth1.AdditionalAuthorizationURLParams
 	return consumer
 }
 
+// OAuth2Client returns oauth2.Config using OAuthProvider details
 func (o *OAuthProvider) OAuth2Client(c *Context) *oauth2.Config {
 
 	if o.ID == "" {
@@ -241,6 +243,7 @@ func (o *OAuthProvider) OAuth2Client(c *Context) *oauth2.Config {
 	return true, res.Access_token, nil
 }*/
 
+// WebhookContext is passed to WebhookHandler of service
 type WebhookContext struct {
 	gin        *gin.Context
 	headers    map[string]string
@@ -249,17 +252,25 @@ type WebhookContext struct {
 	requestID  string
 }
 
+// FirstParse indicates that the request body is not yet readed
 func (wc *WebhookContext) FirstParse() bool {
 	return wc.firstParse
 }
+
+// Headers returns the headers of request
 func (wc *WebhookContext) Headers() map[string][]string {
 	return map[string][]string(wc.gin.Request.Header)
 }
+
+// Header returns the request header with the name
 func (wc *WebhookContext) Header(key string) string {
 	return wc.gin.Request.Header.Get(key)
 }
+
+// KeyboardAnswer retrieve the data related to pressed button
+// buttonText will be returned only in case this button relates to the one in db for this chat
 func (c *Context) KeyboardAnswer() (data string, buttonText string) {
-	keyboard, err := c.Keyboard()
+	keyboard, err := c.keyboard()
 
 	if err != nil || keyboard.ChatID == 0 {
 		log.WithError(err).Error("Can't get stored keyboard")
@@ -290,7 +301,7 @@ func saveKeyboard(m *OutgoingMessage, db *mgo.Database) error {
 			BotID:    m.BotID,
 			ChatID:   m.ChatID,
 			Date:     time.Now(),
-			Keyboard: m.KeyboardMarkup.DB(),
+			Keyboard: m.KeyboardMarkup.db(),
 		}
 
 		if m.Selective && m.ChatID < 0 {
@@ -353,7 +364,8 @@ func saveKeyboard(m *OutgoingMessage, db *mgo.Database) error {
 	return err
 }
 
-func (c *Context) Keyboard() (chatKeyboard, error) {
+// Keyboard retrieve keyboard for the current chat if set otherwise empty keyboard is returned
+func (c *Context) keyboard() (chatKeyboard, error) {
 
 	udata, _ := c.User.getData()
 	chatID := c.Chat.ID
@@ -376,6 +388,7 @@ func (c *Context) Keyboard() (chatKeyboard, error) {
 	return chatKeyboard{}, nil
 }
 
+// Log creates the logrus entry and attach corresponding info from the context
 func (c *Context) Log() *log.Entry {
 	fields := log.Fields{"service": c.ServiceName}
 
@@ -424,22 +437,23 @@ func (c *Context) Log() *log.Entry {
 	return log.WithFields(fields)
 }
 
+// Db returns the MongoDB *mgo.Database instance
 func (c *Context) Db() *mgo.Database {
 	return c.db
 }
 
+// Service related to the current context
 func (c *Context) Service() *Service {
 	s, _ := serviceByName(c.ServiceName)
-	if s == nil {
-		//c.Log().WithField("service", c.ServiceName).Error("No service found")
-	}
 	return s
 }
 
+// Bot related to the service of current request
 func (c *Context) Bot() *Bot {
 	return c.Service().Bot()
 }
 
+// EditPressedMessageText edit the text in the msg where user taped it in case this request is triggered by inlineButton callback
 func (c *Context) EditPressedMessageText(text string) error {
 	if c.Callback == nil {
 		return errors.New("Callback to answer is not presented")
@@ -448,6 +462,7 @@ func (c *Context) EditPressedMessageText(text string) error {
 	return c.EditMessageText(c.Callback.Message, text)
 }
 
+// EditPressedMessageTextAndInlineKeyboard edit the text and inline keyboard in the msg where user taped it in case this request is triggered by inlineButton callback
 func (c *Context) EditPressedMessageTextAndInlineKeyboard(text string, kb InlineKeyboard) error {
 	if c.Callback == nil {
 		return errors.New("Callback to answer is not presented")
@@ -456,6 +471,26 @@ func (c *Context) EditPressedMessageTextAndInlineKeyboard(text string, kb Inline
 	return c.EditMessageTextAndInlineKeyboard(c.Callback.Message, c.Callback.Message.InlineKeyboardMarkup.State, text, kb)
 }
 
+// EditPressedInlineKeyboard edit the inline keyboard in the msg where user taped it in case this request is triggered by inlineButton callback
+func (c *Context) EditPressedInlineKeyboard(kb InlineKeyboard) error {
+	if c.Callback == nil {
+		return errors.New("Callback to answer is not presented")
+	}
+
+	return c.EditInlineKeyboard(c.Callback.Message, c.Callback.Message.InlineKeyboardMarkup.State, kb)
+}
+
+// EditPressedInlineButton edit the text and state of pressed inline button in case this request is triggered by inlineButton callback
+func (c *Context) EditPressedInlineButton(newState int, newText string) error {
+	log.WithField("newText", newText).WithField("newState", newState).Info("EditPressedInlineButton")
+	if c.Callback == nil {
+		return errors.New("Callback to answer is not presented")
+	}
+
+	return c.EditInlineStateButton(c.Callback.Message, c.Callback.Message.InlineKeyboardMarkup.State, c.Callback.State, c.Callback.Data, newState, newText)
+}
+
+// EditMessageText edit the text of message previously sent by the bot
 func (c *Context) EditMessageText(om *OutgoingMessage, text string) error {
 	if om == nil {
 		return errors.New("Empty message provided")
@@ -469,7 +504,7 @@ func (c *Context) EditMessageText(om *OutgoingMessage, text string) error {
 		BaseEdit: tg.BaseEdit{
 			ChatID:      om.ChatID,
 			MessageID:   om.MsgID,
-			ReplyMarkup: &tg.InlineKeyboardMarkup{InlineKeyboard: om.InlineKeyboardMarkup.TG()},
+			ReplyMarkup: &tg.InlineKeyboardMarkup{InlineKeyboard: om.InlineKeyboardMarkup.tg()},
 		},
 		ParseMode: om.ParseMode,
 		Text:      text,
@@ -486,10 +521,11 @@ func (c *Context) EditMessageText(om *OutgoingMessage, text string) error {
 	return err
 }
 
+// EditMessagesTextWithEventID edit the last MaxMsgsToUpdateWithEventID messages' text with the corresponding eventID  in ALL chats
 func (c *Context) EditMessagesTextWithEventID(botID int64, eventID string, text string) error {
 	var messages []OutgoingMessage
 	//update MAX_MSGS_TO_UPDATE_WITH_EVENTID last bot messages
-	c.db.C("messages").Find(bson.M{"botid": botID, "eventid": eventID}).Sort("-_id").Limit(MAX_MSGS_TO_UPDATE_WITH_EVENTID).All(&messages)
+	c.db.C("messages").Find(bson.M{"botid": botID, "eventid": eventID}).Sort("-_id").Limit(MaxMsgsToUpdateWithEventID).All(&messages)
 	for _, message := range messages {
 		err := c.EditMessageText(&message, text)
 		if err != nil {
@@ -499,10 +535,11 @@ func (c *Context) EditMessagesTextWithEventID(botID int64, eventID string, text 
 	return nil
 }
 
+// EditMessagesWithEventID edit the last MaxMsgsToUpdateWithEventID messages' text and inline keyboard with the corresponding eventID in ALL chats
 func (c *Context) EditMessagesWithEventID(botID int64, eventID string, fromState string, text string, kb InlineKeyboard) error {
 	var messages []OutgoingMessage
 	//update MAX_MSGS_TO_UPDATE_WITH_EVENTID last bot messages
-	c.db.C("messages").Find(bson.M{"botid": botID, "eventid": eventID}).Sort("-_id").Limit(MAX_MSGS_TO_UPDATE_WITH_EVENTID).All(&messages)
+	c.db.C("messages").Find(bson.M{"botid": botID, "eventid": eventID}).Sort("-_id").Limit(MaxMsgsToUpdateWithEventID).All(&messages)
 	for _, message := range messages {
 		err := c.EditMessageTextAndInlineKeyboard(&message, fromState, text, kb)
 		if err != nil {
@@ -512,6 +549,7 @@ func (c *Context) EditMessagesWithEventID(botID int64, eventID string, fromState
 	return nil
 }
 
+// EditMessageTextAndInlineKeyboard edit the outgoing message's text and inline keyboard
 func (c *Context) EditMessageTextAndInlineKeyboard(om *OutgoingMessage, fromState string, text string, kb InlineKeyboard) error {
 	bot := c.Bot()
 	if om.MsgID != 0 {
@@ -544,7 +582,7 @@ func (c *Context) EditMessageTextAndInlineKeyboard(om *OutgoingMessage, fromStat
 			ChatID:          om.ChatID,
 			InlineMessageID: om.InlineMsgID,
 			MessageID:       om.MsgID,
-			ReplyMarkup:     &tg.InlineKeyboardMarkup{InlineKeyboard: kb.TG()},
+			ReplyMarkup:     &tg.InlineKeyboardMarkup{InlineKeyboard: kb.tg()},
 		},
 		ParseMode: om.ParseMode,
 		Text:      text,
@@ -567,24 +605,7 @@ func (c *Context) EditMessageTextAndInlineKeyboard(om *OutgoingMessage, fromStat
 	return nil
 }
 
-func (c *Context) EditPressedInlineKeyboard(kb InlineKeyboard) error {
-	if c.Callback == nil {
-		return errors.New("Callback to answer is not presented")
-	}
-
-	return c.EditInlineKeyboard(c.Callback.Message, c.Callback.Message.InlineKeyboardMarkup.State, kb)
-}
-
-func (c *Context) EditPressedInlineButton(newState int, newText string) error {
-	log.WithField("newText", newText).WithField("newState", newState).Info("EditPressedInlineButton")
-	if c.Callback == nil {
-		return errors.New("Callback to answer is not presented")
-	}
-
-	return c.EditInlineStateButton(c.Callback.Message, c.Callback.Message.InlineKeyboardMarkup.State, c.Callback.State, c.Callback.Data, newState, newText)
-}
-
-// fromState is to avoid simultaneously changing request
+// EditInlineKeyboard edit the outgoing message's inline keyboard
 func (c *Context) EditInlineKeyboard(om *OutgoingMessage, fromState string, kb InlineKeyboard) error {
 	log.WithField("msgID", om.MsgID).Info("EditInlineKeyboard")
 
@@ -599,8 +620,7 @@ func (c *Context) EditInlineKeyboard(om *OutgoingMessage, fromState string, kb I
 	ci, err := c.db.C("messages").Find(bson.M{"_id": om.ID, "inlinekeyboardmarkup.state": fromState}).Apply(mgo.Change{Update: bson.M{"$set": bson.M{"inlinekeyboardmarkup": kb}}}, &msg)
 
 	if msg.BotID == 0 {
-		return errors.New(fmt.Sprintf("EditInlineKeyboard – message (botid=%v id=%v state %s) not found", bot.ID, om.MsgID, fromState))
-
+		return fmt.Errorf("EditInlineKeyboard – message (botid=%v id=%v state %s) not found", bot.ID, om.MsgID, fromState)
 	}
 
 	if ci.Updated == 0 {
@@ -612,7 +632,7 @@ func (c *Context) EditInlineKeyboard(om *OutgoingMessage, fromState string, kb I
 			ChatID:          om.ChatID,
 			MessageID:       om.MsgID,
 			InlineMessageID: om.InlineMsgID,
-			ReplyMarkup:     &tg.InlineKeyboardMarkup{InlineKeyboard: kb.TG()},
+			ReplyMarkup:     &tg.InlineKeyboardMarkup{InlineKeyboard: kb.tg()},
 		},
 	})
 
@@ -632,10 +652,14 @@ func (c *Context) EditInlineKeyboard(om *OutgoingMessage, fromState string, kb I
 	return nil
 
 }
+
+// EditInlineButton edit the outgoing message's inline button
 func (c *Context) EditInlineButton(om *OutgoingMessage, kbState string, buttonData string, newButtonText string) error {
 	return c.EditInlineStateButton(om, kbState, 0, buttonData, 0, newButtonText)
 
 }
+
+// EditInlineStateButton edit the outgoing message's inline button with a state
 func (c *Context) EditInlineStateButton(om *OutgoingMessage, kbState string, oldButtonState int, buttonData string, newButtonState int, newButtonText string) error {
 	log.WithField("newText", newButtonText).Info("EditInlineButton")
 	if oldButtonState > 9 || oldButtonState < 0 {
@@ -653,13 +677,13 @@ func (c *Context) EditInlineStateButton(om *OutgoingMessage, kbState string, old
 	//spew.Dump(msg)
 	// need a more thread safe solution to switch stored keyboard
 	if msg.BotID == 0 {
-		return errors.New(fmt.Sprintf("EditInlineButton – message (botid=%v id=%v(%v) state %s) not found", bot.ID, om.MsgID, om.InlineMsgID, kbState))
+		return fmt.Errorf("EditInlineButton – message (botid=%v id=%v(%v) state %s) not found", bot.ID, om.MsgID, om.InlineMsgID, kbState)
 	}
 	i, j, _ := msg.InlineKeyboardMarkup.Find(buttonData)
 	//spew.Dump(i, j)
 
 	if i < 0 {
-		return errors.New(fmt.Sprintf("EditInlineButton – button %v not found in message (botid=%v id=%v(%v) state %s) not found", buttonData, bot.ID, om.MsgID, om.InlineMsgID, kbState))
+		return fmt.Errorf("EditInlineButton – button %v not found in message (botid=%v id=%v(%v) state %s) not found", buttonData, bot.ID, om.MsgID, om.InlineMsgID, kbState)
 	}
 
 	//first of all – change stored keyboard to avoid simultaneously changing requests
@@ -674,7 +698,7 @@ func (c *Context) EditInlineStateButton(om *OutgoingMessage, kbState string, old
 	//spew.Dump(info)
 	if info.Updated == 0 {
 		// another one thread safe check
-		return errors.New(fmt.Sprintf("EditInlineButton – button[%d][%d] %v not found in message (botid=%v id=%v(%v) state %s) not found", i, j, buttonData, bot.ID, om.MsgID, om.InlineMsgID, kbState))
+		return fmt.Errorf("EditInlineButton – button[%d][%d] %v not found in message (botid=%v id=%v(%v) state %s) not found", i, j, buttonData, bot.ID, om.MsgID, om.InlineMsgID, kbState)
 	}
 
 	kb := msg.InlineKeyboardMarkup
@@ -688,7 +712,7 @@ func (c *Context) EditInlineStateButton(om *OutgoingMessage, kbState string, old
 			ChatID:          om.ChatID,
 			MessageID:       om.MsgID,
 			InlineMessageID: om.InlineMsgID,
-			ReplyMarkup:     &tg.InlineKeyboardMarkup{InlineKeyboard: kb.TG()},
+			ReplyMarkup:     &tg.InlineKeyboardMarkup{InlineKeyboard: kb.tg()},
 		},
 	})
 	if err != nil {
@@ -700,6 +724,7 @@ func (c *Context) EditInlineStateButton(om *OutgoingMessage, kbState string, old
 	return nil
 }
 
+// AnswerInlineQueryWithResults answer the inline query that triggered this request
 func (c *Context) AnswerInlineQueryWithResults(res []interface{}, cacheTime int, nextOffset string) error {
 	bot := c.Bot()
 	_, err := bot.API.AnswerInlineQuery(tg.InlineConfig{IsPersonal: true, InlineQueryID: c.InlineQuery.ID, Results: res, NextOffset: nextOffset})
@@ -708,6 +733,7 @@ func (c *Context) AnswerInlineQueryWithResults(res []interface{}, cacheTime int,
 	return err
 }
 
+// AnswerInlineQueryWithPM answer the inline query that triggered this request with Private Message redirect tip
 func (c *Context) AnswerInlineQueryWithPM(text string, parameter string) error {
 	bot := c.Bot()
 	_, err := bot.API.AnswerInlineQuery(tg.InlineConfig{IsPersonal: true, InlineQueryID: c.InlineQuery.ID, SwitchPMText: text, SwitchPMParameter: parameter})
@@ -716,6 +742,7 @@ func (c *Context) AnswerInlineQueryWithPM(text string, parameter string) error {
 	return err
 }
 
+// AnswerCallbackQuery answer the inline keyboard callback query that triggered this request with toast or alert
 func (c *Context) AnswerCallbackQuery(text string, showAlert bool) error {
 	if c.Callback == nil {
 		return errors.New("Callback to answer is not presented")
@@ -735,6 +762,7 @@ func (c *Context) AnswerCallbackQuery(text string, showAlert bool) error {
 	return err
 }
 
+// NewMessage creates the message targeted to the current chat
 func (c *Context) NewMessage() *OutgoingMessage {
 	bot := c.Bot()
 	msg := &OutgoingMessage{}
@@ -749,11 +777,13 @@ func (c *Context) NewMessage() *OutgoingMessage {
 	return msg
 }
 
+// SendAction send the one of "typing", "upload_photo", "record_video", "upload_video", "record_audio", "upload_audio", "upload_document", "find_location"
 func (c *Context) SendAction(s string) error {
 	_, err := c.Bot().API.Send(tg.NewChatAction(c.Chat.ID, s))
 	return err
 }
 
+// DownloadURL downloads the remote URL and returns the local file path
 func (c *Context) DownloadURL(url string) (filePath string, err error) {
 	out, err := ioutil.TempFile("", fmt.Sprintf("%d_%d", c.Bot().ID, c.Chat.ID))
 
@@ -776,32 +806,34 @@ func (c *Context) DownloadURL(url string) (filePath string, err error) {
 	return out.Name(), nil
 }
 
-func (c *WebhookContext) RAW() (*[]byte, error) {
+// RAW returns request's body
+func (wc *WebhookContext) RAW() (*[]byte, error) {
 	var err error
-	if c.body == nil {
-		c.firstParse = true
-		c.body, err = ioutil.ReadAll(c.gin.Request.Body)
+	if wc.body == nil {
+		wc.firstParse = true
+		wc.body, err = ioutil.ReadAll(wc.gin.Request.Body)
 		if err != nil {
 			return nil, err
 		}
 	}
-	return &c.body, nil
+	return &wc.body, nil
 }
 
-func (c *WebhookContext) JSON(out interface{}) error {
+// JSON decodes the JSON in the request's body to the out interface
+func (wc *WebhookContext) JSON(out interface{}) error {
 	var err error
-	if c.body == nil {
-		c.firstParse = true
-		c.body, err = ioutil.ReadAll(c.gin.Request.Body)
+	if wc.body == nil {
+		wc.firstParse = true
+		wc.body, err = ioutil.ReadAll(wc.gin.Request.Body)
 
 		if err != nil {
 			return err
 		}
 	}
-	err = json.Unmarshal(c.body, out)
+	err = json.Unmarshal(wc.body, out)
 
-	if err != nil && strings.HasPrefix(string(c.body), "payload=") {
-		s := string(c.body)
+	if err != nil && strings.HasPrefix(string(wc.body), "payload=") {
+		s := string(wc.body)
 		s, err = uurl.QueryUnescape(s[8:])
 		if err != nil {
 			return err
@@ -812,23 +844,28 @@ func (c *WebhookContext) JSON(out interface{}) error {
 	return err
 }
 
-func (c *WebhookContext) Form() uurl.Values {
-	return c.gin.Request.PostForm
-
+// Form decodes the POST form in the request's body to the out interface
+func (wc *WebhookContext) Form() uurl.Values {
+	//todo: bug, RAW() unavailable after ParseForm()
+	wc.gin.Request.ParseForm()
+	return wc.gin.Request.PostForm
 }
-func (c *WebhookContext) FormValue(key string) string {
-	err := c.gin.Request.ParseForm()
+
+// FormValue return form data with specific key
+func (wc *WebhookContext) FormValue(key string) string {
+	err := wc.gin.Request.ParseForm()
 	if err != nil {
 		log.Error(err)
 	}
-	return c.gin.Request.PostForm.Get(key)
-
+	return wc.gin.Request.PostForm.Get(key)
 }
 
-func (c *WebhookContext) HookID() string {
-	return c.gin.Param("param")
+// HookID returns the HookID from the URL
+func (wc *WebhookContext) HookID() string {
+	return wc.gin.Param("param")
 }
 
-func (c *WebhookContext) RequestID() string {
-	return c.requestID
+// RequestID returns the unique generated request ID
+func (wc *WebhookContext) RequestID() string {
+	return wc.requestID
 }

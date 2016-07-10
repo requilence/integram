@@ -6,16 +6,19 @@ import (
 	"time"
 )
 
-type format string
+// Format is a string with ability to provide params to its placeholders
+type Format string
 
-func Shuffle(formats ...string) format {
+// Shuffle select the random variant from provided strings
+func Shuffle(formats ...string) Format {
 	l := len(formats)
 
 	rand.Seed(time.Now().UnixNano())
 	i := rand.Intn(l)
-	return format(formats[i])
+	return Format(formats[i])
 }
 
-func (f format) S(params ...interface{}) string {
+// S used to provide params to placeholders
+func (f Format) S(params ...interface{}) string {
 	return fmt.Sprintf(string(f), params...)
 }

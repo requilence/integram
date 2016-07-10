@@ -1,15 +1,14 @@
 package integram
 
 import (
-	"time"
-
-	"github.com/requilence/integram/url"
-
 	log "github.com/Sirupsen/logrus"
 	"github.com/mrjones/oauth"
+	"github.com/requilence/integram/url"
 	"gopkg.in/mgo.v2/bson"
+	"time"
 )
 
+// User information initiated from TG
 type User struct {
 	ID        int64 `bson:"_id"`
 	FirstName string
@@ -21,6 +20,7 @@ type User struct {
 	data *userData
 }
 
+// Chat information initiated from TG
 type Chat struct {
 	ID        int64  `bson:"_id"`
 	Type      string `bson:",omitempty"`
@@ -34,6 +34,7 @@ type Chat struct {
 	data *chatData
 }
 
+// OAuthProvider contains OAuth application info
 type OAuthProvider struct {
 	Service string  // Service name
 	BaseURL url.URL // Scheme + Host. Default https://{service.DefaultHost}
@@ -54,33 +55,33 @@ func (o *OAuthProvider) toBson() bson.M {
 
 }
 
-func (oap *OAuthProvider) internalID() string {
-	if oap == nil {
+func (o *OAuthProvider) internalID() string {
+	if o == nil {
 		log.Errorf("OAuthProvider is empty")
 	}
-	s, _ := serviceByName(oap.Service)
+	s, _ := serviceByName(o.Service)
 	//spew.Dump(oap, s)
 
-	if s != nil && oap.BaseURL.Host == s.DefaultBaseURL.Host {
+	if s != nil && o.BaseURL.Host == s.DefaultBaseURL.Host {
 		return s.Name
 	}
 
-	return checksumString(s.Name + oap.BaseURL.Host)
+	return checksumString(s.Name + o.BaseURL.Host)
 }
 
-// returns impersonal Redirect URL, useful when setting up the OAuth Client
-func (oap *OAuthProvider) RedirectURL() string {
-	return BaseURL + "/auth/" + oap.internalID()
+// RedirectURL returns impersonal Redirect URL, useful when setting up the OAuth Client
+func (o *OAuthProvider) RedirectURL() string {
+	return BaseURL + "/auth/" + o.internalID()
 
 }
 
-// True if OAuth provider(app,client) has ID and Secret. Should be always true for service's default provider
-func (oap *OAuthProvider) IsSetup() bool {
-	if oap == nil {
+// IsSetup returns true if OAuth provider(app,client) has ID and Secret. Should be always true for service's default provider
+func (o *OAuthProvider) IsSetup() bool {
+	if o == nil {
 		return false
 	}
 
-	return oap.ID != "" && oap.Secret != ""
+	return o.ID != "" && o.Secret != ""
 }
 
 type oAuthIDCache struct {
@@ -146,14 +147,14 @@ type webPreview struct {
 	Title     string
 	Headline  string
 	Text      string
-	Url       string
+	URL       string
 	ImageURL  string
 	Token     string `bson:"_id"`
 	Redirects int
 	Created   time.Time
 }
 
-// @username if available. First + Last name otherwise
+// Mention returns @username if available. First + Last name otherwise
 func (u *User) Mention() string {
 
 	if u.UserName != "" {
@@ -182,23 +183,24 @@ func (u *User) String() string {
 	return name
 }
 
-// Detected User timezone
+// TzLocation retrieve User's timezone if stored in DB
 func (u *User) TzLocation() *time.Location {
 	return tzLocation(u.Tz)
 }
 
+// IsGroup returns true if chat is a group chat
 func (c *Chat) IsGroup() bool {
 	if c.ID < 0 {
 		return true
-	} else {
-		return false
 	}
+	return false
+
 }
 
+// IsPrivate returns true if chat is a private chat
 func (c *Chat) IsPrivate() bool {
 	if c.ID > 0 {
 		return true
-	} else {
-		return false
 	}
+	return false
 }

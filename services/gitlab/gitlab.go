@@ -3,30 +3,32 @@ package gitlab
 import (
 	"errors"
 	"fmt"
-	"github.com/requilence/integram"
-	m "github.com/requilence/integram/html"
-	api "github.com/xanzy/go-gitlab"
-	"golang.org/x/oauth2"
 	"net/url"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/requilence/integram"
+	api "github.com/xanzy/go-gitlab"
+	"golang.org/x/oauth2"
 )
 
+var m = integram.HTMLRichText{}
+
+//Config contains OAuth data only
 type Config struct {
 	integram.OAuthProvider
 }
 
-const API_URI_SUFFIX = "/api/v3/"
+const apiSuffixURL = "/api/v3/"
 
-//var service integram.Service
-
+// Service returns integram.Service from gitlab.Config
 func (c Config) Service() *integram.Service {
 	return &integram.Service{
 		Name:                "gitlab",
 		NameToPrint:         "GitLab",
-		TGNewMessageHandler: Update,
-		WebhookHandler:      WebhookHandler,
+		TGNewMessageHandler: update,
+		WebhookHandler:      webhookHandler,
 		JobsPool:            1,
 		Jobs: []integram.Job{
 			{sendIssueComment, 10, integram.JobRetryFibonacci},
@@ -37,7 +39,7 @@ func (c Config) Service() *integram.Service {
 		},
 
 		Actions: []interface{}{
-			hostedAppIdEntered,
+			hostedAppIDEntered,
 			hostedAppSecretEntered,
 			issueReplied,
 			mrReplied,
@@ -56,11 +58,12 @@ func (c Config) Service() *integram.Service {
 				},
 			},
 		},
-		OAuthSuccessful: OAuthSuccessful,
+		OAuthSuccessful: oAuthSuccessful,
 	}
 
 }
-func OAuthSuccessful(c *integram.Context) error {
+
+func oAuthSuccessful(c *integram.Context) error {
 	c.Service().SheduleJob(cacheNickMap, 0, time.Now().Add(time.Second*5), c)
 	return c.NewMessage().SetText("Great! Now you can reply issues, commits, merge requests and snippets").Send()
 }
@@ -73,7 +76,7 @@ func me(c *integram.Context) (*api.User, error) {
 		return user, nil
 	}
 
-	user, _, err := Api(c).Users.CurrentUser()
+	user, _, err := client(c).Users.CurrentUser()
 
 	if err != nil {
 		return nil, err
@@ -94,101 +97,104 @@ func cacheNickMap(c *integram.Context) error {
 	return err
 }
 
-type Repository struct {
+type repository struct {
 	Name        string
-	Url         string
+	URL         string `json:"url"`
 	Description string
 	Homepage    string
 }
-type Author struct {
+
+type author struct {
 	Name  string
 	Email string
 }
 
-type User struct {
-	Name       string
-	Username   string
-	Avatar_url string
+type user struct {
+	Name      string
+	Username  string
+	AvatarURL string `json:"avatar_url"`
 }
 
-type Commit struct {
-	Id        string
+type commit struct {
+	ID        string `json:"id"`
 	Message   string
 	Timestamp time.Time
-	Author    Author
-	Url       string
+	Author    author
+	URL       string `json:"url"`
 	Added     []string
 	Modified  []string
 	Removed   []string
 }
-type Attributes struct {
-	Id            int
-	Title         string
-	Note          string
-	Noteable_type string
-	Assignee_id   int
-	Author_id     int
-	Project_id    int
-	Created_at    string
-	Updated_at    string
-	Commit_id     string
-	Position      int
-	Branch_name   string
-	Description   string
-	Milestone_id  int
-	Noteable_id   int
-	State         string
-	Iid           int
-	Url           string
-	Action        string
+
+type attributes struct {
+	ID           int `json:"id"`
+	Title        string
+	Note         string
+	NoteableType string `json:"noteable_type"`
+	AssigneeID   int    `json:"assignee_id"`
+	AuthorID     int    `json:"author_id"`
+	ProjectID    int    `json:"project_id"`
+	CreatedAt    string `json:"created_at"`
+	UpdatedAt    string `json:"updated_at"`
+	CommitID     string `json:"commit_id"`
+	Position     int
+	BranchName   string `json:"branch_name"`
+	Description  string
+	MilestoneID  int `json:"milestone_id"`
+	NoteableID   int `json:"noteable_id"`
+	State        string
+	Iid          int
+	URL          string
+	Action       string
 }
 
-type MergeRequest struct {
-	Id            int
-	Target_branch string
-	Source_branch string
-	Assignee_id   int
-	Author_id     int
-	State         string
-	Title         string
-	Merge_status  string
-	Description   string
+type mergeRequest struct {
+	ID           int    `json:"id"`
+	TargetBranch string `json:"target_branch"`
+	SourceBranch string `json:"source_branch"`
+	AssigneeID   int    `json:"assignee_id"`
+	AuthorID     int    `json:"author_id"`
+	State        string
+	Title        string
+	MergeStatus  string `json:"merge_status"`
+	Description  string
 }
 
-type Issue struct {
-	Id    int
+type issue struct {
+	ID    int `json:"id"`
 	Title string
 	State string
 	Iid   int
 }
-type Snippet struct {
-	Id        int
-	Title     string
-	File_name string
+
+type snippet struct {
+	ID       int `json:"id"`
+	Title    string
+	FileName string `json:"file_name"`
 }
 
-type Webhook struct {
-	Object_kind       string
-	Ref               string
-	Before            string
-	User              User
-	User_id           int
-	User_name         string
-	User_email        string
-	User_avatar       string
-	Object_attributes *Attributes
-	//Project_id        int
-	Repository    Repository
-	Project_id    int
-	Issue         *Issue
-	Snippet       *Snippet
-	After         string
-	Commits       []Commit
-	Commit        *Commit
-	Merge_request *MergeRequest
+type webhook struct {
+	ObjectKind       string `json:"object_kind"`
+	Ref              string
+	Before           string
+	User             user
+	UserID           int         `json:"user_id"`
+	UserName         string      `json:"user_name"`
+	UserEmail        string      `json:"user_email"`
+	UserAvatar       string      `json:"user_avatar"`
+	ObjectAttributes *attributes `json:"object_attributes"`
+	//ProjectID        int
+	Repository   repository
+	ProjectID    int `json:"project_id"`
+	Issue        *issue
+	Snippet      *snippet
+	After        string
+	Commits      []commit
+	Commit       *commit
+	MergeRequest *mergeRequest `json:"merge_request"`
 }
 
-func Mention(c *integram.Context, name string, email string) string {
+func mention(c *integram.Context, name string, email string) string {
 	userName := ""
 	c.ServiceCache("nick_map_"+name, &userName)
 	if userName == "" {
@@ -213,8 +219,8 @@ func mrMessageID(c *integram.Context, mergeRequestID int) int {
 	return 0
 }
 
-func commitMessageID(c *integram.Context, commitId string) int {
-	msg, err := c.FindMessageByEventID("commit_" + commitId)
+func commitMessageID(c *integram.Context, commitID string) int {
+	msg, err := c.FindMessageByEventID("commit_" + commitID)
 
 	if err == nil && msg != nil {
 		return msg.MsgID
@@ -240,7 +246,7 @@ func snippetMessageID(c *integram.Context, snippetID int) int {
 	return 0
 }
 
-func hostedAppSecretEntered(c *integram.Context, baseURL string, appId string) error {
+func hostedAppSecretEntered(c *integram.Context, baseURL string, appID string) error {
 	c.SetServiceBaseURL(baseURL)
 
 	appSecret := strings.TrimSpace(c.Message.Text)
@@ -248,38 +254,34 @@ func hostedAppSecretEntered(c *integram.Context, baseURL string, appId string) e
 		c.NewMessage().SetText("Looks like this *Application Secret* is incorrect. Must be a 64 HEX symbols. Please try again").EnableHTML().DisableWebPreview().SetReplyAction(hostedAppSecretEntered, baseURL).Send()
 		return errors.New("Application Secret '" + appSecret + "' is incorrect")
 	}
-	conf := integram.OAuthProvider{BaseURL: c.ServiceBaseURL, ID: appId, Secret: appSecret}
+	conf := integram.OAuthProvider{BaseURL: c.ServiceBaseURL, ID: appID, Secret: appSecret}
 	_, err := conf.OAuth2Client(c).Exchange(oauth2.NoContext, "-")
 
 	if strings.Contains(err.Error(), `"error":"invalid_grant"`) {
 		// means the app is exists
-		c.SaveOAuthProvider(c.ServiceBaseURL, appId, appSecret)
+		c.SaveOAuthProvider(c.ServiceBaseURL, appID, appSecret)
 		_, err := mustBeAuthed(c)
 
 		return err
-	} else {
-		c.NewMessage().SetText("Application ID or Secret is incorrect. Please try again. Enter *Application Id*").
-			EnableHTML().
-			SetReplyAction(hostedAppIdEntered, baseURL).Send()
 	}
-
-	return nil
-
+	return c.NewMessage().SetText("Application ID or Secret is incorrect. Please try again. Enter *Application ID*").
+		EnableHTML().
+		SetReplyAction(hostedAppIDEntered, baseURL).Send()
 }
 
-func hostedAppIdEntered(c *integram.Context, baseURL string) error {
+func hostedAppIDEntered(c *integram.Context, baseURL string) error {
 	c.SetServiceBaseURL(baseURL)
 
-	appId := strings.TrimSpace(c.Message.Text)
-	if len(appId) != 64 {
-		c.NewMessage().SetText("Looks like this *Application Id* is incorrect. Must be a 64 HEX symbols. Please try again").
+	appID := strings.TrimSpace(c.Message.Text)
+	if len(appID) != 64 {
+		c.NewMessage().SetText("Looks like this *Application ID* is incorrect. Must be a 64 HEX symbols. Please try again").
 			EnableHTML().
-			SetReplyAction(hostedAppIdEntered, baseURL).Send()
-		return errors.New("Application Id '" + appId + "' is incorrect")
+			SetReplyAction(hostedAppIDEntered, baseURL).Send()
+		return errors.New("Application ID '" + appID + "' is incorrect")
 	}
 	return c.NewMessage().SetText("Great! Now write me the *Secret* for this application").
 		EnableHTML().
-		SetReplyAction(hostedAppSecretEntered, baseURL, appId).Send()
+		SetReplyAction(hostedAppSecretEntered, baseURL, appID).Send()
 }
 
 func mustBeAuthed(c *integram.Context) (bool, error) {
@@ -287,13 +289,13 @@ func mustBeAuthed(c *integram.Context) (bool, error) {
 	provider := c.OAuthProvider()
 
 	if !provider.IsSetup() {
-		return false, c.NewMessage().SetText(fmt.Sprintf("To be able to use interactive replies in Telegram, first you need to add oauth application on your hosted GitLab instance (admin priveleges required): %s\nAdd application with any name(f.e. Telegram) and specify this *Redirect URI*: \n%s\n\nAfter you press *Submit* you will receive app info. First, send me the *Application Id*", c.ServiceBaseURL.String()+"/admin/applications/new", provider.RedirectURL())).
+		return false, c.NewMessage().SetText(fmt.Sprintf("To be able to use interactive replies in Telegram, first you need to add oauth application on your hosted GitLab instance (admin priveleges required): %s\nAdd application with any name(f.e. Telegram) and specify this *Redirect URI*: \n%s\n\nAfter you press *Submit* you will receive app info. First, send me the *Application ID*", c.ServiceBaseURL.String()+"/admin/applications/new", provider.RedirectURL())).
 			SetChat(c.User.ID).
 			SetBackupChat(c.Chat.ID).
 			EnableHTML().
 			EnableForceReply().
 			DisableWebPreview().
-			SetReplyAction(hostedAppIdEntered, c.ServiceBaseURL.String()).Send()
+			SetReplyAction(hostedAppIDEntered, c.ServiceBaseURL.String()).Send()
 
 	}
 	if !c.User.OAuthValid() {
@@ -305,28 +307,20 @@ func mustBeAuthed(c *integram.Context) (bool, error) {
 	return true, nil
 
 }
-func noteUniqueID(projectId int, noteId string) string {
-	return "note_" + strconv.Itoa(projectId) + "_" + noteId
+
+func noteUniqueID(projectID int, noteID string) string {
+	return "note_" + strconv.Itoa(projectID) + "_" + noteID
 }
 
-func getDomainFromUrl(s string) (string, error) {
+func client(c *integram.Context) *api.Client {
 
-	u, err := url.Parse(s)
-	if err != nil {
-		return "", err
-	}
-	return u.Host, nil
-}
-
-func Api(c *integram.Context) *api.Client {
-
-	client := api.NewClient(c.User.OAuthHttpClient(), "")
-	client.SetBaseURL(c.ServiceBaseURL.String() + API_URI_SUFFIX)
+	client := api.NewClient(c.User.OAuthHTTPClient(), "")
+	client.SetBaseURL(c.ServiceBaseURL.String() + apiSuffixURL)
 	return client
 }
 
 func sendIssueComment(c *integram.Context, projectID int, issueID int, text string) error {
-	note, _, err := Api(c).Notes.CreateIssueNote(projectID, issueID, &api.CreateIssueNoteOptions{Body: text})
+	note, _, err := client(c).Notes.CreateIssueNote(projectID, issueID, &api.CreateIssueNoteOptions{Body: text})
 
 	if note != nil {
 		c.Message.UpdateEventsID(c.Db(), "issue_note_"+strconv.Itoa(note.ID))
@@ -336,7 +330,7 @@ func sendIssueComment(c *integram.Context, projectID int, issueID int, text stri
 }
 
 func sendMRComment(c *integram.Context, projectID int, MergeRequestID int, text string) error {
-	note, _, err := Api(c).Notes.CreateMergeRequestNote(projectID, MergeRequestID, &api.CreateMergeRequestNoteOptions{Body: text})
+	note, _, err := client(c).Notes.CreateMergeRequestNote(projectID, MergeRequestID, &api.CreateMergeRequestNoteOptions{Body: text})
 
 	if note != nil {
 		c.Message.UpdateEventsID(c.Db(), noteUniqueID(projectID, strconv.Itoa(note.ID)))
@@ -346,7 +340,7 @@ func sendMRComment(c *integram.Context, projectID int, MergeRequestID int, text 
 }
 
 func sendSnippetComment(c *integram.Context, projectID int, SnippetID int, text string) error {
-	note, _, err := Api(c).Notes.CreateSnippetNote(projectID, SnippetID, &api.CreateSnippetNoteOptions{Body: text})
+	note, _, err := client(c).Notes.CreateSnippetNote(projectID, SnippetID, &api.CreateSnippetNoteOptions{Body: text})
 	if note != nil {
 		c.Message.UpdateEventsID(c.Db(), noteUniqueID(projectID, strconv.Itoa(note.ID)))
 	}
@@ -357,13 +351,12 @@ func sendSnippetComment(c *integram.Context, projectID int, SnippetID int, text 
 func trim(s string, max int) string {
 	if len(s) > max {
 		return s[:max] + "…"
-	} else {
-		return s
 	}
+	return s
 }
 
 func sendCommitComment(c *integram.Context, projectID int, commitID string, msg *integram.IncomingMessage) error {
-	note, _, err := Api(c).Notes.CreateCommitNote(projectID, commitID, &api.CreateCommitNoteOptions{Note: msg.Text})
+	note, _, err := client(c).Notes.CreateCommitNote(projectID, commitID, &api.CreateCommitNoteOptions{Note: msg.Text})
 	if err != nil {
 		return err
 	}
@@ -372,7 +365,7 @@ func sendCommitComment(c *integram.Context, projectID int, commitID string, msg 
 
 	return err
 }
-func commitsReplied(c *integram.Context, baseURL string, projectID int, commits []Commit) error {
+func commitsReplied(c *integram.Context, baseURL string, projectID int, commits []commit) error {
 	authorized, err := mustBeAuthed(c)
 
 	if err != nil {
@@ -382,20 +375,20 @@ func commitsReplied(c *integram.Context, baseURL string, projectID int, commits 
 	if !authorized {
 		//todo:bug message lost
 		return c.User.SetAfterAuthAction(commitsReplied, baseURL, projectID, commits)
-	} else {
-		buttons := integram.Buttons{}
-
-		for _, commit := range commits {
-			buttons.Append(commit.Id, trim(commit.Message, 40))
-		}
-
-		return c.NewMessage().
-			SetText(c.User.Mention()+" please specify commit to comment").
-			SetKeyboard(buttons.Markup(1), true).
-			EnableForceReply().
-			SetReplyAction(commitToReplySelected, baseURL, projectID, c.Message).
-			Send()
 	}
+	buttons := integram.Buttons{}
+
+	for _, commit := range commits {
+		buttons.Append(commit.ID, trim(commit.Message, 40))
+	}
+
+	return c.NewMessage().
+		SetText(c.User.Mention()+" please specify commit to comment").
+		SetKeyboard(buttons.Markup(1), true).
+		EnableForceReply().
+		SetReplyAction(commitToReplySelected, baseURL, projectID, c.Message).
+		Send()
+
 }
 
 // we nee msg param because action c.Message can contains selected commit id from prev state at commitsReplied and not the comment message
@@ -409,9 +402,10 @@ func commitToReplySelected(c *integram.Context, baseURL string, projectID int, m
 	authorized, err := mustBeAuthed(c)
 	if !authorized {
 		return c.User.SetAfterAuthAction(sendCommitComment, c, projectID, commitID, msg.Text)
-	} else {
-		c.Service().DoJob(sendCommitComment, projectID, commitID)
 	}
+
+	c.Service().DoJob(sendCommitComment, projectID, commitID)
+
 	return err
 }
 
@@ -422,10 +416,8 @@ func commitReplied(c *integram.Context, baseURL string, projectID int, commitID 
 	authorized, err := mustBeAuthed(c)
 	if !authorized {
 		return c.User.SetAfterAuthAction(sendCommitComment, c, projectID, commitID, c.Message)
-	} else {
-
-		c.Service().DoJob(sendCommitComment, c, projectID, commitID, c.Message)
 	}
+	c.Service().DoJob(sendCommitComment, c, projectID, commitID, c.Message)
 	return err
 }
 
@@ -471,8 +463,8 @@ func snippetReplied(c *integram.Context, baseURL string, projectID int, snippetI
 	return err
 }
 
-func WebhookHandler(c *integram.Context, request *integram.WebhookContext) (err error) {
-	wh := &Webhook{}
+func webhookHandler(c *integram.Context, request *integram.WebhookContext) (err error) {
+	wh := &webhook{}
 
 	err = request.JSON(wh)
 
@@ -484,11 +476,11 @@ func WebhookHandler(c *integram.Context, request *integram.WebhookContext) (err 
 
 	if wh.Repository.Homepage != "" {
 		c.SetServiceBaseURL(wh.Repository.Homepage)
-	} else if wh.Object_attributes != nil {
-		c.SetServiceBaseURL(wh.Object_attributes.Url)
+	} else if wh.ObjectAttributes != nil {
+		c.SetServiceBaseURL(wh.ObjectAttributes.URL)
 	}
 
-	switch wh.Object_kind {
+	switch wh.ObjectKind {
 	case "push":
 		s := strings.Split(wh.Ref, "/")
 		branch := s[len(s)-1]
@@ -499,7 +491,7 @@ func WebhookHandler(c *integram.Context, request *integram.WebhookContext) (err 
 		modified := 0
 		anyOherPersonCommits := false
 		for _, commit := range wh.Commits {
-			if commit.Author.Email != wh.User_email && commit.Author.Name != wh.User_name {
+			if commit.Author.Email != wh.UserEmail && commit.Author.Name != wh.UserName {
 				anyOherPersonCommits = true
 			}
 		}
@@ -507,9 +499,9 @@ func WebhookHandler(c *integram.Context, request *integram.WebhookContext) (err 
 
 			commit.Message = strings.TrimSuffix(commit.Message, "\n")
 			if anyOherPersonCommits {
-				text += Mention(c, commit.Author.Name, commit.Author.Email) + ": "
+				text += mention(c, commit.Author.Name, commit.Author.Email) + ": "
 			}
-			text += m.URL(commit.Message, commit.Url) + "\n"
+			text += m.URL(commit.Message, commit.URL) + "\n"
 			added += len(commit.Added)
 			removed += len(commit.Removed)
 			modified += len(commit.Modified)
@@ -538,23 +530,23 @@ func WebhookHandler(c *integram.Context, request *integram.WebhookContext) (err 
 		if len(wh.Commits) > 1 {
 			wp = c.WebPreview(fmt.Sprintf("%d commits", len(wh.Commits)), "@"+wh.Before[0:10]+" ... @"+wh.After[0:10], f, compareURL(wh.Repository.Homepage, wh.Before, wh.After), "")
 		} else if len(wh.Commits) == 1 {
-			wp = c.WebPreview("Commit", "@"+wh.After[0:10], f, wh.Commits[0].Url, "")
+			wp = c.WebPreview("Commit", "@"+wh.After[0:10], f, wh.Commits[0].URL, "")
 		}
 
 		var err error
 
 		if len(wh.Commits) > 0 {
 			if len(wh.Commits) == 1 {
-				msg.SetReplyAction(commitReplied, c.ServiceBaseURL.String(), wh.Project_id, wh.Commits[0].Id)
+				msg.SetReplyAction(commitReplied, c.ServiceBaseURL.String(), wh.ProjectID, wh.Commits[0].ID)
 			} else {
-				msg.SetReplyAction(commitsReplied, c.ServiceBaseURL.String(), wh.Project_id, wh.Commits)
+				msg.SetReplyAction(commitsReplied, c.ServiceBaseURL.String(), wh.ProjectID, wh.Commits)
 			}
-			_, err = msg.AddEventID("commit_" + wh.Commits[0].Id).SetText(fmt.Sprintf("%s %s to %s\n%s", wh.User_name, m.URL("pushed", wp), m.URL(wh.Repository.Name+"/"+branch, wh.Repository.Homepage+"/tree/"+url.QueryEscape(branch)), text)).
+			_, err = msg.AddEventID("commit_" + wh.Commits[0].ID).SetText(fmt.Sprintf("%s %s to %s\n%s", wh.UserName, m.URL("pushed", wp), m.URL(wh.Repository.Name+"/"+branch, wh.Repository.Homepage+"/tree/"+url.QueryEscape(branch)), text)).
 				EnableHTML().
 				SendAndGetID()
 
 		} else {
-			_, err = msg.SetText(fmt.Sprintf("%s created branch %s\n%s", wh.User_name, m.URL(wh.Repository.Name+"/"+branch, wh.Repository.Homepage+"/tree/"+url.QueryEscape(branch)), text)).
+			_, err = msg.SetText(fmt.Sprintf("%s created branch %s\n%s", wh.UserName, m.URL(wh.Repository.Name+"/"+branch, wh.Repository.Homepage+"/tree/"+url.QueryEscape(branch)), text)).
 				EnableHTML().
 				SendAndGetID()
 		}
@@ -569,125 +561,120 @@ func WebhookHandler(c *integram.Context, request *integram.WebhookContext) (err 
 			itemType = "branch"
 		}
 
-		return msg.SetText(fmt.Sprintf("%s pushed new %s at %s", Mention(c, wh.User_name, wh.User_email), m.URL(itemType+" "+s[len(s)-1], wh.Repository.Homepage+"/tree/"+s[len(s)-1]), m.URL(wh.User_name+" / "+wh.Repository.Name, wh.Repository.Homepage))).
+		return msg.SetText(fmt.Sprintf("%s pushed new %s at %s", mention(c, wh.UserName, wh.UserEmail), m.URL(itemType+" "+s[len(s)-1], wh.Repository.Homepage+"/tree/"+s[len(s)-1]), m.URL(wh.UserName+" / "+wh.Repository.Name, wh.Repository.Homepage))).
 			EnableHTML().DisableWebPreview().Send()
 	case "issue":
-		if wh.Object_attributes.Milestone_id > 0 {
+		if wh.ObjectAttributes.MilestoneID > 0 {
 			// Todo: need an API access to fetch milestones
 		}
 
-		msg.SetReplyAction(issueReplied, c.ServiceBaseURL.String(), wh.Object_attributes.Project_id, wh.Object_attributes.Id)
+		msg.SetReplyAction(issueReplied, c.ServiceBaseURL.String(), wh.ObjectAttributes.ProjectID, wh.ObjectAttributes.ID)
 
-		if wh.Object_attributes.Action == "open" {
-			err := msg.AddEventID("issue_" + strconv.Itoa(wh.Object_attributes.Id)).SetText(fmt.Sprintf("%s %s %s at %s:\n%s\n%s", Mention(c, wh.User.Username, wh.User_email), wh.Object_attributes.State, m.URL("issue", wh.Object_attributes.Url), m.URL(wh.User.Username+" / "+wh.Repository.Name, wh.Repository.Homepage), m.Bold(wh.Object_attributes.Title), wh.Object_attributes.Description)).
+		if wh.ObjectAttributes.Action == "open" {
+			err := msg.AddEventID("issue_" + strconv.Itoa(wh.ObjectAttributes.ID)).SetText(fmt.Sprintf("%s %s %s at %s:\n%s\n%s", mention(c, wh.User.Username, wh.UserEmail), wh.ObjectAttributes.State, m.URL("issue", wh.ObjectAttributes.URL), m.URL(wh.User.Username+" / "+wh.Repository.Name, wh.Repository.Homepage), m.Bold(wh.ObjectAttributes.Title), wh.ObjectAttributes.Description)).
 				EnableHTML().DisableWebPreview().Send()
 
 			return err
-		} else {
-			action := "updated"
-			if wh.Object_attributes.Action == "reopen" {
-				action = "reopened"
-			} else if wh.Object_attributes.Action == "close" {
-				action = "closed"
-			}
-
-			id := issueMessageID(c, wh.Object_attributes.Id)
-
-			if id > 0 {
-				// reply to existing message
-				return msg.SetText(fmt.Sprintf("%s by %s", m.Bold(action), Mention(c, wh.User.Username, ""))).
-					EnableHTML().DisableWebPreview().SetReplyToMsgID(id).Send()
-			} else {
-				// original message not found. Send WebPreview
-				wp := c.WebPreview("Issue", wh.Object_attributes.Title, wh.User.Username+" / "+wh.Repository.Name, wh.Object_attributes.Url, "")
-
-				return msg.SetText(fmt.Sprintf("%s by %s", m.URL(action, wp), Mention(c, wh.User.Username, ""))).EnableHTML().Send()
-			}
 		}
+		action := "updated"
+		if wh.ObjectAttributes.Action == "reopen" {
+			action = "reopened"
+		} else if wh.ObjectAttributes.Action == "close" {
+			action = "closed"
+		}
+
+		id := issueMessageID(c, wh.ObjectAttributes.ID)
+
+		if id > 0 {
+			// reply to existing message
+			return msg.SetText(fmt.Sprintf("%s by %s", m.Bold(action), mention(c, wh.User.Username, ""))).
+				EnableHTML().DisableWebPreview().SetReplyToMsgID(id).Send()
+		}
+		// original message not found. Send WebPreview
+		wp := c.WebPreview("Issue", wh.ObjectAttributes.Title, wh.User.Username+" / "+wh.Repository.Name, wh.ObjectAttributes.URL, "")
+
+		return msg.SetText(fmt.Sprintf("%s by %s", m.URL(action, wp), mention(c, wh.User.Username, ""))).EnableHTML().Send()
 
 	case "note":
 		wp := ""
 		noteType := ""
 		originMsg := &integram.Message{}
-		noteID := strconv.Itoa(wh.Object_attributes.Id)
-		if wh.Object_attributes.Note == "Commit" {
+		noteID := strconv.Itoa(wh.ObjectAttributes.ID)
+		if wh.ObjectAttributes.Note == "Commit" {
 			// collisions by date are unlikely here
-			noteID = wh.Object_attributes.Created_at
+			noteID = wh.ObjectAttributes.CreatedAt
 		}
-		if msg, _ := c.FindMessageByEventID(noteUniqueID(wh.Object_attributes.Project_id, noteID)); msg != nil {
+		if msg, _ := c.FindMessageByEventID(noteUniqueID(wh.ObjectAttributes.ProjectID, noteID)); msg != nil {
 			return nil
 		}
 
-		switch wh.Object_attributes.Note {
+		switch wh.ObjectAttributes.Note {
 		case "Commit":
 			noteType = "commit"
-			originMsg, _ = c.FindMessageByEventID(fmt.Sprintf("commit_%d", wh.Commit.Id))
+			originMsg, _ = c.FindMessageByEventID(fmt.Sprintf("commit_%d", wh.Commit.ID))
 			if originMsg != nil {
 				break
 			}
-			wp = c.WebPreview("Commit", "@"+wh.Commit.Id[0:10], wh.User.Username+" / "+wh.Repository.Name, wh.Object_attributes.Url, "")
+			wp = c.WebPreview("Commit", "@"+wh.Commit.ID[0:10], wh.User.Username+" / "+wh.Repository.Name, wh.ObjectAttributes.URL, "")
 		case "MergeRequest":
 			noteType = "merge request"
-			originMsg, _ = c.FindMessageByEventID(fmt.Sprintf("mr_%d", wh.Merge_request.Id))
+			originMsg, _ = c.FindMessageByEventID(fmt.Sprintf("mr_%d", wh.MergeRequest.ID))
 			if originMsg != nil {
 				break
 			}
-			wp = c.WebPreview("Merge Request", wh.Merge_request.Title, wh.User.Username+" / "+wh.Repository.Name, wh.Object_attributes.Url, "")
+			wp = c.WebPreview("Merge Request", wh.MergeRequest.Title, wh.User.Username+" / "+wh.Repository.Name, wh.ObjectAttributes.URL, "")
 		case "Issue":
 			noteType = "issue"
-			originMsg, _ = c.FindMessageByEventID(fmt.Sprintf("issue_%d", wh.Issue.Id))
+			originMsg, _ = c.FindMessageByEventID(fmt.Sprintf("issue_%d", wh.Issue.ID))
 			if originMsg != nil {
 				break
 			}
-			wp = c.WebPreview("Issue", wh.Issue.Title, wh.User.Username+" / "+wh.Repository.Name, wh.Object_attributes.Url, "")
+			wp = c.WebPreview("Issue", wh.Issue.Title, wh.User.Username+" / "+wh.Repository.Name, wh.ObjectAttributes.URL, "")
 		case "Snippet":
 			noteType = "snippet"
-			originMsg, _ = c.FindMessageByEventID(fmt.Sprintf("snippet_%d", wh.Snippet.Id))
+			originMsg, _ = c.FindMessageByEventID(fmt.Sprintf("snippet_%d", wh.Snippet.ID))
 			if originMsg != nil {
 				break
 			}
-			wp = c.WebPreview("Snippet", wh.Snippet.Title, wh.User.Username+" / "+wh.Repository.Name, wh.Object_attributes.Url, "")
+			wp = c.WebPreview("Snippet", wh.Snippet.Title, wh.User.Username+" / "+wh.Repository.Name, wh.ObjectAttributes.URL, "")
 		}
 
 		if originMsg == nil {
 			if wp == "" {
-				wp = wh.Object_attributes.Url
+				wp = wh.ObjectAttributes.URL
 			}
 
 			if noteType == "" {
-				noteType = strings.ToLower(wh.Object_attributes.Noteable_type)
+				noteType = strings.ToLower(wh.ObjectAttributes.NoteableType)
 			}
 
-			return msg.SetTextFmt("%s commented on %s: %s", Mention(c, wh.User.Username, ""), m.URL(strings.ToLower(wh.Object_attributes.Noteable_type), wp), wh.Object_attributes.Note).
+			return msg.SetTextFmt("%s commented on %s: %s", mention(c, wh.User.Username, ""), m.URL(strings.ToLower(wh.ObjectAttributes.NoteableType), wp), wh.ObjectAttributes.Note).
 				EnableHTML().
 				Send()
-		} else {
-			return msg.SetText(fmt.Sprintf("%s: %s", Mention(c, wh.User.Username, ""), wh.Object_attributes.Note)).
-				DisableWebPreview().EnableHTML().SetReplyToMsgID(originMsg.MsgID).Send()
 		}
-
+		return msg.SetText(fmt.Sprintf("%s: %s", mention(c, wh.User.Username, ""), wh.ObjectAttributes.Note)).
+			DisableWebPreview().EnableHTML().SetReplyToMsgID(originMsg.MsgID).Send()
 	case "merge_request":
 
-		if wh.Object_attributes.Action == "open" {
-			if wh.Object_attributes.Description != "" {
-				wh.Object_attributes.Description = "\n" + wh.Object_attributes.Description
+		if wh.ObjectAttributes.Action == "open" {
+			if wh.ObjectAttributes.Description != "" {
+				wh.ObjectAttributes.Description = "\n" + wh.ObjectAttributes.Description
 			}
 
-			err := msg.AddEventID("mr_" + strconv.Itoa(wh.Object_attributes.Id)).SetText(fmt.Sprintf("%s %s %s at %s:\n%s%s", Mention(c, wh.User.Username, wh.User_email), wh.Object_attributes.State, m.URL("merge request", wh.Object_attributes.Url), m.URL(wh.User_name+" / "+wh.Repository.Name, wh.Repository.Homepage), m.Bold(wh.Object_attributes.Title), wh.Object_attributes.Description)).
+			err := msg.AddEventID("mr_" + strconv.Itoa(wh.ObjectAttributes.ID)).SetText(fmt.Sprintf("%s %s %s at %s:\n%s%s", mention(c, wh.User.Username, wh.UserEmail), wh.ObjectAttributes.State, m.URL("merge request", wh.ObjectAttributes.URL), m.URL(wh.UserName+" / "+wh.Repository.Name, wh.Repository.Homepage), m.Bold(wh.ObjectAttributes.Title), wh.ObjectAttributes.Description)).
 				EnableHTML().DisableWebPreview().Send()
 
 			return err
 		}
 
 	default:
-
 		return
 		break
 	}
 	return
 }
 
-func Update(c *integram.Context) error {
+func update(c *integram.Context) error {
 
 	command, param := c.Message.GetCommand()
 

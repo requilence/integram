@@ -22,36 +22,40 @@ import (
 	log "github.com/Sirupsen/logrus"
 
 	"bytes"
+	"io"
+	"mime/multipart"
+	"os"
+	"path/filepath"
+
 	t "github.com/hackerlist/trello"
 	"github.com/jinzhu/now"
 	"github.com/mrjones/oauth"
 	"github.com/requilence/integram"
 	"github.com/requilence/integram/decent"
-	m "github.com/requilence/integram/html"
 	tg "gopkg.in/telegram-bot-api.v3"
-	"io"
-	"mime/multipart"
-	"os"
-	"path/filepath"
 )
 
+var m = integram.HTMLRichText{}
+
+// Config contains OAuthProvider
 type Config struct {
 	integram.OAuthProvider
 }
 
 var defaultBoardFilter = ChatBoardFilterSettings{CardCreated: true, CardCommented: true, CardMoved: true, PersonAssigned: true, Archived: true, Due: true}
 
-const ErrorWebhookExists = "400 Bad Request: A webhook with that callback, model, and token already exists"
-const MarkSign = "✅ "
+const errorWebhookExists = "400 Bad Request: A webhook with that callback, model, and token already exists"
+const markSign = "✅ "
 const dueDateFormat = "02.01 15:04"
 const dueDateFullFormat = "02.01.2006 15:04"
 
-const CARD_MEMBER_STATE_UNASSIGNED = 0
-const CARD_MEMBER_STATE_ASSIGNED = 1
+const cardMemberStateUnassigned = 0
+const cardMemberStateAssigned = 1
 
-const CARD_LABEL_STATE_NOTATTACHED = 0
-const CARD_LABEL_STATE_ATTACHED = 1
+const cardLabelStateUnattached = 0
+const cardLabelStateAttached = 1
 
+// Service returns *integram.Service from trello.Config
 func (cfg Config) Service() *integram.Service {
 	return &integram.Service{
 		Name:        "trello",
@@ -60,11 +64,11 @@ func (cfg Config) Service() *integram.Service {
 			Key:    cfg.OAuthProvider.ID,
 			Secret: cfg.OAuthProvider.Secret,
 
-			RequestTokenUrl:   "https://trello.com/1/OAuthGetRequestToken",
-			AuthorizeTokenUrl: "https://trello.com/1/OAuthAuthorizeToken",
-			AccessTokenUrl:    "https://trello.com/1/OAuthGetAccessToken",
+			RequestTokenURL:   "https://trello.com/1/OAuthGetRequestToken",
+			AuthorizeTokenURL: "https://trello.com/1/OAuthAuthorizeToken",
+			AccessTokenURL:    "https://trello.com/1/OAuthGetAccessToken",
 
-			AdditionalAuthorizationUrlParams: map[string]string{
+			AdditionalAuthorizationURLParams: map[string]string{
 				"name":       "Integram",
 				"expiration": "never",
 				"scope":      "read,write",
@@ -105,23 +109,26 @@ func (cfg Config) Service() *integram.Service {
 		TGNewMessageHandler:         newMessageHandler,
 		TGInlineQueryHandler:        inlineQueryHandler,
 		TGChosenInlineResultHandler: chosenInlineResultHandler,
-		WebhookHandler:              WebhookHandler,
-		OAuthSuccessful:             OAuthSuccessful,
+		WebhookHandler:              webhookHandler,
+		OAuthSuccessful:             oAuthSuccessful,
 	}
 
 }
 
+// ChatSettings contains filters information
 type ChatSettings struct {
 	Boards map[string]ChatBoardSetting
 }
-type UserSettings struct {
 
+// UserSettings contains boards data and target chats to deliver notifications
+type UserSettings struct {
 	//Boards settings by ID
 	Boards map[string]UserBoardSetting
 	// Chat from which integration request is received
 	TargetChat *integram.Chat
 }
 
+// ChatBoardFilterSettings customize which events will produce messages
 type ChatBoardFilterSettings struct {
 	CardCreated    bool
 	CardCommented  bool
@@ -133,17 +140,18 @@ type ChatBoardFilterSettings struct {
 	Checklisted    bool
 	Due            bool
 }
+
+// ChatBoardSetting contains Trello board settings
 type ChatBoardSetting struct {
-	// Board name
-	Name string
-	// Enable notifications on that board
-	Enabled         bool
+	Name            string // Board name
+	Enabled         bool   // Enable notifications on that board
 	Filter          ChatBoardFilterSettings
 	OAuthToken      string // backward compatibility for some of migrated from v1 users
 	TrelloWebhookID string // backward compatibility for some of migrated from v1 users
 	User            int64  // ID of User who integrate this board into this Chat
 }
 
+// UserBoardSetting contains Trello board settings
 type UserBoardSetting struct {
 	Name            string // Board name
 	TrelloWebhookID string // Trello Webhook id
@@ -162,16 +170,16 @@ func chatSettings(c *integram.Context) ChatSettings {
 	return s
 }
 
-type WebhookInfo struct {
-	Id          string
+type webhookInfo struct {
+	ID          string
 	DateCreated time.Time
 	DateExpires time.Time
-	IdMember    string
-	IdModel     string
+	IDMember    string
+	IDModel     string
 	CallbackURL string
 }
 
-func OAuthSuccessful(c *integram.Context) error {
+func oAuthSuccessful(c *integram.Context) error {
 	var err error
 	b := false
 	if c.User.Cache("auth_redirect", &b) {
@@ -311,7 +319,7 @@ func labelsByBoardID(c *integram.Context, api *t.Client, boardID string) ([]*t.L
 		return nil, err
 	}
 
-	sort.Sort(ByActuality(labels))
+	sort.Sort(byActuality(labels))
 	return labels, nil
 }
 
@@ -373,24 +381,24 @@ func boards(c *integram.Context, api *t.Client) ([]*t.Board, error) {
 	return boards, nil
 }
 
-type ByPriority struct {
+type byPriority struct {
 	Cards []*t.Card
 	MeID  string
 }
 
-func (a ByPriority) Len() int {
+func (a byPriority) Len() int {
 	return len(a.Cards)
 }
 
-func (a ByPriority) Swap(i, j int) {
+func (a byPriority) Swap(i, j int) {
 	a.Cards[i], a.Cards[j] = a.Cards[j], a.Cards[i]
 }
 
-func (a ByPriority) DueBefore(i, j int) bool {
+func (a byPriority) DueBefore(i, j int) bool {
 	return (a.Cards[i].Due != nil && !a.Cards[i].Due.IsZero() && (a.Cards[j].Due == nil || a.Cards[j].Due.IsZero() || a.Cards[i].Due.Before(*(a.Cards[j].Due))))
 }
 
-func (a ByPriority) Assigned(i, j int) bool {
+func (a byPriority) Assigned(i, j int) bool {
 	if len(a.Cards[i].IdMembers) > 0 && integram.SliceContainsString(a.Cards[i].IdMembers, a.MeID) && (len(a.Cards[j].IdMembers) == 0 || !integram.SliceContainsString(a.Cards[j].IdMembers, a.MeID)) {
 		return true
 	}
@@ -398,24 +406,24 @@ func (a ByPriority) Assigned(i, j int) bool {
 	return false
 }
 
-func (a ByPriority) VotesMore(i, j int) bool {
+func (a byPriority) VotesMore(i, j int) bool {
 	return (len(a.Cards[i].IdMembersVoted) > len(a.Cards[j].IdMembersVoted))
 }
 
-func (a ByPriority) PosLess(i, j int) bool {
+func (a byPriority) PosLess(i, j int) bool {
 	return a.Cards[i].IdList == a.Cards[j].IdList && (a.Cards[i].Pos < a.Cards[j].Pos)
 }
 
-func (a ByPriority) LastActivityOlder(i, j int) bool {
+func (a byPriority) LastActivityOlder(i, j int) bool {
 	return (a.Cards[i].DateLastActivity != nil && !a.Cards[i].DateLastActivity.IsZero() && (a.Cards[j].DateLastActivity == nil || a.Cards[j].DateLastActivity.IsZero() || a.Cards[i].DateLastActivity.Before(*(a.Cards[j].DateLastActivity))))
 }
 
-func (a ByPriority) LastBorderActivityMoreRecent(i, j int) bool {
+func (a byPriority) LastBorderActivityMoreRecent(i, j int) bool {
 	return a.Cards[i].Board != nil && a.Cards[j].Board != nil && (a.Cards[i].Board.DateLastActivity != nil && !a.Cards[i].Board.DateLastActivity.IsZero() && (a.Cards[j].Board.DateLastActivity != nil && !a.Cards[j].Board.DateLastActivity.IsZero() && a.Cards[i].Board.DateLastActivity.After(*(a.Cards[j].Board.DateLastActivity))))
 
 }
 
-func (a ByPriority) Less(i, j int) bool {
+func (a byPriority) Less(i, j int) bool {
 	//todo: replace with bit mask
 	if a.Assigned(i, j) {
 		return true
@@ -456,30 +464,30 @@ func (a ByPriority) Less(i, j int) bool {
 	return false
 }
 
-type ByNewest []*t.Board
+type byNewest []*t.Board
 
-func (a ByNewest) Len() int {
+func (a byNewest) Len() int {
 	return len(a)
 }
 
-func (a ByNewest) Swap(i, j int) {
+func (a byNewest) Swap(i, j int) {
 	a[i], a[j] = a[j], a[i]
 }
 
-func (a ByNewest) Less(i, j int) bool {
+func (a byNewest) Less(i, j int) bool {
 	return boardTimeForSorting(a[i]) > boardTimeForSorting(a[j])
 }
 
-type ByActuality []*t.Label
+type byActuality []*t.Label
 
-func (a ByActuality) Len() int {
+func (a byActuality) Len() int {
 	return len(a)
 }
 
-func (a ByActuality) Swap(i, j int) {
+func (a byActuality) Swap(i, j int) {
 	a[i], a[j] = a[j], a[i]
 }
-func (a ByActuality) Less(i, j int) bool {
+func (a byActuality) Less(i, j int) bool {
 	return a[i].Uses > a[j].Uses || (a[i].Uses == a[j].Uses) && a[i].Name != "" && a[j].Name == ""
 }
 
@@ -493,26 +501,26 @@ func boardTimeForSorting(b *t.Board) int64 {
 	return b.DateLastActivity.Unix()
 }
 
-func existsWebhookByBoard(c *integram.Context, boardId string) (WebhookInfo, error) {
+func existsWebhookByBoard(c *integram.Context, boardID string) (webhookInfo, error) {
 	res, err := api(c).Request("GET", "tokens/"+c.User.OAuthToken()+"/webhooks", nil, nil)
 	if err != nil {
-		return WebhookInfo{}, err
+		return webhookInfo{}, err
 	}
 
-	webhooks := []WebhookInfo{}
+	webhooks := []webhookInfo{}
 
 	err = json.Unmarshal(res, &webhooks)
 	if err != nil {
-		return WebhookInfo{}, err
+		return webhookInfo{}, err
 	}
 	log.Printf("webhooks: %+v\n", webhooks)
 	for _, webhook := range webhooks {
-		if webhook.IdModel == boardId && webhook.CallbackURL == c.User.ServiceHookURL() {
+		if webhook.IDModel == boardID && webhook.CallbackURL == c.User.ServiceHookURL() {
 			return webhook, nil
 		}
 	}
 
-	return WebhookInfo{}, errors.New("not found")
+	return webhookInfo{}, errors.New("not found")
 }
 
 func resubscribeAllBoards(c *integram.Context) error {
@@ -524,7 +532,7 @@ func resubscribeAllBoards(c *integram.Context) error {
 			if board.OAuthToken != uToken || board.TrelloWebhookID == "" {
 				//todo: make a job
 				qp := url.Values{"description": {"Integram"}, "callbackURL": {c.User.ServiceHookURL()}, "idModel": {id}}
-				webhook := WebhookInfo{}
+				webhook := webhookInfo{}
 
 				res, err := api(c).Request("POST", "tokens/"+uToken+"/webhooks", nil, qp)
 				if err != nil {
@@ -535,7 +543,7 @@ func resubscribeAllBoards(c *integram.Context) error {
 						c.Log().WithError(err).Error("resubscribeAllBoards")
 					} else {
 						board.OAuthToken = uToken
-						board.TrelloWebhookID = webhook.Id
+						board.TrelloWebhookID = webhook.ID
 						us.Boards[id] = board
 						any = true
 					}
@@ -659,9 +667,9 @@ func subscribeBoard(c *integram.Context, b *t.Board, chatID int64) error {
 	qp := url.Values{"description": {"Integram"}, "callbackURL": {c.User.ServiceHookURL()}, "idModel": {b.Id}}
 
 	res, err := api(c).Request("POST", "tokens/"+c.User.OAuthToken()+"/webhooks", nil, qp)
-	webhook := WebhookInfo{}
+	webhook := webhookInfo{}
 	if err != nil {
-		if err.Error() == ErrorWebhookExists {
+		if err.Error() == errorWebhookExists {
 			webhook, err = existsWebhookByBoard(c, b.Id)
 			if err != nil {
 				c.Log().WithError(err).WithField("boardID", b.Id).Error("Received ErrorWebhookExists but can't refetch")
@@ -677,7 +685,7 @@ func subscribeBoard(c *integram.Context, b *t.Board, chatID int64) error {
 		}
 	}
 
-	return processWebhook(c, b, chatID, webhook.Id)
+	return processWebhook(c, b, chatID, webhook.ID)
 
 	return nil
 }
@@ -718,9 +726,9 @@ func listsFilterByID(lists []*t.List, id string) *t.List {
 	return nil
 }
 
-func targetChatSelected(c *integram.Context, boardId string) error {
+func targetChatSelected(c *integram.Context, boardID string) error {
 
-	if boardId == "" {
+	if boardID == "" {
 		err := errors.New("BoardID is empty")
 		return err
 	}
@@ -728,13 +736,13 @@ func targetChatSelected(c *integram.Context, boardId string) error {
 	key, _ := c.KeyboardAnswer()
 	var chatID int64
 	boards, _ := boards(c, api(c))
-	board := boardsFilterByID(boards, boardId)
+	board := boardsFilterByID(boards, boardID)
 
 	if key == "group" {
 		// Defer adding chatID by using Telegram's ?startgroup
 		chatID = 0
 		c.NewMessage().
-			SetText(fmt.Sprintf("Use this link to choose the group chat: https://telegram.me/%s?startgroup=%s", c.Bot().Username, boardId)).
+			SetText(fmt.Sprintf("Use this link to choose the group chat: https://telegram.me/%s?startgroup=%s", c.Bot().Username, boardID)).
 			HideKeyboard().
 			DisableWebPreview().
 			Send()
@@ -772,7 +780,7 @@ func renderBoardFilters(c *integram.Context, boardID string, keyboard *integram.
 				} else {
 					v := reflect.ValueOf(bs.Filter).FieldByName(button.Data)
 					if bs.Enabled && v.IsValid() && v.Bool() {
-						(*keyboard)[rowIndex][colIndex].Text = MarkSign + button.Text
+						(*keyboard)[rowIndex][colIndex].Text = markSign + button.Text
 					}
 				}
 			}
@@ -826,8 +834,8 @@ func sendBoardFiltersKeyboard(c *integram.Context, boardID string) error {
 }
 
 func cleanMarkSign(s string) string {
-	if strings.HasPrefix(s, MarkSign) {
-		return s[len(MarkSign):]
+	if strings.HasPrefix(s, markSign) {
+		return s[len(markSign):]
 	}
 	return s
 }
@@ -842,63 +850,62 @@ func boardFilterButtonPressed(c *integram.Context, boardID string) error {
 			SetReplyToMsgID(c.Message.MsgID).
 			HideKeyboard().
 			Send()
-	} else {
+	}
 
-		cs := chatSettings(c)
-		if bs, ok := cs.Boards[boardID]; ok {
+	cs := chatSettings(c)
+	if bs, ok := cs.Boards[boardID]; ok {
 
-			if answer == "switch" {
-				bs.Enabled = !bs.Enabled
-				cs.Boards[boardID] = bs
-				c.Chat.SaveSettings(cs)
+		if answer == "switch" {
+			bs.Enabled = !bs.Enabled
+			cs.Boards[boardID] = bs
+			c.Chat.SaveSettings(cs)
 
-				keyboard := getBoardFilterKeyboard(c, boardID)
-				onOrOff := "on"
-				if !bs.Enabled {
-					onOrOff = "off"
-				}
-				return c.NewMessage().
-					SetText(c.User.Mention()+", all notifications turned "+onOrOff).
-					SetKeyboard(keyboard, true).
-					SetSilent(true).
-					SetReplyToMsgID(c.Message.MsgID).
-					SetReplyAction(boardFilterButtonPressed, boardID).
-					Send()
-
-			} else {
-				v := reflect.ValueOf(&bs.Filter).Elem().FieldByName(answer)
-
-				if v.IsValid() && v.CanSet() {
-					v.SetBool(!v.Bool())
-
-					cs.Boards[boardID] = bs
-					c.Chat.SaveSettings(cs)
-					/*var s string
-					if v.Bool() {
-						s = "enabled"
-					} else {
-						s = "disabled"
-					}*/
-					keyboard := getBoardFilterKeyboard(c, boardID)
-
-					return c.NewMessage().
-						SetText(
-							decent.Shuffle(
-								"Ok, %v",
-								"Have done, %v",
-								"I changed it, %v",
-								"Done it for you, %v",
-								"👌 %v",
-								"👍 %v").
-								S(c.User.Mention())).
-						SetKeyboard(keyboard, true).
-						SetReplyToMsgID(c.Message.MsgID).
-						SetSilent(true).
-						SetReplyAction(boardFilterButtonPressed, boardID).
-						Send()
-				}
+			keyboard := getBoardFilterKeyboard(c, boardID)
+			onOrOff := "on"
+			if !bs.Enabled {
+				onOrOff = "off"
 			}
+			return c.NewMessage().
+				SetText(c.User.Mention()+", all notifications turned "+onOrOff).
+				SetKeyboard(keyboard, true).
+				SetSilent(true).
+				SetReplyToMsgID(c.Message.MsgID).
+				SetReplyAction(boardFilterButtonPressed, boardID).
+				Send()
+
 		}
+		v := reflect.ValueOf(&bs.Filter).Elem().FieldByName(answer)
+
+		if v.IsValid() && v.CanSet() {
+			v.SetBool(!v.Bool())
+
+			cs.Boards[boardID] = bs
+			c.Chat.SaveSettings(cs)
+			/*var s string
+			if v.Bool() {
+				s = "enabled"
+			} else {
+				s = "disabled"
+			}*/
+			keyboard := getBoardFilterKeyboard(c, boardID)
+
+			return c.NewMessage().
+				SetText(
+					decent.Shuffle(
+						"Ok, %v",
+						"Have done, %v",
+						"I changed it, %v",
+						"Done it for you, %v",
+						"👌 %v",
+						"👍 %v").
+						S(c.User.Mention())).
+				SetKeyboard(keyboard, true).
+				SetReplyToMsgID(c.Message.MsgID).
+				SetSilent(true).
+				SetReplyAction(boardFilterButtonPressed, boardID).
+				Send()
+		}
+
 	}
 	return errors.New("Can't change board filter value")
 }
@@ -915,12 +922,12 @@ func boardToTuneSelected(c *integram.Context) error {
 
 func boardToIntegrateSelected(c *integram.Context) error {
 
-	boardId, boardName := c.KeyboardAnswer()
-	log.Infof("boardToIntegrateSelected %s (%s)", boardName, boardId)
+	boardID, boardName := c.KeyboardAnswer()
+	log.Infof("boardToIntegrateSelected %s (%s)", boardName, boardID)
 
 	if c.Chat.IsGroup() {
 		boards, _ := boards(c, api(c))
-		board := boardsFilterByID(boards, boardId)
+		board := boardsFilterByID(boards, boardID)
 
 		return scheduleSubscribeIfBoardNotAlreadyExists(c, board, c.Chat.ID)
 	}
@@ -937,7 +944,7 @@ func boardToIntegrateSelected(c *integram.Context) error {
 		SetText("Please choose where you would like to receive Trello notifications for board "+boardName).
 		SetKeyboard(but.Markup(1), true).
 		SetReplyToMsgID(c.Message.MsgID).
-		SetReplyAction(targetChatSelected, boardId).
+		SetReplyAction(targetChatSelected, boardID).
 		Send()
 	return nil
 }
@@ -970,7 +977,7 @@ func boardForCardSelected(c *integram.Context) error {
 
 func listForCardSelected(c *integram.Context, boardID string, boardName string) error {
 
-	listId, listName := c.KeyboardAnswer()
+	listID, listName := c.KeyboardAnswer()
 
 	lists, err := listsByBoardID(c, api(c), boardID)
 
@@ -978,17 +985,17 @@ func listForCardSelected(c *integram.Context, boardID string, boardName string) 
 		return err
 	}
 
-	list := listsFilterByID(lists, listId)
+	list := listsFilterByID(lists, listID)
 
 	if list == nil {
-		return errors.New("wrong listID " + listId + " listname " + listName)
+		return errors.New("wrong listID " + listID + " listname " + listName)
 	}
 	return c.NewMessage().
 		SetTextFmt("Enter the title. Card will be added to %s / %s ", m.Bold(boardName), m.Bold(listName)).
 		EnableHTML().
 		HideKeyboard().
 		//EnableForceReply().
-		SetReplyAction(textForCardEntered, boardID, boardName, listId, listName).
+		SetReplyAction(textForCardEntered, boardID, boardName, listID, listName).
 		Send()
 }
 
@@ -1061,7 +1068,7 @@ func cardText(c *integram.Context, card *t.Card) string {
 		text += "\n  👤 "
 
 		for i, member := range card.Members {
-			text += Mention(c, member)
+			text += mention(c, member)
 			if i < len(card.Members)-1 {
 				text += ", "
 			}
@@ -1112,27 +1119,27 @@ func cardInlineKeyboard(card *t.Card, more bool) integram.InlineKeyboard {
 		but.Append("more", "…")
 		return but.Markup(4, "actions")
 
-	} else {
-		but.Append("name", "Name")
-
-		but.Append("desc", "Description")
-		but.Append("due", "Due")
-		// 65535 is the Trello default for first card in the list
-		if card.Pos <= 65535 {
-			but.AppendWithState(0, "position", "⬇ Bottom")
-		} else {
-			but.AppendWithState(1, "position", "⬆ Top")
-		}
-		but.Append("label", "Label")
-		if !card.Closed {
-			but.AppendWithState(1, "archive", "Archive")
-		} else {
-			but.AppendWithState(0, "archive", "Unarchive")
-		}
-
-		but.Append("back", "↑ Less")
-		return but.Markup(3, "actions")
 	}
+	but.Append("name", "Name")
+
+	but.Append("desc", "Description")
+	but.Append("due", "Due")
+	// 65535 is the Trello default for first card in the list
+	if card.Pos <= 65535 {
+		but.AppendWithState(0, "position", "⬇ Bottom")
+	} else {
+		but.AppendWithState(1, "position", "⬆ Top")
+	}
+	but.Append("label", "Label")
+	if !card.Closed {
+		but.AppendWithState(1, "archive", "Archive")
+	} else {
+		but.AppendWithState(0, "archive", "Unarchive")
+	}
+
+	but.Append("back", "↑ Less")
+	return but.Markup(3, "actions")
+
 }
 func inlineCardButtonPressed(c *integram.Context, cardID string) error {
 	//time.Sleep(time.Second * 20)
@@ -1171,7 +1178,7 @@ func inlineCardButtonPressed(c *integram.Context, cardID string) error {
 		log.Info("assign state ", c.Callback.State)
 		unassign := false
 
-		if c.Callback.State == CARD_MEMBER_STATE_ASSIGNED {
+		if c.Callback.State == cardMemberStateAssigned {
 			unassign = true
 		}
 		member, unassigned, err := assignMemberID(c, api, c.Callback.Data, unassign, card)
@@ -1184,11 +1191,11 @@ func inlineCardButtonPressed(c *integram.Context, cardID string) error {
 
 			if unassigned {
 				// c.EditMessageText(c.Callback.Message, cardText(c, card))
-				err = c.EditPressedInlineButton(CARD_MEMBER_STATE_UNASSIGNED, "   @"+member.Username)
+				err = c.EditPressedInlineButton(cardMemberStateUnassigned, "   @"+member.Username)
 			} else {
 				//c.EditMessageText(c.Callback.Message, cardText(c, card))
 
-				err = c.EditPressedInlineButton(CARD_MEMBER_STATE_ASSIGNED, "✅ @"+member.Username)
+				err = c.EditPressedInlineButton(cardMemberStateAssigned, "✅ @"+member.Username)
 			}
 			return err
 		}
@@ -1197,7 +1204,7 @@ func inlineCardButtonPressed(c *integram.Context, cardID string) error {
 		log.Info("label state ", c.Callback.State)
 		removeLabel := false
 
-		if c.Callback.State == CARD_LABEL_STATE_ATTACHED {
+		if c.Callback.State == cardLabelStateAttached {
 			removeLabel = true
 		}
 		label, unattached, err := attachLabelID(c, api, c.Callback.Data, removeLabel, card)
@@ -1210,11 +1217,11 @@ func inlineCardButtonPressed(c *integram.Context, cardID string) error {
 
 			if unattached {
 				// c.EditMessageText(c.Callback.Message, cardText(c, card))
-				err = c.EditPressedInlineButton(CARD_LABEL_STATE_NOTATTACHED, "   "+colorEmoji(label.Color)+" "+label.Name)
+				err = c.EditPressedInlineButton(cardLabelStateUnattached, "   "+colorEmoji(label.Color)+" "+label.Name)
 			} else {
 				//c.EditMessageText(c.Callback.Message, cardText(c, card))
 
-				err = c.EditPressedInlineButton(CARD_LABEL_STATE_ATTACHED, "✅ "+colorEmoji(label.Color)+" "+label.Name)
+				err = c.EditPressedInlineButton(cardLabelStateAttached, "✅ "+colorEmoji(label.Color)+" "+label.Name)
 			}
 			return err
 		}
@@ -1564,9 +1571,9 @@ func getCardAssignButtons(c *integram.Context, api *t.Client, card *t.Card) (int
 	for _, member := range members {
 
 		if card.IsMemberAssigned(member.Id) {
-			but.AppendWithState(CARD_MEMBER_STATE_ASSIGNED, member.Id, "✅ @"+member.Username)
+			but.AppendWithState(cardMemberStateAssigned, member.Id, "✅ @"+member.Username)
 		} else {
-			but.AppendWithState(CARD_MEMBER_STATE_UNASSIGNED, member.Id, "   @"+member.Username)
+			but.AppendWithState(cardMemberStateUnassigned, member.Id, "   @"+member.Username)
 
 		}
 	}
@@ -1629,9 +1636,9 @@ func getCardLabelsButtons(c *integram.Context, api *t.Client, card *t.Card) (int
 
 	for _, label := range labels {
 		if card.IsLabelAttached(label.Id) {
-			but.AppendWithState(CARD_LABEL_STATE_ATTACHED, label.Id, "✅ "+colorEmoji(label.Color)+" "+label.Name)
+			but.AppendWithState(cardLabelStateAttached, label.Id, "✅ "+colorEmoji(label.Color)+" "+label.Name)
 		} else {
-			but.AppendWithState(CARD_LABEL_STATE_NOTATTACHED, label.Id, "   "+colorEmoji(label.Color)+" "+label.Name)
+			but.AppendWithState(cardLabelStateUnattached, label.Id, "   "+colorEmoji(label.Color)+" "+label.Name)
 		}
 	}
 	return but, err
@@ -1656,35 +1663,34 @@ func cardSetDue(c *integram.Context, card *t.Card, date string) (string, error) 
 		card.Due = &time.Time{}
 		return "", err
 
-	} else {
-
-		dt, err = time.ParseInLocation(dueDateFullFormat, date[0:5]+"."+fmt.Sprintf("%d", int(n.Year()))+date[5:], c.User.TzLocation())
-
-		if err != nil {
-			return "", err
-		}
-
-		dt = dt.In(time.UTC)
-
-		if int(dt.Month()) < int(n.Month()) {
-			dt = dt.AddDate(1, 0, 0)
-		}
-
-		log.WithField("due", dt.Format(time.RFC3339Nano)).Info("set due date")
-
-		_, err = api.Request("PUT", "cards/"+card.Id+"/due", nil, url.Values{"value": {dt.Format(time.RFC3339Nano)}})
-
-		if err != nil {
-			if t.IsBadToken(err) {
-				c.User.ResetOAuthToken()
-			}
-			return "", err
-		}
-
-		err = c.UpdateServiceCache("card_"+card.Id, bson.M{"$set": bson.M{"val.due": &dt}}, card)
-		return dt.In(c.User.TzLocation()).Format(time.RFC1123Z), err
-
 	}
+
+	dt, err = time.ParseInLocation(dueDateFullFormat, date[0:5]+"."+fmt.Sprintf("%d", int(n.Year()))+date[5:], c.User.TzLocation())
+
+	if err != nil {
+		return "", err
+	}
+
+	dt = dt.In(time.UTC)
+
+	if int(dt.Month()) < int(n.Month()) {
+		dt = dt.AddDate(1, 0, 0)
+	}
+
+	log.WithField("due", dt.Format(time.RFC3339Nano)).Info("set due date")
+
+	_, err = api.Request("PUT", "cards/"+card.Id+"/due", nil, url.Values{"value": {dt.Format(time.RFC3339Nano)}})
+
+	if err != nil {
+		if t.IsBadToken(err) {
+			c.User.ResetOAuthToken()
+		}
+		return "", err
+	}
+
+	err = c.UpdateServiceCache("card_"+card.Id, bson.M{"$set": bson.M{"val.due": &dt}}, card)
+	return dt.In(c.User.TzLocation()).Format(time.RFC1123Z), err
+
 }
 func сardNameEntered(c *integram.Context, card *t.Card) error {
 	fmt.Printf("сardNameEntered card:%+v\n", card)
@@ -2022,7 +2028,7 @@ func boardsButtons(c *integram.Context) (*integram.Buttons, error) {
 	if err != nil {
 		return nil, err
 	}
-	sort.Sort(ByNewest(boards))
+	sort.Sort(byNewest(boards))
 
 	buttons := integram.Buttons{}
 	for _, board := range boards {
@@ -2188,7 +2194,7 @@ func inlineQueryHandler(c *integram.Context) error {
 	if err != nil {
 		return err
 	}
-	sort.Sort(ByNewest(boards))
+	sort.Sort(byNewest(boards))
 
 	var cards []*t.Card
 
@@ -2234,7 +2240,7 @@ func inlineQueryHandler(c *integram.Context) error {
 		return err
 	}
 
-	d := ByPriority{Cards: cards, MeID: meInfo.Id}
+	d := byPriority{Cards: cards, MeID: meInfo.Id}
 	sort.Sort(d)
 	start, _ := strconv.Atoi(c.InlineQuery.Offset)
 
@@ -2431,12 +2437,12 @@ func newMessageHandler(c *integram.Context) error {
 				SetInlineKeyboard(integram.InlineButton{Text: "Tap me!", URL: c.Bot().PMURL("connect")}).
 				HideKeyboard().
 				Send()
-		} else {
-			return c.NewMessage().
-				HideKeyboard().
-				SetTextFmt("Hi human! Let's get some juicy Trello in the Telegram. Open this link to authorize me: %s", c.User.OauthInitURL()).
-				Send()
 		}
+		return c.NewMessage().
+			HideKeyboard().
+			SetTextFmt("Hi human! Let's get some juicy Trello in the Telegram. Open this link to authorize me: %s", c.User.OauthInitURL()).
+			Send()
+
 	case "reauthorize":
 		c.User.ResetOAuthToken()
 		c.User.SetCache("me", nil, time.Second)

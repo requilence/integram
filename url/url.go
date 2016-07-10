@@ -1,22 +1,15 @@
+// Package url created to provide Marshaling and Unmarshaling for url.URL
 package url
 
 import (
 	"bytes"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
 	nativeurl "net/url"
 	"strings"
 )
 
+// URL is native url.URL struct
 type URL nativeurl.URL
-
-func MustParse(url string) *URL {
-	u, err := Parse(url)
-	if err != nil {
-		log.Panicf("Expected URL to parse: %q, got error: %v", url, err)
-	}
-	return u
-}
 
 // Parse parses rawurl into a URL structure.
 // The rawurl may be relative or absolute.

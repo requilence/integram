@@ -69,10 +69,10 @@ func verifyTypeMatching(handlerFunc interface{}, args ...interface{}) error {
 	}
 
 	if handlerType.NumOut() != 1 {
-		return fmt.Errorf("handler must have exactly one return value. Got %d.", handlerType.NumOut())
+		return fmt.Errorf("handler must have exactly one return value. Got %d", handlerType.NumOut())
 	}
 	if !typeIsError(handlerType.Out(0)) {
-		return fmt.Errorf("handler must return an error. Got return value of type %s.", handlerType.Out(0).String())
+		return fmt.Errorf("handler must return an error. Got return value of type %s", handlerType.Out(0).String())
 	}
 
 	for argIndex, arg := range args {

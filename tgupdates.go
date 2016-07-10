@@ -1,28 +1,18 @@
 package integram
 
 import (
-	"reflect"
-	"regexp"
-	"strings"
-
-	//	"gopkg.in/mgo.v2/bson"
-	//"github.com/requilence/integram/base"
-	//"github.com/requilence/integram/credentials"
 	"errors"
 	"fmt"
-
-	tg "gopkg.in/telegram-bot-api.v3"
-
 	log "github.com/Sirupsen/logrus"
-
-	"time"
-
 	mgo "gopkg.in/mgo.v2"
-
-	"strconv"
-
 	"gopkg.in/mgo.v2/bson"
+	tg "gopkg.in/telegram-bot-api.v3"
+	"reflect"
+	"regexp"
+	"strconv"
+	"strings"
 	"sync"
+	"time"
 )
 
 var updateMapMutex = &sync.Mutex{}
@@ -289,7 +279,7 @@ func tgCallbackHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service, *Conte
 		}
 		cbData := u.CallbackQuery.Data
 		cbState := 0
-		if []byte(cbData)[0] == INLINE_BUTTON_STATE_KEYWORD {
+		if []byte(cbData)[0] == inlineButtonStateKeyword {
 			log.Debug("INLINE_BUTTON_STATE_KEYWORD found")
 			cbState, err = strconv.Atoi(cbData[1:2])
 			cbData = cbData[2:]
@@ -303,7 +293,7 @@ func tgCallbackHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service, *Conte
 		} else {
 			chat = tgChat(&tg.Chat{ID: u.CallbackQuery.From.ID, LastName: u.CallbackQuery.From.LastName, UserName: u.CallbackQuery.From.UserName, Type: "private", FirstName: u.CallbackQuery.From.FirstName})
 		}
-		ctx := &Context{ServiceName: service.Name, User: tgUser(u.CallbackQuery.From), Chat: chat, db: db, Callback: &Callback{ID: u.CallbackQuery.ID, Data: cbData, Message: rm.om, State: cbState}}
+		ctx := &Context{ServiceName: service.Name, User: tgUser(u.CallbackQuery.From), Chat: chat, db: db, Callback: &callback{ID: u.CallbackQuery.ID, Data: cbData, Message: rm.om, State: cbState}}
 		ctx.User.ctx = ctx
 		ctx.Chat.ctx = ctx
 
@@ -369,7 +359,7 @@ func tgChosenInlineResultHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Servi
 		log.WithError(err).WithField("bot", b.ID).Error("Can't detect service")
 	}
 	user := tgUser(u.ChosenInlineResult.From)
-	ctx := &Context{ServiceName: service.Name, User: user, db: db, ChosenInlineResult: &ChosenInlineResult{ChosenInlineResult: *u.ChosenInlineResult}}
+	ctx := &Context{ServiceName: service.Name, User: user, db: db, ChosenInlineResult: &chosenInlineResult{ChosenInlineResult: *u.ChosenInlineResult}}
 	ctx.User.ctx = ctx
 
 	/*chatID:=0
@@ -479,7 +469,7 @@ func tgIncomingMessageHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service,
 		cmd, _ := im.GetCommand()
 		if cmd == "" {
 			// If there is active keyboard – received message is reply for the source message
-			kb, _ := ctx.Keyboard()
+			kb, _ := ctx.keyboard()
 			if kb.MsgID > 0 {
 				fmt.Printf("Reply for kb: %d\n", kb.MsgID)
 
@@ -653,7 +643,7 @@ func (m *Message) saveToDB(db *mgo.Database) error {
 	return db.C("messages").Insert(m)
 }
 
-// receive true if user created a new group with bot as member or add the bot to existing group
+// IsEventBotAddedToGroup returns true if user created a new group with bot as member or add the bot to existing group
 func (m *IncomingMessage) IsEventBotAddedToGroup() bool {
 	if (m.NewChatMember != nil && m.NewChatMember.ID == m.BotID) || m.GroupChatCreated || m.SuperGroupChatCreated {
 		return true
@@ -661,73 +651,58 @@ func (m *IncomingMessage) IsEventBotAddedToGroup() bool {
 	return false
 }
 
-// Parse received message text for bot command.
-// Returns the command and after command text if presented
+// GetCommand parses received message text for bot command. Returns the command and after command text if presented
 func (m *IncomingMessage) GetCommand() (string, string) {
 	text := m.Text
 
 	if !strings.HasPrefix(text, "/") {
 		return "", text
-	} else {
-		// here is some bot commands examples
-		//
-		// /start
-		// /start@trello_bot
-		// /start@trello_bot text
-		// /start text
-		//
-		r, _ := regexp.Compile("^/([a-zA-Z0-9_]+)(?:@[a-zA-Z0-9_]+)?.?(.*)?$")
-		match := r.FindStringSubmatch(text)
-		if len(match) == 3 {
-			return match[1], match[2]
-		} else if len(match) == 2 {
-			return match[1], ""
-		} else {
-			return "", ""
-		}
 	}
+	r, _ := regexp.Compile("^/([a-zA-Z0-9_]+)(?:@[a-zA-Z0-9_]+)?.?(.*)?$")
+	match := r.FindStringSubmatch(text)
+	if len(match) == 3 {
+		return match[1], match[2]
+	} else if len(match) == 2 {
+		return match[1], ""
+	}
+	return "", ""
+
 }
 
 func detectServiceByBot(botID int64) (*Service, error) {
 	serviceName := ""
 	if botID > 0 {
-		if bot := botById(botID); bot != nil {
+		if bot := botByID(botID); bot != nil {
 			if len(bot.services) == 1 {
 				serviceName = bot.services[0].Name
 			}
 		}
 	}
 	if serviceName == "" {
-		return &Service{}, errors.New(fmt.Sprintf("Can't determine active service for bot with ID=%d. No messages found.", botID))
-	} else {
-		if val, ok := services[serviceName]; ok {
-			return val, nil
-		} else {
-			return &Service{}, errors.New("Unknown service: " + serviceName)
-		}
+		return &Service{}, fmt.Errorf("Can't determine active service for bot with ID=%d. No messages found.", botID)
 	}
+	if val, ok := services[serviceName]; ok {
+		return val, nil
+	}
+	return &Service{}, errors.New("Unknown service: " + serviceName)
+
 }
 func (m *Message) detectService(db *mgo.Database) (*Service, error) {
 	serviceName := ""
 
 	if m.BotID > 0 {
-		if bot := botById(m.BotID); bot != nil {
+		if bot := botByID(m.BotID); bot != nil {
 			if len(bot.services) == 1 {
 				serviceName = bot.services[0].Name
 			}
 		}
 	}
-	//fmt.Printf("detectService: %+v\n", serviceName)
-	/*if serviceName == "" {
-		db.C("messages").Find(bson.M{"chatid": m.ChatID, "botid": m.BotID}).Select(bson.M{"service": 1}).Sort("-date").One(&serviceName)
-	}*/
+
 	if serviceName == "" {
-		return &Service{}, errors.New(fmt.Sprintf("Can't determine active service for bot with ID=%d. No messages found.", m.BotID))
-	} else {
-		if val, ok := services[serviceName]; ok {
-			return val, nil
-		} else {
-			return &Service{}, errors.New("Unknown service: " + serviceName)
-		}
+		return &Service{}, fmt.Errorf("Can't determine active service for bot with ID=%d. No messages found.", m.BotID)
 	}
+	if val, ok := services[serviceName]; ok {
+		return val, nil
+	}
+	return &Service{}, errors.New("Unknown service: " + serviceName)
 }

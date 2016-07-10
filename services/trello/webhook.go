@@ -2,62 +2,57 @@ package trello
 
 import (
 	"encoding/json"
-	"fmt"
-	"time"
-
-	iurl "github.com/requilence/integram/url"
-
 	"errors"
-
+	"fmt"
 	"net/url"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"time"
 
 	log "github.com/Sirupsen/logrus"
 	t "github.com/hackerlist/trello"
 	"github.com/requilence/integram"
 	"github.com/requilence/integram/decent"
-	m "github.com/requilence/integram/html"
-
+	iurl "github.com/requilence/integram/url"
 	"gopkg.in/mgo.v2/bson"
 	tg "gopkg.in/telegram-bot-api.v3"
-	"os"
-	"path/filepath"
-	"regexp"
-	"strings"
 )
 
-const TIME_TO_UPDATE_EXISTING_CARD_MESSAGE_IN_CHAT = time.Minute * 1
+// TimeToJustUpdateMessage used when received to fade the message and just update the message with just posted card
+const TimeToJustUpdateMessage = time.Minute * 1
 
-type Action struct {
-	// Action ID
-	Id              string
-	IdMemberCreator string
-	Data            ActionData
+type action struct {
+	ID              string
+	IDMemberCreator string
+	Data            actionData
 	Type            string
 	Date            time.Time
 	MemberCreator   t.Member
 	Member          *t.Member
 }
 
-type Attachment struct {
-	PreviewUrl2x string
-	PreviewUrl   string
-	Url          string
+type attachment struct {
+	PreviewURL2x string
+	PreviewURL   string
+	URL          string
 	Name         string
-	Id           string
+	ID           string
 }
 
-type ActionData struct {
+type actionData struct {
 	Text     string
 	Value    string
-	IdMember string
+	IDMember string
 	Voted    bool
 
-	Attachment *Attachment
+	Attachment *attachment
 
 	Label *struct {
 		Color string
 		Name  string
-		Id    string
+		ID    string
 	}
 
 	Checklist t.Checklist
@@ -69,24 +64,24 @@ type ActionData struct {
 
 	List struct {
 		Name string
-		Id   string
+		ID   string
 	}
 	ListAfter *struct {
 		Name string
-		Id   string
+		ID   string
 	}
 	ListBefore *struct {
 		Name string
-		Id   string
+		ID   string
 	}
 	Board       t.Board
 	BoardSource *t.Board
 
 	Old *struct {
 		Name   string
-		Id     string
+		ID     string
 		text   string
-		IdList string
+		IDList string
 		Closed bool
 		Due    *time.Time
 		Desc   string
@@ -94,36 +89,36 @@ type ActionData struct {
 
 	Organization *struct {
 		Name string
-		Id   string
+		ID   string
 	}
 }
 
-type Member struct {
-	Id         string
+type member struct {
+	ID         string
 	AvatarHash string
 	FullName   string
 	Initials   string
 	Username   string
 }
 
-type Board struct {
+type board struct {
 	ShortLink string
 	Name      string
-	Id        string
+	ID        string
 }
 
-func (b *Board) url() string {
+func (b *board) URL() string {
 	return "https://trello.com/b/" + b.ShortLink
 }
 
-type BoardExtended struct {
-	Id             string
+type boardExtended struct {
+	ID             string
 	Name           string
 	Desc           string
 	Closed         bool
-	IdOrganization string
+	IDOrganization string
 	Pinned         bool
-	ShortUrl       string
+	ShortURL       string
 	Prefs          struct {
 		Voting      string
 		Comments    string
@@ -132,10 +127,12 @@ type BoardExtended struct {
 	LabelNames map[string]string
 }
 
+// TimeOrNil custom time to workaround 'null'/non-set time in JSON
 type TimeOrNil struct {
 	*time.Time
 }
 
+// UnmarshalJSON checks field for 'null' string first
 func (t *TimeOrNil) UnmarshalJSON(data []byte) (err error) {
 	if string(data) == "null" {
 		t.Time = &time.Time{}
@@ -146,24 +143,24 @@ func (t *TimeOrNil) UnmarshalJSON(data []byte) (err error) {
 	return
 }
 
-type Card struct {
+type card struct {
 	ShortLink string
 	Name      string
 	Closed    bool
 	Due       TimeOrNil
-	Members   []*Member
+	Members   []*member
 	Votes     int
-	Id        string
+	ID        string
 	Desc      string
 }
 
-func (c *Card) url() string {
+func (c *card) url() string {
 	return "https://trello.com/c/" + c.ShortLink
 }
 
-type Webhook struct {
-	Action Action
-	Model  BoardExtended
+type webhook struct {
+	Action action
+	Model  boardExtended
 }
 
 func cardPath(card *t.Card) (path string) {
@@ -200,48 +197,49 @@ func cleanDesc(desc string) string {
 
 	return strings.Trim(a[0], "\n\t\r ")
 }
-func WebhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error) {
+func webhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error) {
 	u, _ := iurl.Parse("https://trello.com")
 	c.ServiceBaseURL = *u
 
-	wh := &Webhook{}
+	wh := &webhook{}
+
 	err = wc.JSON(wh)
 	if err != nil {
 		return
 	}
-	//b, _ := wc.RAW()
-	//log.Printf("Received trello webhook type %s for board %v chat %d: %+v", wh.Action.Type, wh.Model.Id, c.Chat.ID, wh)
 
-	if wh.Action.Id == "" {
+	//b, _ := wc.RAW()
+
+	if wh.Action.ID == "" {
 		return
 	}
 	cs := chatSettings(c)
 
-	if _, ok := cs.Boards[wh.Model.Id]; !ok {
+	if _, ok := cs.Boards[wh.Model.ID]; !ok {
 		return
 	}
 
-	bs := cs.Boards[wh.Model.Id]
+	bs := cs.Boards[wh.Model.ID]
 	if !bs.Enabled {
 		return
 	}
 
 	e := false
 
-	if exists := c.Chat.Cache("action_"+wh.Action.Id, &e); exists && e {
-		c.Log().Errorf("duplicate trello webhook %s, request %s, %s, action %s, chat %s", wc.HookID(), wc.RequestID(), wh.Action.Id, c.Chat.ID)
+	if exists := c.Chat.Cache("action_"+wh.Action.ID, &e); exists && e {
+		c.Log().Errorf("duplicate trello webhook %s, request %s, %s, action %s, chat %s", wc.HookID(), wc.RequestID(), wh.Action.ID, c.Chat.ID)
 		return
 	}
 
-	c.Chat.SetCache("action_"+wh.Action.Id, true, time.Hour)
+	c.Chat.SetCache("action_"+wh.Action.ID, true, time.Hour)
 
 	// if this action is produced inside the TG itself – ignore webhook (f.e. reply to comment)
-	if tm, _ := c.FindMessageByEventID("action_" + wh.Action.Id); tm != nil {
-		c.Log().Errorf("duplicate trello webhook %s, request %s, action %s, chat %s", wc.HookID(), wc.RequestID(), wh.Action.Id, c.Chat.ID)
+	if tm, _ := c.FindMessageByEventID("action_" + wh.Action.ID); tm != nil {
+		c.Log().Errorf("duplicate trello webhook %s, request %s, action %s, chat %s", wc.HookID(), wc.RequestID(), wh.Action.ID, c.Chat.ID)
 		return
 	}
 
-	msg := c.NewMessage().AddEventID("action_"+wh.Action.Id, "wh_"+wc.HookID())
+	msg := c.NewMessage().AddEventID("action_"+wh.Action.ID, "wh_"+wc.HookID())
 
 	card := &wh.Action.Data.Card
 
@@ -277,21 +275,21 @@ func WebhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 		wh.Action.Data.List = *wh.Action.Data.ListAfter
 	}
 
-	if wh.Action.Data.List.Id != "" {
-		card.List = &t.List{Name: wh.Action.Data.List.Name, Id: wh.Action.Data.List.Id}
+	if wh.Action.Data.List.ID != "" {
+		card.List = &t.List{Name: wh.Action.Data.List.Name, Id: wh.Action.Data.List.ID}
 	}
 
 	if wh.Action.Data.Board.Id != "" {
 		card.Board = &wh.Action.Data.Board
 	} else {
-		card.Board = &t.Board{Id: wh.Model.Id, Name: wh.Model.Name, ShortUrl: wh.Model.ShortUrl, Closed: wh.Model.Closed}
+		card.Board = &t.Board{Id: wh.Model.ID, Name: wh.Model.Name, ShortUrl: wh.Model.ShortURL, Closed: wh.Model.Closed}
 	}
 
 	// Maybe we need to update existing message?
 	cardMsg, _ := cardMessage(c, card.Id)
 	cardMsgJustPosted := false
 
-	if cardMsg != nil && cardMsg.Date.Add(TIME_TO_UPDATE_EXISTING_CARD_MESSAGE_IN_CHAT).After(time.Now()) {
+	if cardMsg != nil && cardMsg.Date.Add(TimeToJustUpdateMessage).After(time.Now()) {
 		cardMsgJustPosted = true
 	}
 
@@ -329,16 +327,16 @@ func WebhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 
 		// make a comment to reply original card message
 		if cardMsg != nil {
-			msg.SetText("💬 "+Mention(c, byMember)+": "+wh.Action.Data.Text).
+			msg.SetText("💬 "+mention(c, byMember)+": "+wh.Action.Data.Text).
 				EnableHTML().
 				SetReplyAction(cardReplied, card.Id).
 				Send()
 			return
 		}
 
-		wp := c.WebPreview(Mention(c, card.MemberCreator), card.Board.Name+" • "+card.List.Name, card.Name, card.URL(), "")
+		wp := c.WebPreview(mention(c, card.MemberCreator), card.Board.Name+" • "+card.List.Name, card.Name, card.URL(), "")
 
-		return msg.SetText("💬 "+Mention(c, byMember)+": "+wh.Action.Data.Text+" "+m.URL("↗️", wp)).
+		return msg.SetText("💬 "+mention(c, byMember)+": "+wh.Action.Data.Text+" "+m.URL("↗️", wp)).
 			EnableHTML().
 			SetReplyAction(cardReplied, card.Id).
 			Send()
@@ -363,7 +361,7 @@ func WebhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 			return nil
 		}
 
-		msg.SetTextFmt("%s adds the checklist %s", Mention(c, byMember), m.Bold(wh.Action.Data.Checklist.Name)).
+		msg.SetTextFmt("%s adds the checklist %s", mention(c, byMember), m.Bold(wh.Action.Data.Checklist.Name)).
 			EnableHTML().
 			SetReplyAction(cardReplied, card.Id)
 
@@ -425,14 +423,14 @@ func WebhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 		if wh.Action.Type == "updateCheckItemStateOnCard" {
 
 			if wh.Action.Data.CheckItem.State == "incomplete" {
-				msg.SetTextFmt("❌ %s uncomplete %s on %s", Mention(c, byMember), m.Bold(wh.Action.Data.CheckItem.Name), m.Bold(wh.Action.Data.Checklist.Name))
+				msg.SetTextFmt("❌ %s uncomplete %s on %s", mention(c, byMember), m.Bold(wh.Action.Data.CheckItem.Name), m.Bold(wh.Action.Data.Checklist.Name))
 
 			} else {
-				msg.SetTextFmt("✅ %s complete %s on %s", Mention(c, byMember), m.Bold(wh.Action.Data.CheckItem.Name), m.Bold(wh.Action.Data.Checklist.Name))
+				msg.SetTextFmt("✅ %s complete %s on %s", mention(c, byMember), m.Bold(wh.Action.Data.CheckItem.Name), m.Bold(wh.Action.Data.Checklist.Name))
 			}
 
 		} else {
-			msg.SetTextFmt("%s adds the checklist item %s to list %s", Mention(c, byMember), m.Bold(wh.Action.Data.CheckItem.Name), m.Bold(wh.Action.Data.Checklist.Name))
+			msg.SetTextFmt("%s adds the checklist item %s to list %s", mention(c, byMember), m.Bold(wh.Action.Data.CheckItem.Name), m.Bold(wh.Action.Data.Checklist.Name))
 		}
 
 	case "addMemberToCard", "removeMemberFromCard":
@@ -465,14 +463,14 @@ func WebhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 				return
 			}
 		}
-		msg.SetTextFmt("%s %s %s", Mention(c, byMember), a, Mention(c, wh.Action.Member))
+		msg.SetTextFmt("%s %s %s", mention(c, byMember), a, mention(c, wh.Action.Member))
 
 	case "voteOnCard":
 
 		if wh.Action.Data.Voted == true {
-			c.UpdateServiceCache("card_"+card.Id, bson.M{"$addToSet": bson.M{"val.idmembersvoted": wh.Action.IdMemberCreator}}, &card)
+			c.UpdateServiceCache("card_"+card.Id, bson.M{"$addToSet": bson.M{"val.idmembersvoted": wh.Action.IDMemberCreator}}, &card)
 		} else {
-			c.UpdateServiceCache("card_"+card.Id, bson.M{"$pull": bson.M{"val.idmembersvoted": wh.Action.IdMemberCreator}}, &card)
+			c.UpdateServiceCache("card_"+card.Id, bson.M{"$pull": bson.M{"val.idmembersvoted": wh.Action.IDMemberCreator}}, &card)
 		}
 
 		if cardMsg != nil {
@@ -493,12 +491,11 @@ func WebhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 			replyTo = cardMsg.MsgID
 		}
 		var err error
-		if strings.Contains(wh.Action.Data.Attachment.Url, "trello-attach") {
-			_, err = c.Service().DoJob(downloadAttachment, c, card.Id, replyTo, "by "+Mention(c, byMember), wh.Action.Data.Attachment)
+		if strings.Contains(wh.Action.Data.Attachment.URL, "trello-attach") {
+			_, err = c.Service().DoJob(downloadAttachment, c, card.Id, replyTo, "by "+mention(c, byMember), wh.Action.Data.Attachment)
 			return err
-		} else {
-			msg.SetTextFmt("%s attached the link %s", Mention(c, byMember), wh.Action.Data.Attachment.Url)
 		}
+		msg.SetTextFmt("%s attached the link %s", mention(c, byMember), wh.Action.Data.Attachment.URL)
 		// todo: reuse fileid in multichat webhooks
 	case "updateCard":
 
@@ -508,7 +505,7 @@ func WebhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 		}
 		//fmt.Printf("updateCard\nold: %+v\n\nnew:%+v\n",oldCard,&wh.Action.Data.Card)
 
-		if oldCard.IdList != "" {
+		if oldCard.IDList != "" {
 			// card moved to another list
 			err = c.UpdateServiceCache("card_"+card.Id, bson.M{"$set": bson.M{"val.list": wh.Action.Data.ListAfter}}, card)
 			//err = c.EditMessageText(cardMsg, cardText(c, card))
@@ -520,7 +517,7 @@ func WebhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 				return
 			}
 			msg.EnableHTML()
-			msg.Text = fmt.Sprintf("%s moved card to %s", Mention(c, byMember), m.Fixed(wh.Action.Data.ListAfter.Name))
+			msg.Text = fmt.Sprintf("%s moved card to %s", mention(c, byMember), m.Fixed(wh.Action.Data.ListAfter.Name))
 		} else if oldCard.Name != "" {
 			// card renamed
 
@@ -532,7 +529,7 @@ func WebhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 			}
 			msg.EnableHTML()
 			msg.SetSilent(true)
-			msg.Text = fmt.Sprintf("✏️ %s", Mention(c, byMember))
+			msg.Text = fmt.Sprintf("✏️ %s", mention(c, byMember))
 
 		} else if oldCard.Closed != card.Closed {
 			err = c.UpdateServiceCache("card_"+card.Id, bson.M{"$set": bson.M{"val.closed": card.Closed}}, card)
@@ -550,10 +547,9 @@ func WebhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 			if card.Closed == false {
 				un = "un"
 			}
-			msg.Text = fmt.Sprintf("%s %sarchived the card", Mention(c, byMember), un)
+			msg.Text = fmt.Sprintf("%s %sarchived the card", mention(c, byMember), un)
 		} else if oldCard.Due != nil {
 			// due date set/unset
-			//spew.Dump("oldCard.Due", oldCard.Due, card.Due)
 			err = c.UpdateServiceCache("card_"+card.Id, bson.M{"$set": bson.M{"val.due": card.Due}}, card)
 			//err = c.EditMessageText(cardMsg, cardText(c, card))
 			updateCardMessages(c, wc, card)
@@ -569,9 +565,9 @@ func WebhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 
 			if card.Due != nil && !card.Due.IsZero() {
 				msg.EnableHTML()
-				msg.Text = fmt.Sprintf("%s set the due date: `%v`", Mention(c, byMember), decent.Relative(card.Due.In(c.User.TzLocation())))
+				msg.Text = fmt.Sprintf("%s set the due date: `%v`", mention(c, byMember), decent.Relative(card.Due.In(c.User.TzLocation())))
 			} else {
-				msg.Text = fmt.Sprintf("%s removed the due date", Mention(c, byMember))
+				msg.Text = fmt.Sprintf("%s removed the due date", mention(c, byMember))
 			}
 		} else if oldCard.Desc != card.Desc {
 			card.Desc = cleanDesc(card.Desc)
@@ -596,7 +592,7 @@ func WebhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 			msg.SetSilent(true)
 
 			if card.Desc != "" {
-				msg.Text = fmt.Sprintf("✏️ %s", Mention(c, byMember))
+				msg.Text = fmt.Sprintf("✏️ %s", mention(c, byMember))
 			}
 		} else {
 			return
@@ -611,7 +607,7 @@ func WebhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 		if card == nil || card.List == nil || card.Board == nil {
 			c.Log().WithField("card", card).Error("Cant create webpreview")
 		} else {
-			msg.Text += " " + m.URL("↗️", c.WebPreview(Mention(c, card.MemberCreator), card.Board.Name+" • "+card.List.Name, card.Name, card.URL(), ""))
+			msg.Text += " " + m.URL("↗️", c.WebPreview(mention(c, card.MemberCreator), card.Board.Name+" • "+card.List.Name, card.Name, card.URL(), ""))
 		}
 	} else {
 		msg.DisableWebPreview()
@@ -620,7 +616,7 @@ func WebhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 
 	return
 }
-func Mention(c *integram.Context, member *t.Member) string {
+func mention(c *integram.Context, member *t.Member) string {
 	if member == nil {
 		return ""
 	}
@@ -697,10 +693,8 @@ func cardReplied(c *integram.Context, cardID string) error {
 	if c.Message.Text != "" {
 		_, err := c.Service().DoJob(commentCard, c, cardID, c.Message.Text)
 		return err
-	} else {
-		return errors.New("Can't find the text or file in the reply message")
 	}
-
+	return errors.New("Can't find the text or file in the reply message")
 }
 
 func attachFileToCard(c *integram.Context, cardID string, doc tg.Document) error {
@@ -745,10 +739,10 @@ func attachFileToCard(c *integram.Context, cardID string, doc tg.Document) error
 		return err
 	}
 
-	var a Action
+	var a action
 	err = json.Unmarshal(b, &a)
 
-	return c.Message.UpdateEventsID(c.Db(), "action_"+a.Id)
+	return c.Message.UpdateEventsID(c.Db(), "action_"+a.ID)
 }
 
 func commentCard(c *integram.Context, cardID string, text string) error {
@@ -761,21 +755,21 @@ func commentCard(c *integram.Context, cardID string, text string) error {
 		return err
 	}
 
-	var a Action
+	var a action
 	err = json.Unmarshal(b, &a)
 
-	return c.Message.UpdateEventsID(c.Db(), "action_"+a.Id)
+	return c.Message.UpdateEventsID(c.Db(), "action_"+a.ID)
 }
 
-func downloadAttachment(c *integram.Context, cardID string, replyToMsgID int, text string, attachment Attachment) error {
-	if attachment.PreviewUrl != "" {
+func downloadAttachment(c *integram.Context, cardID string, replyToMsgID int, text string, attachment attachment) error {
+	if attachment.PreviewURL != "" {
 		c.SendAction(tg.ChatUploadPhoto)
 	} else {
 		c.SendAction(tg.ChatUploadDocument)
 	}
 
 	var fileLocalPath string
-	c.User.Cache("attachment_"+attachment.Id, &fileLocalPath)
+	c.User.Cache("attachment_"+attachment.ID, &fileLocalPath)
 
 	if fileLocalPath != "" {
 		if _, err := os.Stat(fileLocalPath); os.IsNotExist(err) {
@@ -785,19 +779,17 @@ func downloadAttachment(c *integram.Context, cardID string, replyToMsgID int, te
 
 	if fileLocalPath == "" {
 		var err error
-		fileLocalPath, err = c.DownloadURL(attachment.Url)
+		fileLocalPath, err = c.DownloadURL(attachment.URL)
 		if err != nil {
 			return err
 		}
-		c.User.SetCache("attachment_"+attachment.Id, fileLocalPath, time.Hour*24)
+		c.User.SetCache("attachment_"+attachment.ID, fileLocalPath, time.Hour*24)
 	}
-	if attachment.PreviewUrl != "" {
+	if attachment.PreviewURL != "" {
 		return c.NewMessage().SetReplyAction(cardReplied, cardID).SetText(text).SetReplyToMsgID(replyToMsgID).SetImage(fileLocalPath, attachment.Name).Send()
 
-	} else {
-		return c.NewMessage().SetReplyAction(cardReplied, cardID).SetText(text).SetReplyToMsgID(replyToMsgID).SetDocument(fileLocalPath, attachment.Name).Send()
 	}
-
+	return c.NewMessage().SetReplyAction(cardReplied, cardID).SetText(text).SetReplyToMsgID(replyToMsgID).SetDocument(fileLocalPath, attachment.Name).Send()
 }
 
 /*func cardMessageID(c *integram.Context, cardID string) int {

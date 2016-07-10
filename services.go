@@ -3,21 +3,20 @@ package integram
 import (
 	"encoding/gob"
 	"errors"
+	"fmt"
+	log "github.com/Sirupsen/logrus"
+	"github.com/mrjones/oauth"
+	"github.com/requilence/integram/url"
+	"github.com/requilence/jobs"
+	"golang.org/x/oauth2"
 	"net/http"
 	"os"
 	"reflect"
 	"runtime"
 	"time"
-
-	"golang.org/x/oauth2"
-
-	"github.com/requilence/integram/url"
-
-	log "github.com/Sirupsen/logrus"
-	"github.com/mrjones/oauth"
-	"github.com/requilence/jobs"
 )
 
+// BaseURL of the Integram instance to handle the webhooks and resolve webpreviews properly
 var BaseURL = "https://integram.org"
 
 // Map of Services configs per name. See Register func
@@ -34,6 +33,7 @@ var actionFuncs = make(map[string]interface{})
 // Channel that use to recover tgUpadates reader after panic inside it
 var tgUpdatesRevoltChan = make(chan *Bot)
 
+// Service configuration
 type Service struct {
 	Name        string // Service lowercase name
 	NameToPrint string // Service print name
@@ -74,45 +74,35 @@ type Service struct {
 }
 
 const (
-	JobRetryLinear    = iota // 0
-	JobRetryFibonacci        // 1
+	// JobRetryLinear specify jobs retry politic as retry after fail
+	JobRetryLinear = iota
+	// JobRetryFibonacci specify jobs retry politic as delay after fail using fibonacci sequence
+	JobRetryFibonacci
 )
 
-// Job's handlers that may be used when scheduling
+// Job 's handler that may be used when scheduling
 type Job struct {
 	HandlerFunc interface{} // Must be a func.
 	Retries     uint        // Number of retries before fail
 	RetryType   int         // JobRetryLinear or JobRetryFibonacci
 }
 
+// DefaultOAuth1 is the default OAuth1 config for the service
 type DefaultOAuth1 struct {
 	Key                              string
 	Secret                           string
-	RequestTokenUrl                  string
-	AuthorizeTokenUrl                string
-	AccessTokenUrl                   string
-	AdditionalAuthorizationUrlParams map[string]string
-	HttpMethod                       string
+	RequestTokenURL                  string
+	AuthorizeTokenURL                string
+	AccessTokenURL                   string
+	AdditionalAuthorizationURLParams map[string]string
+	HTTPMethod                       string
 	AccessTokenReceiver              func(serviceContext *Context, r *http.Request, requestToken *oauth.RequestToken) (token string, err error)
 }
 
+// DefaultOAuth2 is the default OAuth2 config for the service
 type DefaultOAuth2 struct {
 	oauth2.Config
 	AccessTokenReceiver func(serviceContext *Context, r *http.Request) (token string, expiresAt *time.Time, refreshToken string, err error)
-}
-
-// Redis job pool safe exit
-func RunWorkers() {
-	for k := range jobs.Pools {
-		pool := jobs.Pools[k]
-		defer func() {
-			log.Infof("Closing job pool: %s\n", k)
-			pool.Close()
-			if err := pool.Wait(); err != nil {
-				log.WithError(err).WithField("poolName", k).Error("Jobs pool stoped")
-			}
-		}()
-	}
 }
 
 func init() {
@@ -173,10 +163,12 @@ func beforeJob(ch chan bool, job *jobs.Job, args *[]reflect.Value) {
 	s.Close()
 }
 
+// Servicer is interface to match service's config from which the service itself can be produced
 type Servicer interface {
 	Service() *Service
 }
 
+// Register the service's config and corresponding botToken
 func Register(servicer Servicer, botToken string) {
 	service := servicer.Service()
 	if service.DefaultOAuth1 != nil {
@@ -184,11 +176,11 @@ func Register(servicer Servicer, botToken string) {
 			err := errors.New("OAuth1 need an AccessTokenReceiver func to be specified\n")
 			panic(err.Error())
 		}
-		service.DefaultBaseURL = *UrlMustParse(service.DefaultOAuth1.AccessTokenUrl)
+		service.DefaultBaseURL = *URLMustParse(service.DefaultOAuth1.AccessTokenURL)
 
 		//mongoSession.DB(mongo.Database).C("users").EnsureIndex(mgo.Index{Key: []string{"settings." + service.Name + ".oauth_redirect_token"}})
 	} else if service.DefaultOAuth2 != nil {
-		service.DefaultBaseURL = *UrlMustParse(service.DefaultOAuth2.Endpoint.AuthURL)
+		service.DefaultBaseURL = *URLMustParse(service.DefaultOAuth2.Endpoint.AuthURL)
 	}
 	service.DefaultBaseURL.Path = ""
 	service.DefaultBaseURL.RawPath = ""
@@ -281,15 +273,16 @@ func Register(servicer Servicer, botToken string) {
 
 }
 
+// Bot returns corresponding bot for the service
 func (s *Service) Bot() *Bot {
 	if bot, exists := botPerService[s.Name]; exists {
 		return bot
-	} else {
-		log.WithField("service", s.Name).Error("Can't get bot for service")
-		return nil
 	}
+	log.WithField("service", s.Name).Error("Can't get bot for service")
+	return nil
 }
 
+// DefaultOAuthProvider returns default(means cloud-based) OAuth client
 func (s *Service) DefaultOAuthProvider() *OAuthProvider {
 	oap := OAuthProvider{}
 	oap.BaseURL = s.DefaultBaseURL
@@ -306,44 +299,31 @@ func (s *Service) DefaultOAuthProvider() *OAuthProvider {
 	return &oap
 }
 
-// Run the queued job. The job must be registred in Service's config (Jobs field). Arguments must be identically types with hudlerFunc's input args
+// DoJob queues the job to run. The job must be registred in Service's config (Jobs field). Arguments must be identically types with hudlerFunc's input args
 func (s *Service) DoJob(handlerFunc interface{}, data ...interface{}) (*jobs.Job, error) {
 	return s.SheduleJob(handlerFunc, 0, time.Now(), data...)
 }
 
-// Shedule the queued job for specific time with specific priority. The job must be registred in Service's config (Jobs field). Arguments must be identically types with hudlerFunc's input args
+// SheduleJob schedules the job for specific time with specific priority. The job must be registred in Service's config (Jobs field). Arguments must be identically types with hudlerFunc's input args
 func (s *Service) SheduleJob(handlerFunc interface{}, priority int, time time.Time, data ...interface{}) (*jobs.Job, error) {
 	if jobsPerName, ok := jobsPerService[s.Name]; ok {
 		if jobType, ok := jobsPerName[getFuncName(handlerFunc)]; ok {
 			return jobType.Schedule(priority, time, data...)
-		} else {
-			panic("SheduleJob: Job type not found")
-			//return nil, errors.New("SheduleJob: Job type not found")
 		}
-	} else {
-		return nil, errors.New("SheduleJob: Service pool not found")
+		panic("SheduleJob: Job type not found")
 	}
+	panic("SheduleJob: Service pool not found")
 }
 
 func serviceByName(name string) (*Service, error) {
 	if val, ok := services[name]; ok {
 		return val, nil
-	} else {
-		return nil, errors.New("Can't find service with name ")
 	}
+
+	return nil, fmt.Errorf("Can't find service with name %s", name)
 }
 
+// Log returns logrus instance with related context info attached
 func (s *Service) Log() *log.Entry {
 	return log.WithField("service", s.Name)
 }
-
-/*func (o *OAuthProvider) RequestToken(db *mgo.Database, token string) *oauth.RequestToken {
-	requestToken := oauth.RequestToken{}
-	db.C("oauth1_request_tokens").Find(bson.M{"key": o.Key, "token": token}).Select(bson.M{"token": 1, "secret": 1}).One(&requestToken)
-	return &requestToken
-}
-
-func (o *OAuthProvider) RemoveRequestToken(db *mgo.Database, token string) error {
-	return db.C("oauth1_request_tokens").Remove(bson.M{"key": o.Key, "token": token})
-}
-*/

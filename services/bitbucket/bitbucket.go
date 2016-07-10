@@ -3,30 +3,28 @@ package bitbucket
 import (
 	"errors"
 	"fmt"
-	api "github.com/ktrysmt/go-bitbucket"
-	"github.com/requilence/integram"
-	m "github.com/requilence/integram/html"
-	"golang.org/x/oauth2"
 	"strings"
 	"time"
+
+	api "github.com/ktrysmt/go-bitbucket"
+	"github.com/requilence/integram"
+	"golang.org/x/oauth2"
 )
 
+var m = integram.HTMLRichText{}
+
+// Config contains OAuth data only
 type Config struct {
 	integram.OAuthProvider
 }
 
-const API_URI_SUFFIX = "/api/v3/"
-
-var config Config
-
-//var service integram.Service
-
+// Service returns integram.Service from config
 func (c Config) Service() *integram.Service {
 	return &integram.Service{
 		Name:                "bitbucket",
 		NameToPrint:         "Bitbucket",
-		TGNewMessageHandler: Update,
-		WebhookHandler:      WebhookHandler,
+		TGNewMessageHandler: update,
+		WebhookHandler:      webhookHandler,
 		JobsPool:            1,
 		Jobs:                []integram.Job{},
 
@@ -44,17 +42,17 @@ func (c Config) Service() *integram.Service {
 				},
 			},
 		},
-		OAuthSuccessful: OAuthSuccessful,
+		OAuthSuccessful: oAuthSuccessful,
 	}
 
 }
 
-func OAuthSuccessful(c *integram.Context) error {
+func oAuthSuccessful(c *integram.Context) error {
 	return c.NewMessage().SetText("Great! Now you can reply issues, commits, merge requests and snippets").Send()
 }
 
-func Api(c *integram.Context) *api.Client {
-	return api.NewWithHTTPClient(c.User.OAuthHttpClient())
+func client(c *integram.Context) *api.Client {
+	return api.NewWithHTTPClient(c.User.OAuthHTTPClient())
 }
 
 /*func me(c *integram.Context) (*gitlab.User, error) {
@@ -88,7 +86,7 @@ func cacheNickMap(c *integram.Context) error {
 }
 
 */
-func hostedAppSecretEntered(c *integram.Context, baseURL string, appId string) error {
+func hostedAppSecretEntered(c *integram.Context, baseURL string, appID string) error {
 	c.SetServiceBaseURL(baseURL)
 
 	appSecret := strings.TrimSpace(c.Message.Text)
@@ -96,39 +94,39 @@ func hostedAppSecretEntered(c *integram.Context, baseURL string, appId string) e
 		c.NewMessage().SetText("Looks like this *Application Secret* is incorrect. Must be a 64 HEX symbols. Please try again").EnableHTML().DisableWebPreview().SetReplyAction(hostedAppSecretEntered, baseURL).Send()
 		return errors.New("Application Secret '" + appSecret + "' is incorrect")
 	}
-	conf := integram.OAuthProvider{BaseURL: c.ServiceBaseURL, ID: appId, Secret: appSecret}
+	conf := integram.OAuthProvider{BaseURL: c.ServiceBaseURL, ID: appID, Secret: appSecret}
 	token, err := conf.OAuth2Client(c).Exchange(oauth2.NoContext, "-")
 
 	if strings.Contains(err.Error(), `"error":"invalid_grant"`) {
 		// means the app is exists
-		c.SaveOAuthProvider(c.ServiceBaseURL, appId, appSecret)
+		c.SaveOAuthProvider(c.ServiceBaseURL, appID, appSecret)
 		_, err := mustBeAuthed(c)
 
 		return err
-	} else {
-		c.NewMessage().SetText("Application ID or Secret is incorrect. Please try again. Enter *Application Id*").
-			EnableHTML().
-			SetReplyAction(hostedAppIdEntered, baseURL).Send()
 	}
+	c.NewMessage().SetText("Application ID or Secret is incorrect. Please try again. Enter *Application Id*").
+		EnableHTML().
+		SetReplyAction(hostedAppIDEntered, baseURL).Send()
+
 	fmt.Printf("Exchange: token: %+v, err:%v\n", token, err)
 
 	return nil
 
 }
 
-func hostedAppIdEntered(c *integram.Context, baseURL string) error {
+func hostedAppIDEntered(c *integram.Context, baseURL string) error {
 	c.SetServiceBaseURL(baseURL)
 
-	appId := strings.TrimSpace(c.Message.Text)
-	if len(appId) != 64 {
+	appID := strings.TrimSpace(c.Message.Text)
+	if len(appID) != 64 {
 		c.NewMessage().SetText("Looks like this *Application Id* is incorrect. Must be a 64 HEX symbols. Please try again").
 			EnableHTML().
-			SetReplyAction(hostedAppIdEntered, baseURL).Send()
-		return errors.New("Application Id '" + appId + "' is incorrect")
+			SetReplyAction(hostedAppIDEntered, baseURL).Send()
+		return errors.New("Application Id '" + appID + "' is incorrect")
 	}
 	return c.NewMessage().SetText("Great! Now write me the *Secret* for this application").
 		EnableHTML().
-		SetReplyAction(hostedAppSecretEntered, baseURL, appId).Send()
+		SetReplyAction(hostedAppSecretEntered, baseURL, appID).Send()
 }
 
 func splitRepo(fullRepoName string) (owner string, repo string) {
@@ -152,6 +150,7 @@ func me(rest *api.Client, c *integram.Context) (actor *api.Actor, err error) {
 	}
 	return
 }
+
 func storeIssue(c *integram.Context, issue *api.Issue) error {
 	return c.SetServiceCache(issueUniqueID(issue.Repository.FullName, issue.ID), &issue, time.Hour*24*365)
 }
@@ -183,7 +182,7 @@ func issueInlineButtonPressed(c *integram.Context, fullRepoName string, issueID 
 	issue := api.Issue{}
 
 	c.ServiceCache(issueUniqueID(fullRepoName, issueID), &issue)
-	rest := Api(c)
+	rest := client(c)
 
 	fmt.Printf("issueID: %d\n", issueID)
 	owner, repo := splitRepo(fullRepoName)
@@ -270,7 +269,7 @@ func mustBeAuthed(c *integram.Context) (bool, error) {
 			EnableHTML().
 			EnableForceReply().
 			DisableWebPreview().
-			SetReplyAction(hostedAppIdEntered, c.ServiceBaseURL.String()).Send()
+			SetReplyAction(hostedAppIDEntered, c.ServiceBaseURL.String()).Send()
 
 	}
 	if !c.User.OAuthValid() {
@@ -301,7 +300,7 @@ func mention(c *integram.Context, member *api.Actor) string {
 	return "@" + userName
 }
 
-func Update(c *integram.Context) error {
+func update(c *integram.Context) error {
 
 	command, param := c.Message.GetCommand()
 
