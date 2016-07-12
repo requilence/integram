@@ -23,7 +23,7 @@ You can run Integram on your own server.
 - Use your own bot created with [Botfather](https://telegram.me/botfather).
 - For the each service you are want to use you need to create an OAuth client(application) in it
 - Set environment variable **GOPATH** to the directory contains **main.go** file
-- Inside the directory contains **main.go** file run **git clone https://github.com/Requilence/integram src/github.com/requilence/integram**
+- Run **go get github.com/requilence/integram**
 - Specify environment variables:
     - **INTEGRAM_PORT** - if set to 443, integram.crt and integram.key must be presented in the root
     - **INTEGRAM_BASE_URL** - the base URL the host accessible with, f.e. **https://integram.org**
@@ -69,7 +69,7 @@ func main() {
 
 ### Dependencies and vendor directory 
 
-All dependencies come with package itself and may be modified directly. For now venodr dir is not supported by **go get**
+All dependencies come with package itself and may be modified directly (see the [Third party libraries](https://github.com/Requilence/integram#third-party-libraries))
 
 ### Requirements
 
