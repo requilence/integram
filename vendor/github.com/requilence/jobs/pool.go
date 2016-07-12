@@ -7,6 +7,7 @@ package jobs
 import (
 	"fmt"
 	"net"
+	"reflect"
 	"runtime"
 	"sync"
 	"time"
@@ -33,6 +34,8 @@ type Pool struct {
 	// exit is used to signal the pool to stop running the query loop
 	// and close the jobs channel
 	exit chan bool
+	// beforeFunc is a function that gets called before each job.
+	middlewareFunc func(chan bool, *Job, *[]reflect.Value)
 	// afterFunc is a function that gets called after each job.
 	afterFunc func(*Job)
 	// RWMutex is only used during testing when we need to
@@ -74,6 +77,8 @@ type PoolConfig struct {
 	// corresponding jobs in the executing set, those jobs will be requeued. Default
 	// is 30 seconds.
 	StaleTimeout time.Duration
+	// Key will be attached to Pool.id to allow multiply pools per machine and routing tasks to specific pool
+	Key string
 }
 
 // DefaultPoolConfig is the default config for pools. You can override any values
@@ -95,14 +100,17 @@ func NewPool(config *PoolConfig) (*Pool, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Pool{
+	poolID := hardwareId + config.Key
+	Pools[config.Key] = &Pool{
 		config:  finalConfig,
-		id:      hardwareId,
+		id:      poolID,
 		wg:      &sync.WaitGroup{},
 		exit:    make(chan bool),
 		workers: make([]*worker, finalConfig.NumWorkers),
 		jobs:    make(chan *Job, finalConfig.BatchSize),
-	}, nil
+	}
+
+	return Pools[config.Key], nil
 }
 
 // getPoolConfig replaces any zero values in passedConfig with the default values.
@@ -336,6 +344,11 @@ func (p *Pool) removeStaleSelf() error {
 	return nil
 }
 
+// SetMiddleware will assign a function that will start goroutine before job is started and closed after job is ended
+func (p *Pool) SetMiddleware(f func(chan bool, *Job, *[]reflect.Value)) {
+	p.middlewareFunc = f
+}
+
 // SetAfterFunc will assign a function that will be executed each time
 // a job is finished.
 func (p *Pool) SetAfterFunc(f func(*Job)) {
@@ -376,9 +389,10 @@ func (p *Pool) Start() error {
 	for i := range p.workers {
 		p.wg.Add(1)
 		worker := &worker{
-			wg:        p.wg,
-			jobs:      p.jobs,
-			afterFunc: p.afterFunc,
+			wg:             p.wg,
+			jobs:           p.jobs,
+			afterFunc:      p.afterFunc,
+			middlewareFunc: p.middlewareFunc,
 		}
 		p.workers[i] = worker
 		worker.start()
@@ -461,11 +475,11 @@ func (p *Pool) getNextJobs(n int) ([]*Job, error) {
 	p.RLock()
 	thisId := p.id
 	p.RUnlock()
-	return getNextJobs(n, thisId)
+	return getNextJobs(n, thisId, p.config.Key)
 }
 
 // getNextJobs queries the database and returns the next n ready jobs.
-func getNextJobs(n int, poolId string) ([]*Job, error) {
+func getNextJobs(n int, poolId string, poolKey string) ([]*Job, error) {
 	// Start a new transaction
 	t := newTransaction()
 	// Invoke a script to get all the jobs which are ready to execute based on their

@@ -15,13 +15,15 @@
 -- Assign args to variables for easy reference
 local jobId = ARGV[1]
 local newStatus = ARGV[2]
+local poolKey = ARGV[3]
 local jobKey = 'jobs:' .. jobId
 -- Make sure the job hasn't already been destroyed
 local exists = redis.call('EXISTS', jobKey)
 if exists ~= 1 then
 	return
 end
-local newStatusSet = 'jobs:' .. newStatus
+local poolKey = redis.call('HGET', jobKey, 'poolKey')
+local newStatusSet = 'jobs:' .. newStatus..poolKey
 -- Add the job to the new status set
 local jobPriority = redis.call('HGET', jobKey, 'priority')
 redis.call('ZADD', newStatusSet, jobPriority, jobId)

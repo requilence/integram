@@ -13,9 +13,13 @@ import (
 // Types is map of job type names to *Type
 var Types = map[string]*Type{}
 
+// Pools is map of pool names to *P
+var Pools = map[string]*Pool{}
+
 // Type represents a type of job that can be executed by workers
 type Type struct {
 	name     string
+	PoolKey  string
 	handler  interface{}
 	retries  uint
 	dataType reflect.Type
@@ -52,6 +56,18 @@ type HandlerFunc interface{}
 // data with the same type as the first argument to handler, or nil if the handler
 // accepts no arguments.
 func RegisterType(name string, retries uint, handler HandlerFunc) (*Type, error) {
+	return RegisterTypeWithPoolKey(name, "", retries, handler)
+}
+
+// RegisterType registers a new type of job that can be executed by workers.
+// name should be a unique string identifier for the job.
+// retries is the number of times this type of job should be retried if it fails.
+// handler is a function that a worker will call in order to execute the job.
+// handler should be a function which accepts either 0 or 1 arguments of any type,
+// corresponding to the data for a job of this type. All jobs of this type must have
+// data with the same type as the first argument to handler, or nil if the handler
+// accepts no arguments.
+func RegisterTypeWithPoolKey(name string, poolKey string, retries uint, handler HandlerFunc) (*Type, error) {
 	// Make sure name is unique
 	if _, found := Types[name]; found {
 		return Types[name], newErrorNameAlreadyRegistered(name)
@@ -61,9 +77,6 @@ func RegisterType(name string, retries uint, handler HandlerFunc) (*Type, error)
 	if handlerType.Kind() != reflect.Func {
 		return nil, fmt.Errorf("jobs: in RegisterNewType, handler must be a function. Got %T", handler)
 	}
-	if handlerType.NumIn() > 1 {
-		return nil, fmt.Errorf("jobs: in RegisterNewType, handler must accept 0 or 1 arguments. Got %d.", handlerType.NumIn())
-	}
 	if handlerType.NumOut() != 1 {
 		return nil, fmt.Errorf("jobs: in RegisterNewType, handler must have exactly one return value. Got %d.", handlerType.NumOut())
 	}
@@ -71,13 +84,12 @@ func RegisterType(name string, retries uint, handler HandlerFunc) (*Type, error)
 		return nil, fmt.Errorf("jobs: in RegisterNewType, handler must return an error. Got return value of type %s.", handlerType.Out(0).String())
 	}
 	Type := &Type{
+		PoolKey: poolKey,
 		name:    name,
 		handler: handler,
 		retries: retries,
 	}
-	if handlerType.NumIn() == 1 {
-		Type.dataType = handlerType.In(0)
-	}
+
 	Types[name] = Type
 	return Type, nil
 }
@@ -89,7 +101,9 @@ func typeIsError(typ reflect.Type) bool {
 }
 
 // String satisfies the Stringer interface and returns the name of the Type.
+
 func (jt *Type) String() string {
+
 	return jt.name
 }
 
@@ -98,9 +112,10 @@ func (jt *Type) String() string {
 // executed until after time. data is the data associated with this particular
 // job and should have the same type as the first argument to the handler for this
 // Type.
-func (jt *Type) Schedule(priority int, time time.Time, data interface{}) (*Job, error) {
+func (jt *Type) Schedule(priority int, time time.Time, data ...interface{}) (*Job, error) {
 	// Encode the data
 	encodedData, err := jt.encodeData(data)
+
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +141,7 @@ func (jt *Type) Schedule(priority int, time time.Time, data interface{}) (*Job, 
 // data associated with this particular job and should have the same type as the first argument
 // to the handler for this Type. Every recurring execution of the job will use the
 // same data.
-func (jt *Type) ScheduleRecurring(priority int, time time.Time, freq time.Duration, data interface{}) (*Job, error) {
+func (jt *Type) ScheduleRecurring(priority int, time time.Time, freq time.Duration, data ...interface{}) (*Job, error) {
 	// Encode the data
 	encodedData, err := jt.encodeData(data)
 	if err != nil {
@@ -153,9 +168,15 @@ func (jt *Type) ScheduleRecurring(priority int, time time.Time, freq time.Durati
 // If it is, it encodes the data into a slice of bytes.
 func (jt *Type) encodeData(data interface{}) ([]byte, error) {
 	// Check the type of data
-	dataType := reflect.TypeOf(data)
-	if dataType != jt.dataType {
-		return nil, fmt.Errorf("jobs: provided data was not of the correct type.\nExpected %s for Type %s, but got %s", jt.dataType, jt, dataType)
+	handlerType := reflect.TypeOf(jt.handler)
+
+	for i, arg := range data.([]interface{}) {
+
+		handlerArgType := handlerType.In(i)
+		argType := reflect.TypeOf(arg)
+		if handlerArgType != argType && argType != reflect.PtrTo(handlerArgType) && reflect.PtrTo(argType) != handlerArgType {
+			return nil, fmt.Errorf("jobs: one of provided, args[%d], was not of the correct type.\nExpected %s, but got %s", i, handlerArgType.String(), argType.String())
+		}
 	}
 	// Encode the data
 	encodedData, err := encode(data)

@@ -17,8 +17,16 @@ local jobKey = 'jobs:' .. jobId
 -- Remove the job from the status set
 local status = redis.call('HGET', jobKey, 'status')
 if status ~= '' then
-	local statusSet = 'jobs:' .. status
+
+	local poolKey = redis.call('HGET', jobKey, 'poolKey')
+	local statusSet = 'jobs:' .. status .. poolKey
+	local executingStatusSet = '{{.executingSet}}' .. poolKey
+
+	redis.log(redis.LOG_WARNING, "destroy "..jobId.. " from "..statusSet)
+
 	redis.call('ZREM', statusSet, jobId)
+	redis.call('ZREM', executingStatusSet, jobId)
+
 end
 -- Remove the job from the time index
 redis.call('ZREM', '{{.timeIndexSet}}', jobId)

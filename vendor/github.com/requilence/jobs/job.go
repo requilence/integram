@@ -293,10 +293,12 @@ func (j *Job) mainHashArgs() []interface{} {
 		"freq", j.freq,
 		"priority", j.priority,
 		"retries", j.retries,
+		"totalRetries", j.retries,
 		"status", j.status,
 		"started", j.started,
 		"finished", j.finished,
 		"poolId", j.poolId,
+		"poolKey", j.typ.PoolKey,
 	}
 	if j.err != nil {
 		hashArgs = append(hashArgs, "error", j.err.Error())

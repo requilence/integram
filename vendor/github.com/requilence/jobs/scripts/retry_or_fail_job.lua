@@ -18,7 +18,27 @@
 -- IMPORTANT: If you edit this file, you must run go generate . to rewrite ../scripts.go
 
 -- Assign args to variables for easy reference
+
+local function Fibonacci(n)
+	local function inner(m, a, b)
+		if m == 0 then
+			return a
+		end
+		return inner(m-1, b, a+b)
+	end
+	return inner(n, 0, 1)
+end
+
+
 local jobId = ARGV[1]
+local currentTime = tonumber(ARGV[2])
+
+local function NextRetryTime(n)
+	return string.format("%.0f",(currentTime+Fibonacci(n)*1000000000))
+end
+
+redis.log(redis.LOG_WARNING, "jobID: "..jobId)
+
 local jobKey = 'jobs:' .. jobId
 -- Make sure the job hasn't already been destroyed
 local exists = redis.call('EXISTS', jobKey)
@@ -27,21 +47,31 @@ if exists ~= 1 then
 end
 -- Check how many retries remain
 local retries = redis.call('HGET', jobKey, 'retries')
+redis.log(redis.LOG_WARNING, "retries left: "..retries)
+
+local poolKey = redis.call('HGET', jobKey, 'poolKey')
+
 local newStatus = ''
 if retries == '0' then
+	redis.log(redis.LOG_WARNING, "no retries left...")
 	-- newStatus should be failed because there are no retries left
 	newStatus = '{{.statusFailed}}'
 else
-	-- subtract 1 from the remaining retries
+	local totalRetries = redis.call('HGET', jobKey, 'totalRetries')
+	local nextTime = NextRetryTime(totalRetries-retries+1)
+
 	redis.call('HINCRBY', jobKey, 'retries', -1)
+	redis.call('HSET', jobKey, 'time', nextTime)
+	redis.pcall('ZADD', '{{.timeIndexSet}}', nextTime, jobId)
+	-- subtract 1 from the remaining retries
 	-- newStatus should be queued, so the job will be retried
 	newStatus = '{{.statusQueued}}'
 end
 -- Get the job priority (used as score)
 local jobPriority = redis.call('HGET', jobKey, 'priority')
 -- Add the job to the appropriate new set
-local newStatusSet = 'jobs:' .. newStatus
-redis.call('ZADD', newStatusSet, jobPriority, jobId)	
+local newStatusSet = 'jobs:' .. newStatus..poolKey
+redis.call('ZADD', newStatusSet, jobPriority, jobId)
 -- Remove the job from the old status set
 local oldStatus = redis.call('HGET', jobKey, 'status')
 if ((oldStatus ~= '') and (oldStatus ~= newStatus)) then
@@ -50,13 +80,4 @@ if ((oldStatus ~= '') and (oldStatus ~= newStatus)) then
 end
 -- Set the job status in the hash
 redis.call('HSET', jobKey, 'status', newStatus)
-if retries == '0' then
-	-- Return false to indicate the job has not been queued for retry
-	-- NOTE: 0 is used to represent false because apparently
-	-- false gets converted to nil
-	return 0
-else
-	-- Return true to indicate the job has been queued for retry
-	-- NOTE: 1 is used to represent true (for consistency)
-	return 1
-end
+return retries
