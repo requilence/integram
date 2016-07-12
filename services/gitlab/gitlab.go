@@ -541,14 +541,20 @@ func webhookHandler(c *integram.Context, request *integram.WebhookContext) (err 
 			} else {
 				msg.SetReplyAction(commitsReplied, c.ServiceBaseURL.String(), wh.ProjectID, wh.Commits)
 			}
-			_, err = msg.AddEventID("commit_" + wh.Commits[0].ID).SetText(fmt.Sprintf("%s %s to %s\n%s", wh.UserName, m.URL("pushed", wp), m.URL(wh.Repository.Name+"/"+branch, wh.Repository.Homepage+"/tree/"+url.QueryEscape(branch)), text)).
+			_, err = msg.AddEventID("commit_" + wh.Commits[0].ID).SetText(fmt.Sprintf("%s %s to %s\n%s", mention(c, wh.UserName, wh.UserEmail), m.URL("pushed", wp), m.URL(wh.Repository.Name+"/"+branch, wh.Repository.Homepage+"/tree/"+url.QueryEscape(branch)), text)).
 				EnableHTML().
 				SendAndGetID()
 
 		} else {
-			_, err = msg.SetText(fmt.Sprintf("%s created branch %s\n%s", wh.UserName, m.URL(wh.Repository.Name+"/"+branch, wh.Repository.Homepage+"/tree/"+url.QueryEscape(branch)), text)).
-				EnableHTML().
-				SendAndGetID()
+			if wh.After != "0000000000000000000000000000000000000000" && wh.After != "" {
+				_, err = msg.SetText(fmt.Sprintf("%s created branch %s\n%s", mention(c, wh.UserName, wh.UserEmail), m.URL(wh.Repository.Name+"/"+branch, wh.Repository.Homepage+"/tree/"+url.QueryEscape(branch)), text)).
+					EnableHTML().
+					SendAndGetID()
+			} else {
+				_, err = msg.SetText(fmt.Sprintf("%s deleted branch %s\n%s", mention(c, wh.UserName, wh.UserEmail), m.Bold(wh.Repository.Name+"/"+branch), text)).
+					EnableHTML().
+					SendAndGetID()
+			}
 		}
 
 		return err
@@ -608,7 +614,7 @@ func webhookHandler(c *integram.Context, request *integram.WebhookContext) (err 
 			return nil
 		}
 
-		switch wh.ObjectAttributes.Note {
+		switch wh.ObjectAttributes.NoteableType {
 		case "Commit":
 			noteType = "commit"
 			originMsg, _ = c.FindMessageByEventID(fmt.Sprintf("commit_%d", wh.Commit.ID))
@@ -665,11 +671,19 @@ func webhookHandler(c *integram.Context, request *integram.WebhookContext) (err 
 				EnableHTML().DisableWebPreview().Send()
 
 			return err
-		}
+		} else {
+			originMsg, _ := c.FindMessageByEventID(fmt.Sprintf("mr_%d", wh.ObjectAttributes.ID))
 
-	default:
-		return
-		break
+			if originMsg != nil {
+				return msg.SetText(fmt.Sprintf("%s %s by %s", m.URL("merge request", wh.ObjectAttributes.URL), wh.ObjectAttributes.State, mention(c, wh.User.Username, wh.UserEmail))).
+					EnableHTML().SetReplyToMsgID(originMsg.MsgID).DisableWebPreview().Send()
+			}
+			wp := c.WebPreview("Merge Request", wh.ObjectAttributes.Title, wh.ObjectAttributes.Description, wh.ObjectAttributes.URL, "")
+
+			return msg.SetText(fmt.Sprintf("%s %s by %s", m.URL("Merge request", wp), wh.ObjectAttributes.State, mention(c, wh.User.Username, wh.UserEmail))).
+				EnableHTML().Send()
+
+		}
 	}
 	return
 }
