@@ -551,10 +551,9 @@ func (c *Context) FindMessageByEventID(id string) (*Message, error) {
 
 func findMessageByEventID(db *mgo.Database, chatID int64, botID int64, eventID string) (*Message, error) {
 	msg := OutgoingMessage{}
-	fmt.Printf("chaid=%v, botid=%v, eventid=%v\n", chatID, botID, eventID)
 
 	err := db.C("messages").Find(bson.M{"chatid": chatID, "botid": botID, "eventid": eventID}).Sort("-_id").One(&msg)
-	if err != nil {
+	if err != nil || msg.BotID == 0 {
 		return nil, err
 	}
 	msg.Message.om = &msg
