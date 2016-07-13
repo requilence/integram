@@ -43,7 +43,8 @@ import (
 func main() {
 	integram.Debug=true
 	
-    trello.Config{
+	integram.Register(
+        trello.Config{
             integram.OAuthProvider{
                 ID:     "TRELLO_APP_KEY",
                 Secret: "TRELLO_APP_SECRET",
