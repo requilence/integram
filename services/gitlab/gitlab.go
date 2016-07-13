@@ -669,19 +669,18 @@ func webhookHandler(c *integram.Context, request *integram.WebhookContext) (err 
 				EnableHTML().DisableWebPreview().Send()
 
 			return err
-		} else {
-			originMsg, _ := c.FindMessageByEventID(fmt.Sprintf("mr_%d", wh.ObjectAttributes.ID))
-
-			if originMsg != nil {
-				return msg.SetText(fmt.Sprintf("%s %s by %s", m.URL("merge request", wh.ObjectAttributes.URL), wh.ObjectAttributes.State, mention(c, wh.User.Username, wh.UserEmail))).
-					EnableHTML().SetReplyToMsgID(originMsg.MsgID).DisableWebPreview().Send()
-			}
-			wp := c.WebPreview("Merge Request", wh.ObjectAttributes.Title, wh.ObjectAttributes.Description, wh.ObjectAttributes.URL, "")
-
-			return msg.SetText(fmt.Sprintf("%s %s by %s", m.URL("Merge request", wp), wh.ObjectAttributes.State, mention(c, wh.User.Username, wh.UserEmail))).
-				EnableHTML().Send()
-
 		}
+		originMsg, _ := c.FindMessageByEventID(fmt.Sprintf("mr_%d", wh.ObjectAttributes.ID))
+
+		if originMsg != nil {
+			return msg.SetText(fmt.Sprintf("%s %s by %s", m.URL("merge request", wh.ObjectAttributes.URL), wh.ObjectAttributes.State, mention(c, wh.User.Username, wh.UserEmail))).
+				EnableHTML().SetReplyToMsgID(originMsg.MsgID).DisableWebPreview().Send()
+		}
+		wp := c.WebPreview("Merge Request", wh.ObjectAttributes.Title, wh.ObjectAttributes.Description, wh.ObjectAttributes.URL, "")
+
+		return msg.SetText(fmt.Sprintf("%s %s by %s", m.URL("Merge request", wp), wh.ObjectAttributes.State, mention(c, wh.User.Username, wh.UserEmail))).
+			EnableHTML().Send()
+
 	}
 	return
 }

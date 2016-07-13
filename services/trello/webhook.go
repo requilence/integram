@@ -382,6 +382,9 @@ func webhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 				return err
 			}
 			err = c.UpdateServiceCache("card_"+card.Id, bson.M{"$addToSet": bson.M{"val.checklists": checklist}}, card)
+			if err != nil {
+				c.Log().WithError(err).Error("failed to add checklist to the card")
+			}
 			for i, checklist := range card.Checklists {
 				if checklist.Id == wh.Action.Data.Checklist.Id {
 					checklistIndex = i

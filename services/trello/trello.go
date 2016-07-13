@@ -1296,11 +1296,11 @@ func inlineCardButtonPressed(c *integram.Context, cardID string) error {
 			c.AnswerCallbackQuery("You archived card \""+card.Name+"\"", false)
 
 			return c.EditPressedInlineButton(0, "Unarchive")
-		} else {
-			c.AnswerCallbackQuery("You unarchived card \""+card.Name+"\"", false)
-
-			return c.EditPressedInlineButton(1, "Archive")
 		}
+		c.AnswerCallbackQuery("You unarchived card \""+card.Name+"\"", false)
+
+		return c.EditPressedInlineButton(1, "Archive")
+
 	case "position":
 
 		if c.Callback.State == 1 {
@@ -1319,11 +1319,10 @@ func inlineCardButtonPressed(c *integram.Context, cardID string) error {
 			c.AnswerCallbackQuery("You moved card \""+card.Name+"\" to the top of the list", false)
 
 			return c.EditPressedInlineButton(0, "⬇ To the bottom")
-		} else {
-			c.AnswerCallbackQuery("You moved card \""+card.Name+"\" to the bottom of the list", false)
-
-			return c.EditPressedInlineButton(1, "⬆ To the top")
 		}
+		c.AnswerCallbackQuery("You moved card \""+card.Name+"\" to the bottom of the list", false)
+
+		return c.EditPressedInlineButton(1, "⬆ To the top")
 	case "due":
 		buts := integram.InlineButtons{}
 
@@ -1935,7 +1934,7 @@ func attachLabelID(c *integram.Context, api *t.Client, labelID string, unattach 
 		}
 		// looks like member ID
 	} else {
-		err = fmt.Errorf("bad labelID %f", labelID)
+		err = fmt.Errorf("bad labelID %s", labelID)
 	}
 	return
 }
