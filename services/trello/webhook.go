@@ -227,7 +227,7 @@ func webhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 	e := false
 
 	if exists := c.Chat.Cache("action_"+wh.Action.ID, &e); exists && e {
-		c.Log().Errorf("duplicate trello webhook %s, request %s, %s, action %s, chat %s", wc.HookID(), wc.RequestID(), wh.Action.ID, c.Chat.ID)
+		c.Log().Errorf("duplicate trello webhook %s, request %s, action %s, chat %s", wc.HookID(), wc.RequestID(), wh.Action.ID, c.Chat.ID)
 		return
 	}
 
@@ -742,6 +742,9 @@ func attachFileToCard(c *integram.Context, cardID string, doc tg.Document) error
 	var a action
 	err = json.Unmarshal(b, &a)
 
+	if err != nil {
+		c.Log().WithError(err).Error("attachFileToCard json error")
+	}
 	return c.Message.UpdateEventsID(c.Db(), "action_"+a.ID)
 }
 
@@ -757,6 +760,10 @@ func commentCard(c *integram.Context, cardID string, text string) error {
 
 	var a action
 	err = json.Unmarshal(b, &a)
+
+	if err != nil {
+		c.Log().WithError(err).Error("commentCard json error")
+	}
 
 	return c.Message.UpdateEventsID(c.Db(), "action_"+a.ID)
 }

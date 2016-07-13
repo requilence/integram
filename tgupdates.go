@@ -3,16 +3,17 @@ package integram
 import (
 	"errors"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
-	mgo "gopkg.in/mgo.v2"
-	"gopkg.in/mgo.v2/bson"
-	tg "gopkg.in/telegram-bot-api.v3"
 	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	log "github.com/Sirupsen/logrus"
+	mgo "gopkg.in/mgo.v2"
+	"gopkg.in/mgo.v2/bson"
+	tg "gopkg.in/telegram-bot-api.v3"
 )
 
 var updateMapMutex = &sync.Mutex{}
@@ -111,7 +112,7 @@ func updateRoutine(b *Bot, u *tg.Update) {
 			} else {
 				secsSpent := context.inlineQueryAnsweredAt.Sub(start).Seconds()
 				if secsSpent > 30 {
-					context.Log().WithError(err).Errorf("BotUpdateHandler InlineQuery 30 sec exceeded: %d sec spent", secsSpent)
+					context.Log().WithError(err).Errorf("BotUpdateHandler InlineQuery 30 sec exceeded: %.1f sec spent", secsSpent)
 				}
 			}
 		}
@@ -325,7 +326,7 @@ func tgCallbackHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service, *Conte
 
 					if !returnVals[0].IsNil() {
 						err := returnVals[0].Interface().(error)
-						// NOTE: panics will be caught by the recover statment above
+						// NOTE: panics will be caught by the recover statement above
 						ctx.Log().WithField("handler", rm.OnCallbackAction).WithError(err).Error("callbackAction failed")
 						ctx.AnswerCallbackQuery("Oops! Please try again", false)
 					}
@@ -490,7 +491,7 @@ func tgIncomingMessageHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service,
 			} else {
 				fmt.Printf("rm: nil %v, %v\n", b.ID, im.ChatID)
 			}
-			// Leave ReplyToMessage empty to avoid unnecesary db request in case we don't need prev message.
+			// Leave ReplyToMessage empty to avoid unnecessary db request in case we don't need prev message.
 			im.ReplyToMessage = rm
 			if rm != nil {
 				im.ReplyToMessage.BotID = b.ID
@@ -531,7 +532,7 @@ func tgIncomingMessageHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service,
 
 					if !returnVals[0].IsNil() {
 						err := returnVals[0].Interface().(error)
-						// NOTE: panics will be caught by the recover statment above
+						// NOTE: panics will be caught by the recover statement above
 						log.WithField("handler", rm.OnReplyAction).WithError(err).Error("replyHandler failed")
 					}
 				}

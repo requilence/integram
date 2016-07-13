@@ -360,7 +360,7 @@ func sendCommitComment(c *integram.Context, projectID int, commitID string, msg 
 	if err != nil {
 		return err
 	}
-	// note id not availble for commit comment. So use the date. Collisions are unlikely here...
+	// note id not available for commit comment. So use the date. Collisions are unlikely here...
 	c.Message.UpdateEventsID(c.Db(), noteUniqueID(projectID, note.CreatedAt))
 
 	return err
@@ -577,10 +577,8 @@ func webhookHandler(c *integram.Context, request *integram.WebhookContext) (err 
 		msg.SetReplyAction(issueReplied, c.ServiceBaseURL.String(), wh.ObjectAttributes.ProjectID, wh.ObjectAttributes.ID)
 
 		if wh.ObjectAttributes.Action == "open" {
-			err := msg.AddEventID("issue_" + strconv.Itoa(wh.ObjectAttributes.ID)).SetText(fmt.Sprintf("%s %s %s at %s:\n%s\n%s", mention(c, wh.User.Username, wh.UserEmail), wh.ObjectAttributes.State, m.URL("issue", wh.ObjectAttributes.URL), m.URL(wh.User.Username+" / "+wh.Repository.Name, wh.Repository.Homepage), m.Bold(wh.ObjectAttributes.Title), wh.ObjectAttributes.Description)).
+			return msg.AddEventID("issue_" + strconv.Itoa(wh.ObjectAttributes.ID)).SetText(fmt.Sprintf("%s %s %s at %s:\n%s\n%s", mention(c, wh.User.Username, wh.UserEmail), wh.ObjectAttributes.State, m.URL("issue", wh.ObjectAttributes.URL), m.URL(wh.User.Username+" / "+wh.Repository.Name, wh.Repository.Homepage), m.Bold(wh.ObjectAttributes.Title), wh.ObjectAttributes.Description)).
 				EnableHTML().DisableWebPreview().Send()
-
-			return err
 		}
 		action := "updated"
 		if wh.ObjectAttributes.Action == "reopen" {
@@ -617,7 +615,7 @@ func webhookHandler(c *integram.Context, request *integram.WebhookContext) (err 
 		switch wh.ObjectAttributes.NoteableType {
 		case "Commit":
 			noteType = "commit"
-			originMsg, _ = c.FindMessageByEventID(fmt.Sprintf("commit_%d", wh.Commit.ID))
+			originMsg, _ = c.FindMessageByEventID(fmt.Sprintf("commit_%s", wh.Commit.ID))
 			if originMsg != nil {
 				break
 			}
@@ -654,7 +652,7 @@ func webhookHandler(c *integram.Context, request *integram.WebhookContext) (err 
 				noteType = strings.ToLower(wh.ObjectAttributes.NoteableType)
 			}
 
-			return msg.SetTextFmt("%s commented on %s: %s", mention(c, wh.User.Username, ""), m.URL(strings.ToLower(wh.ObjectAttributes.NoteableType), wp), wh.ObjectAttributes.Note).
+			return msg.SetTextFmt("%s commented on %s: %s", mention(c, wh.User.Username, ""), m.URL(noteType, wp), wh.ObjectAttributes.Note).
 				EnableHTML().
 				Send()
 		}

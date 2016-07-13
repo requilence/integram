@@ -291,7 +291,7 @@ func (buttons *InlineButtons) Prepend(data string, text string) {
 	if len(data) > 64 {
 		log.WithField("text", text).Errorf("InlineButton data '%s' extends 64 bytes limit", data)
 	}
-	*buttons = append([]InlineButton{InlineButton{Data: data, Text: text}}, *buttons...)
+	*buttons = append([]InlineButton{{Data: data, Text: text}}, *buttons...)
 }
 
 // AppendWithState add the InlineButton with state to the end of InlineButtons(row)
@@ -301,7 +301,7 @@ func (buttons *InlineButtons) AppendWithState(state int, data string, text strin
 		log.WithField("text", text).Errorf("InlineButton data '%s' extends 64 bytes limit", data)
 	}
 	if state > 9 || state < 0 {
-		log.WithField("data", data).WithField("text", text).Errorf("AppendWithState – state must be [0-9], %s received", state)
+		log.WithField("data", data).WithField("text", text).Errorf("AppendWithState – state must be [0-9], %d received", state)
 	}
 	*buttons = append(*buttons, InlineButton{Data: data, Text: text, State: state})
 }
@@ -313,9 +313,9 @@ func (buttons *InlineButtons) PrependWithState(state int, data string, text stri
 		log.WithField("text", text).Errorf("InlineButton data '%s' extends 64 bytes limit", data)
 	}
 	if state > 9 || state < 0 {
-		log.WithField("data", data).WithField("text", text).Errorf("PrependWithState – state must be [0-9], %s received", state)
+		log.WithField("data", data).WithField("text", text).Errorf("PrependWithState – state must be [0-9], %d received", state)
 	}
-	*buttons = append([]InlineButton{InlineButton{Data: data, Text: text, State: state}}, *buttons...)
+	*buttons = append([]InlineButton{{Data: data, Text: text, State: state}}, *buttons...)
 }
 
 // AddURL adds InlineButton with URL to the end of InlineButtons(row)
@@ -415,7 +415,7 @@ func (keyboard *Keyboard) AddRows(buttons ...Buttons) {
 
 // Prepend adds InlineButton with URL to the begin of InlineButtons(row)
 func (buttons *Buttons) Prepend(data string, text string) {
-	*buttons = append([]Button{Button{Data: data, Text: text}}, *buttons...)
+	*buttons = append([]Button{{Data: data, Text: text}}, *buttons...)
 }
 
 // Append adds Button with URL to the end of Buttons(row)
@@ -953,6 +953,9 @@ func initBots() error {
 	// 23 retries mean maximum of 8 hours deferment (fibonacci sequence)
 	sendMessageJob, err = jobs.RegisterTypeWithPoolKey("sendMessage", "_telegram", 23, sendMessage)
 
+	if err != nil {
+		log.WithError(err).Panic("RegisterTypeWithPoolKey sendMessage failed")
+	}
 	for _, service := range services {
 
 		bot := service.Bot()

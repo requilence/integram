@@ -3,14 +3,6 @@ package integram
 import (
 	"errors"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
-	"github.com/gin-gonic/gin"
-	"github.com/requilence/integram/url"
-	"github.com/weekface/mgorus"
-	"golang.org/x/oauth2"
-	"gopkg.in/mgo.v2"
-	"gopkg.in/mgo.v2/bson"
-	tg "gopkg.in/telegram-bot-api.v3"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -19,6 +11,15 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	log "github.com/Sirupsen/logrus"
+	"github.com/gin-gonic/gin"
+	"github.com/requilence/integram/url"
+	"github.com/weekface/mgorus"
+	"golang.org/x/oauth2"
+	"gopkg.in/mgo.v2"
+	"gopkg.in/mgo.v2/bson"
+	tg "gopkg.in/telegram-bot-api.v3"
 )
 
 var pwd string
@@ -226,7 +227,7 @@ func serviceHookHandler(c *gin.Context) {
 	// If token starts with c - this is notification with TG Chat behavior
 	// So just one chat will receive this notification
 
-	// If token starts with h - this auto detection. Used for backward compability with previous Integram version
+	// If token starts with h - this auto detection. Used for backward compatibility with previous Integram version
 
 	if token[0:1] == "u" {
 		user, err := ctx.findUser(bson.M{"hooks.token": token})
@@ -390,6 +391,9 @@ func oAuthInitRedirect(c *gin.Context) {
 		}
 		err = db.C("users_cache").Update(bson.M{"key": "auth_" + authTempID}, bson.M{"$set": bson.M{"val.requesttoken": requestToken}})
 
+		if err != nil {
+			ctx.Log().WithError(err).Error("oAuthInitRedirect error updating authTempID")
+		}
 		// hijack JS redirect to determine user's timezone
 		c.HTML(http.StatusOK, "oauthredirect.tmpl", gin.H{"url": url})
 		fmt.Println("HTML")

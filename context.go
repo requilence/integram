@@ -4,6 +4,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"io/ioutil"
+	"net/http"
+	uurl "net/url"
+	"runtime"
+	"strings"
+	"time"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/gin-gonic/gin"
 	"github.com/mrjones/oauth"
@@ -12,13 +20,6 @@ import (
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 	tg "gopkg.in/telegram-bot-api.v3"
-	"io"
-	"io/ioutil"
-	"net/http"
-	uurl "net/url"
-	"runtime"
-	"strings"
-	"time"
 )
 
 // MaxMsgsToUpdateWithEventID set the maximum number of last messages to update with EditMessagesTextWithEventID
@@ -53,7 +54,7 @@ type callback struct {
 	State      int // state is used for checkbox buttons or for other switches
 }
 
-// SetServiceBaseURL set the baseURL for the current request. Useful when service can be self-hosted. The actual service URL can be foudn in the incoming webhook
+// SetServiceBaseURL set the baseURL for the current request. Useful when service can be self-hosted. The actual service URL can be found in the incoming webhook
 func (c *Context) SetServiceBaseURL(domainOrURL string) {
 	u, _ := getBaseURL(domainOrURL)
 
@@ -661,13 +662,12 @@ func (c *Context) EditInlineButton(om *OutgoingMessage, kbState string, buttonDa
 
 // EditInlineStateButton edit the outgoing message's inline button with a state
 func (c *Context) EditInlineStateButton(om *OutgoingMessage, kbState string, oldButtonState int, buttonData string, newButtonState int, newButtonText string) error {
-	log.WithField("newText", newButtonText).Info("EditInlineButton")
 	if oldButtonState > 9 || oldButtonState < 0 {
-		log.WithField("data", buttonData).WithField("text", newButtonText).Errorf("EditInlineStateButton – oldButtonState must be [0-9], %s recived", oldButtonState)
+		c.Log().WithField("data", buttonData).WithField("text", newButtonText).Errorf("EditInlineStateButton – oldButtonState must be [0-9], %d recived", oldButtonState)
 	}
 
 	if newButtonState > 9 || newButtonState < 0 {
-		log.WithField("data", buttonData).WithField("text", newButtonText).Errorf("EditInlineStateButton – newButtonState must be [0-9], %s recived", newButtonState)
+		c.Log().WithField("data", buttonData).WithField("text", newButtonText).Errorf("EditInlineStateButton – newButtonState must be [0-9], %d recived", newButtonState)
 	}
 
 	bot := c.Bot()

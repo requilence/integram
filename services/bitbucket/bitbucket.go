@@ -197,7 +197,7 @@ func issueInlineButtonPressed(c *integram.Context, fullRepoName string, issueID 
 			issue.State = state
 			storeIssue(c, &issue)
 
-			state = "back"
+			c.Callback.Data = "back"
 		}
 	}
 	switch c.Callback.Data {

@@ -1,11 +1,12 @@
 package integram
 
 import (
+	"time"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/mrjones/oauth"
 	"github.com/requilence/integram/url"
 	"gopkg.in/mgo.v2/bson"
-	"time"
 )
 
 // User information initiated from TG
@@ -118,7 +119,7 @@ type userProtected struct {
 	OAuthRefreshToken string
 	AuthTempToken     string // Temp token for redirect to time-limited Oauth URL to authorize the user (F.e. Trello)
 
-	AfterAuthHandler string // Used to store function that will be called after succesfull auth. F.e. in case of interactive reply in chat for non-authed user
+	AfterAuthHandler string // Used to store function that will be called after successfull auth. F.e. in case of interactive reply in chat for non-authed user
 	AfterAuthData    []byte // Gob encoded arg's
 }
 

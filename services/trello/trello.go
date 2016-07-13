@@ -686,8 +686,6 @@ func subscribeBoard(c *integram.Context, b *t.Board, chatID int64) error {
 	}
 
 	return processWebhook(c, b, chatID, webhook.ID)
-
-	return nil
 }
 
 func labelsFilterByID(labels []*t.Label, id string) *t.Label {
@@ -1273,19 +1271,11 @@ func inlineCardButtonPressed(c *integram.Context, cardID string) error {
 	case "back":
 		kb := cardInlineKeyboard(card, false)
 
-		err := c.EditPressedMessageTextAndInlineKeyboard(cardText(c, card), kb)
-		if err != nil {
-			return err
-		}
-
+		return c.EditPressedMessageTextAndInlineKeyboard(cardText(c, card), kb)
 	case "more":
 		kb := cardInlineKeyboard(card, true)
 
-		err := c.EditPressedMessageTextAndInlineKeyboard(cardText(c, card), kb)
-		if err != nil {
-			return err
-		}
-
+		return c.EditPressedMessageTextAndInlineKeyboard(cardText(c, card), kb)
 	case "archive":
 
 		closed := true
@@ -1305,11 +1295,11 @@ func inlineCardButtonPressed(c *integram.Context, cardID string) error {
 		if card.Closed {
 			c.AnswerCallbackQuery("You archived card \""+card.Name+"\"", false)
 
-			c.EditPressedInlineButton(0, "Unarchive")
+			return c.EditPressedInlineButton(0, "Unarchive")
 		} else {
 			c.AnswerCallbackQuery("You unarchived card \""+card.Name+"\"", false)
 
-			c.EditPressedInlineButton(1, "Archive")
+			return c.EditPressedInlineButton(1, "Archive")
 		}
 	case "position":
 
@@ -1328,11 +1318,11 @@ func inlineCardButtonPressed(c *integram.Context, cardID string) error {
 		if card.Pos <= 65535 {
 			c.AnswerCallbackQuery("You moved card \""+card.Name+"\" to the top of the list", false)
 
-			c.EditPressedInlineButton(0, "⬇ To the bottom")
+			return c.EditPressedInlineButton(0, "⬇ To the bottom")
 		} else {
 			c.AnswerCallbackQuery("You moved card \""+card.Name+"\" to the bottom of the list", false)
 
-			c.EditPressedInlineButton(1, "⬆ To the top")
+			return c.EditPressedInlineButton(1, "⬆ To the top")
 		}
 	case "due":
 		buts := integram.InlineButtons{}
@@ -1345,7 +1335,7 @@ func inlineCardButtonPressed(c *integram.Context, cardID string) error {
 		t := now.New(time.Now().In(userLocation))
 
 		buts.Append(t.EndOfDay().Format(dueDateFormat), "🔥 Today")
-		buts.Append(t.EndOfDay().AddDate(0, 0, 1).Format(dueDateFormat), "Tommorow")
+		buts.Append(t.EndOfDay().AddDate(0, 0, 1).Format(dueDateFormat), "Tomorrow")
 
 		buts.Append(t.EndOfSunday().Format(dueDateFormat), "Sunday")
 		buts.Append(t.EndOfSunday().AddDate(0, 0, 7).Format(dueDateFormat), "Next Sunday")
@@ -1355,10 +1345,7 @@ func inlineCardButtonPressed(c *integram.Context, cardID string) error {
 		buts.Append("due_manual", "Enter the date")
 		buts.Append("back", "←⃪⃪⃪ Back")
 
-		err := c.EditPressedMessageTextAndInlineKeyboard(cardText(c, card), buts.Markup(1, "due"))
-		if err != nil {
-			return err
-		}
+		return c.EditPressedMessageTextAndInlineKeyboard(cardText(c, card), buts.Markup(1, "due"))
 
 	case "move":
 
@@ -1375,7 +1362,7 @@ func inlineCardButtonPressed(c *integram.Context, cardID string) error {
 		}
 		buts.Append("back", "↑ Less")
 
-		err = c.EditInlineKeyboard(c.Callback.Message, "actions", buts.Markup(1, "move"))
+		return c.EditInlineKeyboard(c.Callback.Message, "actions", buts.Markup(1, "move"))
 	case "label":
 		buts, err := getCardLabelsButtons(c, api, card)
 		if err != nil {
@@ -1388,10 +1375,7 @@ func inlineCardButtonPressed(c *integram.Context, cardID string) error {
 
 		kb := buts.Markup(1, "label")
 		kb.FixedWidth = true
-		err = c.EditInlineKeyboard(c.Callback.Message, "actions", kb)
-		if err != nil {
-			return err
-		}
+		return c.EditInlineKeyboard(c.Callback.Message, "actions", kb)
 	case "assign":
 		buts, err := getCardAssignButtons(c, api, card)
 		if err != nil {
@@ -1404,10 +1388,7 @@ func inlineCardButtonPressed(c *integram.Context, cardID string) error {
 
 		kb := buts.Markup(1, "assign")
 		kb.FixedWidth = true
-		err = c.EditInlineKeyboard(c.Callback.Message, "actions", kb)
-		if err != nil {
-			return err
-		}
+		return c.EditInlineKeyboard(c.Callback.Message, "actions", kb)
 	case "vote":
 		me, err := me(c, api)
 		if err != nil {
@@ -1462,7 +1443,7 @@ func inlineCardButtonPressed(c *integram.Context, cardID string) error {
 		if desc == "" {
 			desc = "Description is empty"
 		}
-		err = msg.SetText(m.Pre(desc)+"\n"+c.User.Mention()+", write the new description for the card").
+		return msg.SetText(m.Pre(desc)+"\n"+c.User.Mention()+", write the new description for the card").
 			EnableForceReply().
 			EnableHTML().
 			SetSelective(true).
@@ -1479,7 +1460,7 @@ func inlineCardButtonPressed(c *integram.Context, cardID string) error {
 			msg.SetReplyToMsgID(c.Callback.Message.MsgID)
 		}
 
-		err = msg.SetText(m.Pre(card.Name)+"\n"+c.User.Mention()+", write the new name for the card").
+		return msg.SetText(m.Pre(card.Name)+"\n"+c.User.Mention()+", write the new name for the card").
 			EnableForceReply().
 			EnableHTML().
 			SetSelective(true).
@@ -1800,7 +1781,7 @@ func сardDueDateEntered(c *integram.Context, card *t.Card) error {
 		t := now.New(time.Now().In(userLocation))
 
 		buttons.Append(t.EndOfDay().Format(dueDateFormat), "🔥 Today")
-		buttons.Append(t.EndOfDay().AddDate(0, 0, 1).Format(dueDateFormat), "Tommorow")
+		buttons.Append(t.EndOfDay().AddDate(0, 0, 1).Format(dueDateFormat), "Tomorrow")
 
 		buttons.Append(t.EndOfSunday().Format(dueDateFormat), "Sunday")
 		buttons.Append(t.EndOfSunday().AddDate(0, 0, 7).Format(dueDateFormat), "Next Sunday")
@@ -1950,7 +1931,7 @@ func attachLabelID(c *integram.Context, api *t.Client, labelID string, unattach 
 			//spew.Dump("a2",b)
 
 		} else {
-			err = fmt.Errorf("can't find labelID inside board %f", card.Board.Id)
+			err = fmt.Errorf("can't find labelID inside board %s", card.Board.Id)
 		}
 		// looks like member ID
 	} else {
@@ -2018,7 +1999,7 @@ func assignMemberID(c *integram.Context, api *t.Client, memberID string, unassig
 		}
 		// looks like member ID
 	} else {
-		err = fmt.Errorf("bad memberID %f", memberID)
+		err = fmt.Errorf("bad memberID %s", memberID)
 	}
 	return
 }
@@ -2304,7 +2285,7 @@ func inlineQueryHandler(c *integram.Context) error {
 					Text: card.Name + "\n\n<b>" + list.Name + " • " + board.Name + "</b>"},
 				ReplyMarkup: &tg.InlineKeyboardMarkup{
 					InlineKeyboard: [][]tg.InlineKeyboardButton{
-						[]tg.InlineKeyboardButton{
+						{
 							{Text: "Getting the card...", CallbackData: "wait"},
 						},
 					},
@@ -2345,7 +2326,7 @@ func inlineQueryHandler(c *integram.Context) error {
 							Text: c.InlineQuery.Query + "\n\n<b>" + lists[li].Name + " • " + boards[bi].Name + "</b>"},
 						ReplyMarkup: &tg.InlineKeyboardMarkup{
 							InlineKeyboard: [][]tg.InlineKeyboardButton{
-								[]tg.InlineKeyboardButton{
+								{
 									{Text: "Creating card...", CallbackData: "wait"},
 								},
 							},

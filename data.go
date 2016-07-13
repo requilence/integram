@@ -3,17 +3,18 @@ package integram
 import (
 	"errors"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
-	"github.com/requilence/integram/url"
-	"golang.org/x/oauth2"
-	"gopkg.in/mgo.v2"
-	"gopkg.in/mgo.v2/bson"
 	"net/http"
 	"os"
 	"reflect"
 	"runtime"
 	"strings"
 	"time"
+
+	log "github.com/Sirupsen/logrus"
+	"github.com/requilence/integram/url"
+	"golang.org/x/oauth2"
+	"gopkg.in/mgo.v2"
+	"gopkg.in/mgo.v2/bson"
 )
 
 var (
@@ -84,7 +85,6 @@ func bindInterfaceToInterface(in interface{}, out interface{}, path ...string) e
 	if reflect.TypeOf(out).Kind() != reflect.Ptr {
 		err := errors.New("bindInterfaceToInterface: out interface must be a pointer")
 		panic(err)
-		return err
 	}
 	if reflect.TypeOf(in).Kind() == reflect.Ptr {
 		inner = reflect.ValueOf(in).Elem().Interface()
@@ -104,13 +104,16 @@ func bindInterfaceToInterface(in interface{}, out interface{}, path ...string) e
 	}
 	innerType := reflect.TypeOf(inner).Kind()
 	if innerType == reflect.Slice || innerType == reflect.Array || innerType == reflect.Map || innerType == reflect.Interface {
-
-		j, err := bson.Marshal(inner)
+		var j []byte
+		j, err = bson.Marshal(inner)
 		if err != nil {
 			log.Error(err)
 			return err
 		}
 		err = bson.Unmarshal(j, out)
+		if err != nil {
+			return err
+		}
 
 	} else {
 		reflect.ValueOf(out).Elem().Set(reflect.ValueOf(inner))
@@ -183,7 +186,6 @@ func (c *Context) updateCacheVal(cacheType string, key string, update interface{
 		_, err = c.db.C("services_cache").Find(bson.M{"service": serviceID, "key": strings.ToLower(key)}).Select(bson.M{"_id": 0, "val": 1}).Limit(1).Apply(mgo.Change{Update: update, ReturnNew: true}, mi)
 	} else {
 		panic("updateCacheVal, type " + cacheType + " not exists")
-		return false
 	}
 
 	//spew.Dump("updateCacheVal", info, err)
@@ -725,7 +727,7 @@ func (user *User) SaveSetting(key string, value interface{}) error {
 	return err
 }
 
-// AuthTempToken returns Auth token used in OAuth proccess to associate TG user with OAuth creditianals
+// AuthTempToken returns Auth token used in OAuth process to associate TG user with OAuth creditianals
 func (user *User) AuthTempToken() string {
 	host := user.ctx.ServiceBaseURL.Host
 	fmt.Println("host:" + host)
@@ -757,13 +759,13 @@ func (user *User) AuthTempToken() string {
 	return rnd
 }
 
-// OauthRedirectURL used in OAuth proccess as returning URL
+// OauthRedirectURL used in OAuth process as returning URL
 func (user *User) OauthRedirectURL() string {
 	providerID := user.ctx.OAuthProvider().internalID()
 	return BaseURL + "/auth/" + providerID
 }
 
-// OauthInitURL used in OAuth proccess as returning URL
+// OauthInitURL used in OAuth process as returning URL
 func (user *User) OauthInitURL() string {
 	authTempToken := user.AuthTempToken()
 	s := user.ctx.Service()
