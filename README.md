@@ -3,6 +3,8 @@ Integram 2.0
 
 Framework and platform for integrating services into [Telegram](https://telegram.org) using official [Bot API](https://core.telegram.org/bots/api)
 
+[![GoDoc](https://godoc.org/github.com/Requilence/integram?status.svg)](https://godoc.org/github.com/Requilence/integram) [![CircleCI](https://img.shields.io/circleci/project/Requilence/integram.svg)](https://circleci.com/gh/Requilence/integram)
+
 ![Screencast](https://1153359166.rsc.cdn77.org/integram/img/screencast4.gif)
 
 How to use Integram
