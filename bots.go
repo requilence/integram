@@ -261,11 +261,11 @@ func (keyboard *InlineKeyboard) EditText(buttonData string, newText string) {
 }
 
 // AddPMSwitchButton add the button to switch to PM as a first row in the InlineKeyboard
-func (keyboard *InlineKeyboard) AddPMSwitchButton(c *Context, text string, param string) {
+func (keyboard *InlineKeyboard) AddPMSwitchButton(b *Bot, text string, param string) {
 	if len(keyboard.Buttons) > 0 && len(keyboard.Buttons[0]) > 0 && keyboard.Buttons[0][0].Text == text {
 		return
 	}
-	keyboard.PrependRows(InlineButtons{InlineButton{Text: text, URL: c.Bot().PMURL(param)}})
+	keyboard.PrependRows(InlineButtons{InlineButton{Text: text, URL: b.PMURL(param)}})
 }
 
 // AppendRows adds 1 or more InlineButtons (rows) to the end of InlineKeyboard

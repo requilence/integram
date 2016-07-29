@@ -278,7 +278,7 @@ func mustBeAuthed(c *integram.Context) (bool, error) {
 		}
 		if !c.User.IsPrivateStarted() && c.Callback != nil {
 			kb := c.Callback.Message.InlineKeyboardMarkup
-			kb.AddPMSwitchButton(c, "👉  Tap me to auth", "auth")
+			kb.AddPMSwitchButton(c.Bot(), "👉  Tap me to auth", "auth")
 			c.EditPressedInlineKeyboard(kb)
 		} else {
 			return false, c.NewMessage().SetTextFmt("You need to authorize me to use interactive replies: %s", c.User.OauthInitURL()).

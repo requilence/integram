@@ -647,11 +647,11 @@ func cardReplied(c *integram.Context, cardID string) error {
 			if c.Callback != nil {
 				kb := c.Callback.Message.InlineKeyboardMarkup
 				c.AnswerCallbackQuery("You need to authorize me\nUse the \"Tap me to auth\" button", true)
-				kb.AddPMSwitchButton(c, "👉  Tap me to auth", "auth")
+				kb.AddPMSwitchButton(c.Bot(), "👉  Tap me to auth", "auth")
 				c.EditPressedInlineKeyboard(kb)
 			} else {
 				kb := integram.InlineKeyboard{}
-				kb.AddPMSwitchButton(c, "👉  Tap me to auth", "auth")
+				kb.AddPMSwitchButton(c.Bot(), "👉  Tap me to auth", "auth")
 				c.NewMessage().EnableAntiFlood().SetText("You need to authorize me in order to comment cards with replies and use buttons").SetReplyToMsgID(c.Message.MsgID).SetInlineKeyboard(kb).Send()
 			}
 

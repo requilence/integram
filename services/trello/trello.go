@@ -1153,7 +1153,7 @@ func inlineCardButtonPressed(c *integram.Context, cardID string) error {
 			c.NewMessage().EnableAntiFlood().SetTextFmt("You need to authorize me in order to use Trello bot: %s", c.User.OauthInitURL()).SetChat(c.User.ID).Send()
 		} else {
 			kb := c.Callback.Message.InlineKeyboardMarkup
-			kb.AddPMSwitchButton(c, "👉  Tap me to auth", "auth")
+			kb.AddPMSwitchButton(c.Bot(), "👉  Tap me to auth", "auth")
 			c.EditPressedInlineKeyboard(kb)
 
 			c.AnswerCallbackQuery("You need to authorize me\nUse the \"Tap me to auth\" button", true)
@@ -2357,7 +2357,7 @@ func newMessageHandler(c *integram.Context) error {
 			_, err = c.Service().DoJob(sendBoardsForCard, c)
 		} else {
 			kb := integram.InlineKeyboard{}
-			kb.AddPMSwitchButton(c, "👉  Tap me to auth", "auth")
+			kb.AddPMSwitchButton(c.Bot(), "👉  Tap me to auth", "auth")
 
 			err = c.NewMessage().SetReplyToMsgID(c.Message.MsgID).SetText("You need to auth me to be able to create cards").SetInlineKeyboard(kb).Send()
 		}
