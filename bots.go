@@ -1198,7 +1198,7 @@ func sendMessage(m *OutgoingMessage) error {
 
 			db := mongoSession.Clone().DB(mongo.Database)
 			defer db.Session.Close()
-			removeHooksForChat(db, m.ChatID)
+			removeHooksForChat(db, m.BotID, m.ChatID)
 
 			log.WithField("chat", m.ChatID).WithField("bot", m.BotID).Warn("sendMessage error: Bot kicked")
 
@@ -1206,7 +1206,7 @@ func sendMessage(m *OutgoingMessage) error {
 		} else if tgErr.ChatDiactivated() {
 			db := mongoSession.Clone().DB(mongo.Database)
 			defer db.Session.Close()
-			removeHooksForChat(db, m.ChatID)
+			removeHooksForChat(db, m.BotID, m.ChatID)
 			db.C("chats").UpdateId(m.ChatID, bson.M{"$set": bson.M{"deactivated": true}})
 			log.WithField("chat", m.ChatID).WithField("bot", m.BotID).Warn("sendMessage error: Chat deactivated")
 			return nil
