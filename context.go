@@ -247,7 +247,6 @@ func (o *OAuthProvider) OAuth2Client(c *Context) *oauth2.Config {
 // WebhookContext is passed to WebhookHandler of service
 type WebhookContext struct {
 	gin        *gin.Context
-	headers    map[string]string
 	body       []byte
 	firstParse bool
 	requestID  string
