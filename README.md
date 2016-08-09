@@ -30,6 +30,9 @@ You can run Integram on your own server.
     - **INTEGRAM_PORT** - if set to 443, integram.crt and integram.key must be presented in the root
     - **INTEGRAM_BASE_URL** - the base URL the host accessible with, f.e. **https://integram.org**
 - Run **go run main.go** or **go build && ./integram**
+- In order to run test with **go test** you need to set some environment variables:
+    - **INTEGRAM_TEST_BOT_TOKEN** - to perform some non-emulated Telegram tests
+    - **INTEGRAM_TEST_USER** - Telegram user id that have a dialog with this bot
 
 main.go example
 ------------------
