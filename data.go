@@ -301,6 +301,8 @@ func (user *User) SetCache(key string, val interface{}, ttl time.Duration) error
 	expiresAt := time.Now().Add(ttl)
 
 	serviceID := user.ctx.getServiceID()
+	key = strings.ToLower(key)
+
 	if val == nil {
 		err := user.ctx.db.C("users_cache").Remove(bson.M{"userid": user.ID, "service": serviceID, "key": key})
 		return err
@@ -316,9 +318,10 @@ func (user *User) SetCache(key string, val interface{}, ttl time.Duration) error
 func (chat *Chat) SetCache(key string, val interface{}, ttl time.Duration) error {
 	expiresAt := time.Now().Add(ttl)
 	serviceID := chat.ctx.getServiceID()
+	key = strings.ToLower(key)
 
 	if val == nil {
-		err := chat.ctx.db.C("users_cache").Remove(bson.M{"chatid": chat.ID, "service": serviceID, "key": key})
+		err := chat.ctx.db.C("chats_cache").Remove(bson.M{"chatid": chat.ID, "service": serviceID, "key": key})
 		return err
 	}
 	_, err := chat.ctx.db.C("chats_cache").Upsert(bson.M{"chatid": chat.ID, "service": serviceID, "key": key}, bson.M{"$set": bson.M{"val": val, "expiresat": expiresAt}})
@@ -332,6 +335,7 @@ func (chat *Chat) SetCache(key string, val interface{}, ttl time.Duration) error
 func (c *Context) SetServiceCache(key string, val interface{}, ttl time.Duration) error {
 	expiresAt := time.Now().Add(ttl)
 	serviceID := c.getServiceID()
+	key = strings.ToLower(key)
 
 	if val == nil {
 		err := c.db.C("services_cache").Remove(bson.M{"service": serviceID, "key": key})
