@@ -226,7 +226,11 @@ func Register(servicer Servicer, botToken string) {
 					//argType = argType.Elem()
 				}
 
-				gob.Register(reflect.Zero(argType).Interface())
+				if argType.Kind() == reflect.Interface {
+					gob.Register(reflect.Zero(argType))
+				} else {
+					gob.Register(reflect.Zero(argType).Interface())
+				}
 				m[i] = reflect.Zero(argType)
 			}
 			gob.Register(m)
