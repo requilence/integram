@@ -838,13 +838,19 @@ func (t *scheduleMessageSender) Send(m *OutgoingMessage) error {
 
 // Send put the message to the jobs queue
 func (m *OutgoingMessage) Send() error {
-	return activeMessageSender.Send(m)
-}
+	if m.ChatID == 0 {
+		return errors.New("ChatID is empty")
+	}
 
-// SendAndGetID put the message to the jobs queue and return the message's BSON Object ID
-func (m *OutgoingMessage) SendAndGetID() (bson.ObjectId, error) {
-	err := activeMessageSender.Send(m)
-	return m.ID, err
+	if m.BotID == 0 {
+		return errors.New("BotID is empty")
+	}
+
+	if m.Text == "" && m.FilePath == "" {
+		return errors.New("Text and FilePath are empty")
+	}
+
+	return activeMessageSender.Send(m)
 }
 
 // AddEventID attach one or more event ID. You can use eventid to edit the message in case of additional webhook received or to ignore in case of duplicate

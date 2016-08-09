@@ -341,7 +341,7 @@ func webhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 				} else {
 					pushedText = m.URL("pushed", wp)
 				}
-				_, err = msg.SetTextFmt("%s %s to %s/%s\n%s",
+				err = msg.SetTextFmt("%s %s to %s/%s\n%s",
 					mention(c, &change.New.Target.Author.User),
 					pushedText,
 					m.URL(event.Repository.Name, event.Repository.Links.HTML.Href),
@@ -349,7 +349,7 @@ func webhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 					text).
 					AddEventID(commitUniqueID(change.Commits[0].Hash)).
 					EnableHTML().
-					SendAndGetID()
+					Send()
 			}
 		}
 	case "issue:created":
