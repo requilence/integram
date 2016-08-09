@@ -520,6 +520,8 @@ func (c *Context) EditMessageText(om *OutgoingMessage, text string) error {
 		} else if err.(tg.Error).IsAntiFlood() {
 			c.Log().WithError(err).Warn("TG Anti flood activated")
 		}
+	} else {
+		err = c.db.C("messages").UpdateId(om.ID, bson.M{"$set": bson.M{"text": text}})
 	}
 	return err
 }
