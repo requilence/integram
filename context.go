@@ -58,7 +58,7 @@ type callback struct {
 func (c *Context) SetServiceBaseURL(domainOrURL string) {
 	u, _ := getBaseURL(domainOrURL)
 
-	if u != nil {
+	if u != nil && u.Host != "" {
 		c.ServiceBaseURL = *u
 	} else if domainOrURL != "" {
 		c.ServiceBaseURL = url.URL{Scheme: "https", Host: domainOrURL}
