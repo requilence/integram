@@ -733,8 +733,16 @@ func (user *User) SaveSetting(key string, value interface{}) error {
 
 // AuthTempToken returns Auth token used in OAuth process to associate TG user with OAuth creditianals
 func (user *User) AuthTempToken() string {
+
 	host := user.ctx.ServiceBaseURL.Host
-	fmt.Println("host:" + host)
+	if host == "" {
+		host = user.ctx.Service().DefaultBaseURL.Host
+	}
+
+	serviceBaseURL := user.ctx.ServiceBaseURL.String()
+	if serviceBaseURL == "" {
+		serviceBaseURL = user.ctx.Service().DefaultBaseURL.String()
+	}
 
 	ps, _ := user.protectedSettings()
 	if ps.AuthTempToken != "" {
@@ -742,7 +750,7 @@ func (user *User) AuthTempToken() string {
 
 		oAuthIDCacheFound := oAuthIDCacheVal{}
 		if exists := user.Cache("auth_"+ps.AuthTempToken, &oAuthIDCacheFound); !exists {
-			oAuthIDCacheFound = oAuthIDCacheVal{BaseURL: user.ctx.ServiceBaseURL.String()}
+			oAuthIDCacheFound = oAuthIDCacheVal{BaseURL: serviceBaseURL}
 			user.SetCache("auth_"+ps.AuthTempToken, oAuthIDCacheFound, time.Hour*24)
 		}
 
