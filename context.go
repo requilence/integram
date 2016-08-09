@@ -796,6 +796,9 @@ func (c *Context) DownloadURL(url string) (filePath string, err error) {
 	if err != nil {
 		return "", err
 	}
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return "", errors.New("non 2xx resp status")
+	}
 	defer resp.Body.Close()
 
 	_, err = io.Copy(out, resp.Body)
