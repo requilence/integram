@@ -906,7 +906,7 @@ func (m *OutgoingMessage) SetReplyToMsgID(id int) *OutgoingMessage {
 // UpdateEventsID sets the event id and update it in DB
 func (m *Message) UpdateEventsID(db *mgo.Database, eventID ...string) error {
 	m.EventID = append(m.EventID, eventID...)
-	return db.C("messages").Update(bson.M{"chatid": m.ChatID, "botid": m.BotID, "msgid": m.MsgID}, bson.M{"$set": bson.M{"eventid": eventID}})
+	return db.C("messages").Update(bson.M{"chatid": m.ChatID, "botid": m.BotID, "msgid": m.MsgID}, bson.M{"$addToSet": bson.M{"eventid": bson.M{"$each": eventID}}})
 }
 
 // Update will update existing message in DB
