@@ -523,31 +523,40 @@ func (c *Context) EditMessageText(om *OutgoingMessage, text string) error {
 }
 
 // EditMessagesTextWithEventID edit the last MaxMsgsToUpdateWithEventID messages' text with the corresponding eventID  in ALL chats
-func (c *Context) EditMessagesTextWithEventID(botID int64, eventID string, text string) error {
+func (c *Context) EditMessagesTextWithEventID(eventID string, text string) (edited int, err error) {
 	var messages []OutgoingMessage
 	//update MAX_MSGS_TO_UPDATE_WITH_EVENTID last bot messages
-	c.db.C("messages").Find(bson.M{"botid": botID, "eventid": eventID}).Sort("-_id").Limit(MaxMsgsToUpdateWithEventID).All(&messages)
+	c.db.C("messages").Find(bson.M{"botid": c.Bot().ID, "eventid": eventID}).Sort("-_id").Limit(MaxMsgsToUpdateWithEventID).All(&messages)
 	for _, message := range messages {
-		err := c.EditMessageText(&message, text)
+		err = c.EditMessageText(&message, text)
 		if err != nil {
 			c.Log().WithError(err).WithField("eventid", eventID).Error("EditMessagesTextWithEventID")
+		} else {
+			edited++
 		}
 	}
-	return nil
+	return edited, err
 }
 
 // EditMessagesWithEventID edit the last MaxMsgsToUpdateWithEventID messages' text and inline keyboard with the corresponding eventID in ALL chats
-func (c *Context) EditMessagesWithEventID(botID int64, eventID string, fromState string, text string, kb InlineKeyboard) error {
+func (c *Context) EditMessagesWithEventID(eventID string, fromState string, text string, kb InlineKeyboard) (edited int, err error) {
 	var messages []OutgoingMessage
+	f := bson.M{"botid": c.Bot().ID, "eventid": eventID}
+	if fromState != "" {
+		f["inlinekeyboardmarkup.state"] = fromState
+	}
+
 	//update MAX_MSGS_TO_UPDATE_WITH_EVENTID last bot messages
-	c.db.C("messages").Find(bson.M{"botid": botID, "eventid": eventID}).Sort("-_id").Limit(MaxMsgsToUpdateWithEventID).All(&messages)
+	c.db.C("messages").Find(f).Sort("-_id").Limit(MaxMsgsToUpdateWithEventID).All(&messages)
 	for _, message := range messages {
-		err := c.EditMessageTextAndInlineKeyboard(&message, fromState, text, kb)
+		err = c.EditMessageTextAndInlineKeyboard(&message, fromState, text, kb)
 		if err != nil {
 			c.Log().WithError(err).WithField("eventid", eventID).Error("EditMessagesWithEventID")
+		} else {
+			edited++
 		}
 	}
-	return nil
+	return edited, err
 }
 
 // EditMessageTextAndInlineKeyboard edit the outgoing message's text and inline keyboard

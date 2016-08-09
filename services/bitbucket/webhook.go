@@ -431,7 +431,7 @@ func webhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 		}
 
 		if rm != nil {
-			c.EditMessagesTextWithEventID(c.Bot().ID, eventID, issueText(c, &event.Issue))
+			c.EditMessagesTextWithEventID(eventID, issueText(c, &event.Issue))
 			// if last Issue message just posted
 			if err == nil && time.Now().Sub(rm.Date).Seconds() < 60 {
 				return nil
@@ -456,7 +456,7 @@ func webhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 		msg := c.NewMessage()
 
 		if rm != nil {
-			c.EditMessagesTextWithEventID(c.Bot().ID, eventID, prText)
+			c.EditMessagesTextWithEventID(eventID, prText)
 			// if last PR message just posted
 			if err == nil && time.Now().Sub(rm.Date).Seconds() < 60 {
 				return nil

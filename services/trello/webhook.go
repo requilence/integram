@@ -180,7 +180,7 @@ func cardPath(card *t.Card) (path string) {
 
 func updateCardMessages(c *integram.Context, request *integram.WebhookContext, card *t.Card) {
 	if request.FirstParse() {
-		c.EditMessagesWithEventID(c.Bot().ID, "card_"+card.Id, "actions", cardText(c, card), cardInlineKeyboard(card, false))
+		c.EditMessagesWithEventID("card_"+card.Id, "actions", cardText(c, card), cardInlineKeyboard(card, false))
 	}
 }
 
