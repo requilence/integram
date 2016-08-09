@@ -5,7 +5,8 @@ import (
 	"strings"
 )
 
-// MarkdownRichText produce Markdown that can be sent to Telegram
+// MarkdownRichText produce Markdown that can be sent to Telegram. Not recommended to use because of tricky escaping
+// Use HTMLRichText instead
 type MarkdownRichText struct{}
 
 // HTMLRichText produce HTML that can be sent to Telegram
@@ -13,7 +14,7 @@ type HTMLRichText struct{}
 
 // Pre generates <pre>text</pre>
 func (hrt HTMLRichText) Pre(s string) string {
-	return "<pre> " + hrt.EncodeEntities(s) + "</pre>"
+	return "<pre>" + hrt.EncodeEntities(s) + "</pre>"
 }
 
 // Fixed generates <code>text</code>
@@ -54,24 +55,30 @@ func (hrt HTMLRichText) Italic(text string) string {
 }
 
 // Pre generates```text```
-func (mrt MarkdownRichText) Pre(s string) string {
-	return "``` " + s + "```"
+func (mrt MarkdownRichText) Pre(text string) string {
+	if text == "" {
+		return ""
+	}
+	return "```\n" + mrt.Esc(text) + "\n```"
 }
 
 // Fixed generates`text`
-func (mrt MarkdownRichText) Fixed(s string) string {
-	return "`" + s + "`"
+func (mrt MarkdownRichText) Fixed(text string) string {
+	if text == "" {
+		return ""
+	}
+	return "`" + mrt.Esc(text) + "`"
 }
 
-// URLEsc escapes '[', ']', '(', ')'
-func (mrt MarkdownRichText) URLEsc(s string) string {
-	repalcer := strings.NewReplacer("[", "\\[", "]", "\\]", "(", "\\(", ")", "\\)")
+// Esc replace '[', ']', '(', ')', "`", "_", "*" with similar symbols
+func (mrt MarkdownRichText) Esc(s string) string {
+	repalcer := strings.NewReplacer("[", "⟦", "]", "⟧", "(", "❨", ")", "❩", "`", "‛", "_", "＿", "*", "∗")
 	return repalcer.Replace(s)
 }
 
 // URL generates [text](URL)
 func (mrt MarkdownRichText) URL(text string, url string) string {
-	text = fmt.Sprintf("[%s](%s)", mrt.URLEsc(text), mrt.URLEsc(url))
+	text = fmt.Sprintf("[%s](%s)", mrt.Esc(text), mrt.Esc(url))
 	return text
 }
 
@@ -80,10 +87,7 @@ func (mrt MarkdownRichText) Bold(text string) string {
 	if text == "" {
 		return ""
 	}
-	repalcer := strings.NewReplacer("*", "\\*")
-	text = repalcer.Replace(text)
-	text = fmt.Sprintf("*%s*", text)
-	return text
+	return "*" + mrt.Esc(text) + "*"
 }
 
 // Italic generates _text_
@@ -91,8 +95,6 @@ func (mrt MarkdownRichText) Italic(text string) string {
 	if text == "" {
 		return ""
 	}
-	repalcer := strings.NewReplacer("_", "\\_")
-	text = repalcer.Replace(text)
-	text = fmt.Sprintf("_%s_", text)
-	return text
+
+	return "_" + mrt.Esc(text) + "_"
 }
