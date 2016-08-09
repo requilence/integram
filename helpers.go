@@ -140,7 +140,14 @@ func checksumString(s string) string {
 	return base64.RawURLEncoding.EncodeToString(b)
 }
 
-func randString(n int) string {
+type strGenerator interface {
+	Get(n int) string
+}
+
+type rndStrGenerator struct {
+}
+
+func (r rndStrGenerator) Get(n int) string {
 	rand.Seed(time.Now().UTC().UnixNano())
 	b := make([]byte, n)
 	for i := 0; i < n; {
@@ -151,6 +158,8 @@ func randString(n int) string {
 	}
 	return string(b)
 }
+
+var rndStr = strGenerator(rndStrGenerator{})
 
 // URLMustParse returns url.URL from static string. Don't use it with a dynamic param
 func URLMustParse(s string) *url.URL {

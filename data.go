@@ -591,7 +591,7 @@ func (user *User) ServiceHookToken() string {
 			}
 		}
 	}
-	token := "u" + randString(10)
+	token := "u" + rndStr.Get(10)
 	user.addHook(serviceHook{
 		Token:    token,
 		Services: []string{user.ctx.ServiceName},
@@ -611,7 +611,7 @@ func (chat *Chat) ServiceHookToken() string {
 			}
 		}
 	}
-	token := "c" + randString(10)
+	token := "c" + rndStr.Get(10)
 	chat.addHook(serviceHook{
 		Token:    token,
 		Services: []string{chat.ctx.ServiceName},
@@ -752,8 +752,9 @@ func (user *User) AuthTempToken() string {
 			return ps.AuthTempToken
 		}
 	}
-	rnd := strings.ToLower(randString(16))
-	user.SetCache("auth_"+rnd, oAuthIDCacheVal{BaseURL: user.ctx.ServiceBaseURL.String()}, time.Hour*24)
+
+	rnd := strings.ToLower(rndStr.Get(16))
+	user.SetCache("auth_"+rnd, oAuthIDCacheVal{BaseURL: serviceBaseURL}, time.Hour*24)
 
 	err := user.saveProtectedSetting("AuthTempToken", rnd)
 
@@ -933,7 +934,7 @@ func findOauthProviderByHost(db *mgo.Database, host string) (*OAuthProvider, err
 
 // WebPreview generate fake webpreview and store it in DB. Telegram will resolve it as we need
 func (c *Context) WebPreview(title string, headline string, text string, serviceURL string, imageURL string) (WebPreviewURL string) {
-	token := randString(10)
+	token := rndStr.Get(10)
 	if title == "" {
 		title = c.Service().NameToPrint
 		c.Log().WithField("token", token).Warn("webPreview: title is empty")
@@ -965,7 +966,7 @@ func (c *Context) WebPreview(title string, headline string, text string, service
 
 		if err != nil {
 			// Wow! So jackpot! Much collision
-			wp.Token = randString(10)
+			wp.Token = rndStr.Get(10)
 			err = c.db.C("previews").Insert(wp)
 			c.Log().WithError(err).Error("Can't add webpreview")
 

@@ -301,7 +301,7 @@ func serviceHookHandler(c *gin.Context) {
 	//}
 
 	//var msg *OutgoingMessage
-	wctx := &WebhookContext{gin: c, requestID: randString(10)}
+	wctx := &WebhookContext{gin: c, requestID: rndStr.Get(10)}
 
 	for _, hook := range hooks {
 		if hook.Token == token {
