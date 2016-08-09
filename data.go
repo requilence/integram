@@ -634,19 +634,22 @@ func (chat *Chat) ServiceHookURL() string {
 // AddChatToHook adds the target chat to user's existing hook
 func (user *User) AddChatToHook(chatID int64) error {
 	data, _ := user.getData()
+	token := user.ServiceHookToken()
 
 	for i, hook := range data.Hooks {
-		for _, service := range hook.Services {
-			if service == user.ctx.ServiceName {
-				for _, existingChatID := range hook.Chats {
-					if existingChatID == chatID {
-						return nil
+		if hook.Token == token {
+			for _, service := range hook.Services {
+				if service == user.ctx.ServiceName {
+					for _, existingChatID := range hook.Chats {
+						if existingChatID == chatID {
+							return nil
+						}
 					}
-				}
-				data.Hooks[i].Chats = append(data.Hooks[i].Chats, chatID)
-				err := user.ctx.db.C("users").Update(bson.M{"_id": user.ID, "hooks.services": service}, bson.M{"$addToSet": bson.M{"hooks.$.chats": chatID}})
+					data.Hooks[i].Chats = append(data.Hooks[i].Chats, chatID)
+					err := user.ctx.db.C("users").Update(bson.M{"_id": user.ID, "hooks.services": service}, bson.M{"$addToSet": bson.M{"hooks.$.chats": chatID}})
 
-				return err
+					return err
+				}
 			}
 		}
 	}
