@@ -520,32 +520,11 @@ func (keyboard Keyboard) tg() [][]tg.KeyboardButton {
 	return res
 }
 
-// FindOutgoingMessage retrieve the message that was sent by bot. Useful to change callbacks, eventid and to edit the message
-func (m *Message) FindOutgoingMessage(db *mgo.Database) (*OutgoingMessage, error) {
-	if m.om != nil {
-		return m.om, nil
-	}
-	if m.BotID != m.FromID {
-		return nil, nil
-	}
-
-	om := OutgoingMessage{}
-	err := db.C("messages").Find(bson.M{"chatid": m.ChatID, "botid": m.BotID, "msgid": m.MsgID}).One(&om)
-
-	if err != nil {
-		return nil, err
-	}
-	m.om = &om
-	return &om, nil
-}
-
-// FindMessageByBsonID find message by Mongo Object ID
-func (c *Context) FindMessageByBsonID(id bson.ObjectId) (*Message, error) {
-	return findMessageByBsonID(c.db, id)
-}
-
 // FindMessageByEventID find message by event id
 func (c *Context) FindMessageByEventID(id string) (*Message, error) {
+	if c.Bot() == nil {
+		return nil, errors.New("Bot not set for the service")
+	}
 	return findMessageByEventID(c.db, c.Chat.ID, c.Bot().ID, id)
 }
 

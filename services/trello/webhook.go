@@ -802,23 +802,12 @@ func downloadAttachment(c *integram.Context, cardID string, replyToMsgID int, te
 	return c.NewMessage().SetReplyAction(cardReplied, cardID).SetText(text).SetReplyToMsgID(replyToMsgID).SetDocument(fileLocalPath, attachment.Name).Send()
 }
 
-/*func cardMessageID(c *integram.Context, cardID string) int {
-	var cardMessageBsonID bson.ObjectId
-	c.Chat.Cache("card_"+cardID, &cardMessageBsonID)
-
-	cardMessage, err := c.FindMessageByBsonID(cardMessageBsonID)
-	if err == nil && cardMessage != nil {
-		return cardMessage.MsgID
-	}
-	return 0
-}*/
-
-func cardMessage(c *integram.Context, cardID string) (*integram.OutgoingMessage, error) {
+func cardMessage(c *integram.Context, cardID string) (*integram.Message, error) {
 	msg, err := c.FindMessageByEventID("card_" + cardID)
 	if err == nil && msg != nil {
-		log.Infof("card message found %v", cardID)
+		log.Debugf("card message found %v", cardID)
 
-		return msg.FindOutgoingMessage(c.Db())
+		return msg, nil
 	}
 	return nil, err
 }
