@@ -503,7 +503,7 @@ func (chat *Chat) Settings(out interface{}) error {
 	return nil
 }
 
-// Setting returns Chat's setting for service with specific key
+// Setting returns Chat's setting for service with specific key. NOTE! Only builtin types are supported (f.e. structs will become map)
 func (chat *Chat) Setting(key string) (result interface{}, exists bool) {
 	var settings map[string]interface{}
 
@@ -542,6 +542,10 @@ func (chat *Chat) SaveSettings(allSettings interface{}) error {
 
 	_, err := chat.ctx.db.C("chats").UpsertId(chat.ID, bson.M{"$set": bson.M{"settings." + serviceID: allSettings}})
 
+	if chat.data == nil {
+		chat.data = &chatData{}
+	}
+
 	if chat.data.Settings == nil {
 		chat.data.Settings = make(map[string]interface{})
 	}
@@ -558,6 +562,9 @@ func (user *User) SaveSettings(allSettings interface{}) error {
 
 	_, err := user.ctx.db.C("users").UpsertId(user.ID, bson.M{"$set": bson.M{"settings." + serviceID: allSettings}})
 
+	if user.data == nil {
+		user.data = &userData{}
+	}
 	if user.data.Settings == nil {
 		user.data.Settings = make(map[string]interface{})
 	}
