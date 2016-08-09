@@ -81,6 +81,11 @@ func updateRoutine(b *Bot, u *tg.Update) {
 	if context.Message != nil {
 		fmt.Printf(" %s: %+v\n", service.NameToPrint, u.Message.Text)
 
+		if service.TGNewMessageHandler == nil {
+			context.Log().Warn("Received Message but TGNewMessageHandler not set for service")
+			return
+		}
+
 		err := service.TGNewMessageHandler(context)
 
 		if err != nil {
