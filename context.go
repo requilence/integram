@@ -393,20 +393,21 @@ func (c *Context) keyboard() (chatKeyboard, error) {
 func (c *Context) Log() *log.Entry {
 	fields := log.Fields{"service": c.ServiceName}
 
-	pc := make([]uintptr, 10)
-	runtime.Callers(2, pc)
-	f := runtime.FuncForPC(pc[0])
-	fields["file"], fields["line"] = f.FileLine(pc[0])
-	fields["func"] = f.Name()
+	if Debug {
+		pc := make([]uintptr, 10)
+		runtime.Callers(2, pc)
+		f := runtime.FuncForPC(pc[0])
+		fields["file"], fields["line"] = f.FileLine(pc[0])
+		fields["func"] = f.Name()
+	}
 
 	if c.User.ID > 0 {
 		fields["user"] = c.User.ID
 	}
-	if c.Chat.ID > 0 {
+	if c.Chat.ID != 0 {
 		fields["chat"] = c.Chat.ID
 	}
 	if c.Message != nil {
-		fields["bot"] = c.Message.BotID
 		fields["msg"] = c.Message.Text
 	}
 
@@ -420,6 +421,7 @@ func (c *Context) Log() *log.Entry {
 
 	if c.Callback != nil {
 		fields["callback"] = c.Callback.Data
+
 		if c.Callback.Message.MsgID > 0 {
 			fields["callback_msgid"] = c.Callback.Message.MsgID
 		} else {

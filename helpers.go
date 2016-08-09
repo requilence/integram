@@ -191,3 +191,7 @@ func getHostFromURL(s string) string {
 
 	return ""
 }
+
+func Logger() *log.Logger {
+	return log.StandardLogger()
+}
