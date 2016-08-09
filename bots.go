@@ -760,19 +760,20 @@ type messageSender interface {
 
 type scheduleMessageSender struct{}
 
-var activeMessageSender = scheduleMessageSender{}
+var activeMessageSender = messageSender(scheduleMessageSender{})
 
-func (t *scheduleMessageSender) Send(m *OutgoingMessage) error {
+func (t scheduleMessageSender) Send(m *OutgoingMessage) error {
 	if m.processed {
 		return nil
 	}
+
 	if m.AntiFlood {
 		db := mongoSession.Clone().DB(mongo.Database)
 		defer db.Session.Close()
 		msg, _ := findLastOutgoingMessageInChat(db, m.BotID, m.ChatID)
 		if msg != nil && msg.Text == m.Text && time.Now().Sub(msg.Date).Seconds() < antiFloodTimeout {
 			log.Errorf("flood. mins %v", time.Now().Sub(msg.Date).Minutes())
-			return nil
+			return errors.New("AntiFlood is active. Flood detected")
 		}
 	}
 	if m.Selective && m.ChatID > 0 {
