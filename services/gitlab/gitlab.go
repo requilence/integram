@@ -694,7 +694,51 @@ func webhookHandler(c *integram.Context, request *integram.WebhookContext) (err 
 
 		return msg.SetText(fmt.Sprintf("%s %s by %s", m.URL("Merge request", wp), wh.ObjectAttributes.State, mention(c, wh.User.Username, wh.UserEmail))).
 			EnableHTML().Send()
+	case "build":
+		time.Sleep(time.Second)
+		// workaround for simultaneously push/build webhooks
+		// todo: replace with job?
 
+		commitMsg, _ := c.FindMessageByEventID(fmt.Sprintf("commit_%s", wh.SHA))
+
+		text := ""
+		commit := ""
+		build := m.URL("Build", fmt.Sprintf("%s/builds/%d", wh.Repository.Homepage, wh.BuildID))
+
+		if commitMsg == nil {
+			hpURL := strings.Split(wh.Repository.Homepage, "/")
+			username := hpURL[len(hpURL)-2]
+			commit = m.URL("Commit", c.WebPreview("Commit", "@"+wh.SHA[0:10], username+" / "+wh.Repository.Name, wh.Repository.URL+"/commit/"+wh.SHA, "")) + " "
+			build = m.URL("build", fmt.Sprintf("%s/builds/%d", wh.Repository.Homepage, wh.BuildID))
+		} else {
+			msg.SetReplyToMsgID(commitMsg.MsgID).DisableWebPreview()
+		}
+
+		if wh.BuildStatus == "pending" {
+			text = "⏳ " + commit + build + " is pending"
+		} else if wh.BuildStatus == "running" {
+			text = "⚙ " + commit + build + " is running"
+		} else if wh.BuildStatus == "success" {
+			text = fmt.Sprintf("✅ "+commit+build+" succeeded after %.1f sec", wh.BuildDuration)
+		} else if wh.BuildStatus == "failed" {
+			text = fmt.Sprintf("‼️ "+commit+build+" failed after %.1f sec", wh.BuildDuration)
+		} else if wh.BuildStatus == "canceled" {
+			text = fmt.Sprintf("🔚 "+commit+build+" canceled by %s after %.1f sec", mention(c, wh.User.Name, ""), wh.BuildDuration)
+		}
+		if commitMsg != nil {
+			lines := strings.Split(commitMsg.Text, "\n")
+			prevText := commitMsg.Text
+			if strings.Contains(lines[len(lines)-1], wh.Repository.Homepage+"/builds/") {
+				prevText = strings.Join(lines[0:len(lines)-1], "\n")
+			}
+			text = prevText + "\n" + text
+			_, err = c.EditMessagesTextWithEventID(commitMsg.EventID[0], text)
+		}
+
+		if wh.BuildStatus != "pending" && wh.BuildStatus != "running" {
+			return msg.SetText(text).
+				EnableHTML().Send()
+		}
 	}
 	return
 }
