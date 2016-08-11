@@ -208,7 +208,6 @@ func webhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 		return
 	}
 
-	//b, _ := wc.RAW()
 
 	if wh.Action.ID == "" {
 		return
@@ -351,7 +350,6 @@ func webhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 		}
 		err = c.UpdateServiceCache("card_"+card.Id, bson.M{"$addToSet": bson.M{"val.checklists": checklist}}, card)
 
-		//c.EditMessageText(cardMsg, cardText(c, card))
 		updateCardMessages(c, wc, card)
 		if cardMsgJustPosted {
 			return err
@@ -506,7 +504,6 @@ func webhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 		if oldCard == nil {
 			return errors.New("updateCard without oldCard")
 		}
-		//fmt.Printf("updateCard\nold: %+v\n\nnew:%+v\n",oldCard,&wh.Action.Data.Card)
 
 		if oldCard.IDList != "" {
 			// card moved to another list
@@ -523,9 +520,7 @@ func webhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 			msg.Text = fmt.Sprintf("%s moved card to %s", mention(c, byMember), m.Fixed(wh.Action.Data.ListAfter.Name))
 		} else if oldCard.Name != "" {
 			// card renamed
-
 			err = c.UpdateServiceCache("card_"+card.Id, bson.M{"$set": bson.M{"val.name": card.Name}}, card)
-			//err = c.EditMessageText(cardMsg, cardText(c, card))
 			updateCardMessages(c, wc, card)
 			if cardMsgJustPosted && err == nil {
 				return
@@ -536,8 +531,6 @@ func webhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 
 		} else if oldCard.Closed != card.Closed {
 			err = c.UpdateServiceCache("card_"+card.Id, bson.M{"$set": bson.M{"val.closed": card.Closed}}, card)
-
-			//err = c.EditMessageText(cardMsg, cardText(c, card))
 			updateCardMessages(c, wc, card)
 			if cardMsgJustPosted && err == nil {
 				return
@@ -554,7 +547,6 @@ func webhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 		} else if oldCard.Due != nil {
 			// due date set/unset
 			err = c.UpdateServiceCache("card_"+card.Id, bson.M{"$set": bson.M{"val.due": card.Due}}, card)
-			//err = c.EditMessageText(cardMsg, cardText(c, card))
 			updateCardMessages(c, wc, card)
 			if cardMsgJustPosted && err == nil {
 				return
@@ -579,7 +571,6 @@ func webhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 			}
 			// description edited
 			err = c.UpdateServiceCache("card_"+card.Id, bson.M{"$set": bson.M{"val.desc": card.Desc}}, card)
-			//err = c.EditMessageText(cardMsg, cardText(c, card))
 			updateCardMessages(c, wc, card)
 
 			if cardMsgJustPosted && err == nil {
@@ -632,7 +623,6 @@ func mention(c *integram.Context, member *t.Member) string {
 }
 
 func cardReplied(c *integram.Context, cardID string) error {
-	//	msg,_:=c.Message.SetReplyAction()
 	c.Message.SetReplyAction(cardReplied, cardID)
 
 	if !c.User.OAuthValid() {

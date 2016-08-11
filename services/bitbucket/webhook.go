@@ -159,8 +159,6 @@ func prInlineKeyboard(pr *api.PullRequest) integram.InlineKeyboard {
 func commitInlineKeyboard(commit *api.Commit) integram.InlineKeyboard {
 	but := integram.InlineButtons{}
 	// wating for api endpoints..
-	//but.Append("assign", "Assign")
-	//but.Append("status", "⬆︎ "+strings.ToUpper(issue.State[0:1])+issue.State[1:])
 
 	if len(commit.ApprovedActorsUUID) > 0 {
 		but.Append("vote", fmt.Sprintf("✅ Approved (%d)", len(commit.ApprovedActorsUUID)))
@@ -174,8 +172,6 @@ func commitInlineKeyboard(commit *api.Commit) integram.InlineKeyboard {
 func issueInlineKeyboard(issue *api.Issue) integram.InlineKeyboard {
 	but := integram.InlineButtons{}
 	// wating for api endpoints..
-	//but.Append("assign", "Assign")
-	//but.Append("status", "⬆︎ "+strings.ToUpper(issue.State[0:1])+issue.State[1:])
 
 	if issue.Votes > 0 {
 		but.Append("vote", fmt.Sprintf("👍 %d", issue.Votes))
@@ -480,9 +476,7 @@ func webhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 		c.SetServiceCache(prUniqueID(event.Repository.FullName, event.PullRequest.ID), event.PullRequest, time.Hour*24*365)
 
 		return c.NewMessage().AddEventID(prUniqueID(event.Repository.FullName, event.PullRequest.ID)).
-			//SetInlineKeyboard(prInlineKeyboard(&event.PullRequest)).
 			SetText(prText(c, &event.PullRequest)).
-			//SetCallbackAction(prInlineButtonPressed, event.Repository.FullName, event.PullRequest.ID).
 			EnableHTML().Send()
 
 	case "pullrequest:approved":

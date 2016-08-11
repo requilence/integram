@@ -111,7 +111,6 @@ func init() {
 	if baseURL != "" {
 		BaseURL = baseURL
 	}
-	log.Debugf("BaseURL: %s", baseURL)
 
 	go func() {
 		var b *Bot
@@ -147,7 +146,6 @@ func beforeJob(ch chan bool, job *jobs.Job, args *[]reflect.Value) {
 	for i := 0; i < len(*args); i++ {
 
 		if (*args)[i].Kind() == reflect.Ptr && (*args)[i].Type().String() == "*integram.Context" {
-			//log.Debugf("arg inside: " + (*args)[le].Kind().String() + " to " + (*args)[le].Type().String() + " addr " + (*args)[le].Addr().String() + "\n")
 			ctx := (*args)[i].Interface().(*Context)
 
 			ctx.db = s.DB(mongo.Database)

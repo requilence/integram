@@ -197,9 +197,6 @@ func oAuthSuccessful(c *integram.Context) error {
 func accessTokenReceiver(c *integram.Context, r *http.Request, requestToken *oauth.RequestToken) (token string, err error) {
 	values := r.URL.Query()
 	verificationCode := values.Get("oauth_verifier")
-	//tokenKey := values.Get("oauth_token")
-
-	//requestToken := service.DefaultOAuth1.RequestToken(c.Db(), tokenKey)
 
 	accessToken, err := c.OAuthProvider().OAuth1Client(c).AuthorizeToken(requestToken, verificationCode)
 	if err != nil || accessToken == nil {
@@ -211,8 +208,6 @@ func accessTokenReceiver(c *integram.Context, r *http.Request, requestToken *oau
 }
 
 func api(c *integram.Context) *t.Client {
-	//	log.WithFields(log.Fields{"OauthKey": config.OauthKey, "OauthSecret": config.OauthSecret, "token": c.User.OAuthToken()}).Debug("Trello API init")
-
 	token := c.User.OAuthToken()
 
 	if token == "" {
@@ -234,7 +229,6 @@ func api(c *integram.Context) *t.Client {
 func me(c *integram.Context, api *t.Client) (*t.Member, error) {
 	me := &t.Member{}
 	if exists := c.User.Cache("me", me); exists {
-		//fmt.Printf("Found me in cache: %s\n", me.Id)
 		return me, nil
 	}
 	var err error
@@ -992,14 +986,9 @@ func listForCardSelected(c *integram.Context, boardID string, boardName string) 
 		SetTextFmt("Enter the title. Card will be added to %s / %s ", m.Bold(boardName), m.Bold(listName)).
 		EnableHTML().
 		HideKeyboard().
-		//EnableForceReply().
 		SetReplyAction(textForCardEntered, boardID, boardName, listID, listName).
 		Send()
 }
-
-//func inlineCardAssignButtonPressed(c *integram.Context, cardID string) error {
-
-//}
 
 func colorEmoji(color string) string {
 	switch color {
@@ -1140,7 +1129,6 @@ func cardInlineKeyboard(card *t.Card, more bool) integram.InlineKeyboard {
 
 }
 func inlineCardButtonPressed(c *integram.Context, cardID string) error {
-	//time.Sleep(time.Second * 20)
 
 	log.WithField("data", c.Callback.Data).WithField("state", c.Callback.State).WithField("cardID", cardID).Debug("inlineCardButtonPressed")
 	api := api(c)
@@ -1180,7 +1168,6 @@ func inlineCardButtonPressed(c *integram.Context, cardID string) error {
 			unassign = true
 		}
 		member, unassigned, err := assignMemberID(c, api, c.Callback.Data, unassign, card)
-		//	spew.Dump(member, unassigned, err)
 		if err != nil {
 			return err
 		}
@@ -1188,7 +1175,6 @@ func inlineCardButtonPressed(c *integram.Context, cardID string) error {
 		if member != nil {
 
 			if unassigned {
-				// c.EditMessageText(c.Callback.Message, cardText(c, card))
 				err = c.EditPressedInlineButton(cardMemberStateUnassigned, "   @"+member.Username)
 			} else {
 				//c.EditMessageText(c.Callback.Message, cardText(c, card))
@@ -1206,7 +1192,6 @@ func inlineCardButtonPressed(c *integram.Context, cardID string) error {
 			removeLabel = true
 		}
 		label, unattached, err := attachLabelID(c, api, c.Callback.Data, removeLabel, card)
-		//	spew.Dump(member, unassigned, err)
 		if err != nil {
 			return err
 		}
@@ -1214,11 +1199,8 @@ func inlineCardButtonPressed(c *integram.Context, cardID string) error {
 		if label != nil {
 
 			if unattached {
-				// c.EditMessageText(c.Callback.Message, cardText(c, card))
 				err = c.EditPressedInlineButton(cardLabelStateUnattached, "   "+colorEmoji(label.Color)+" "+label.Name)
 			} else {
-				//c.EditMessageText(c.Callback.Message, cardText(c, card))
-
 				err = c.EditPressedInlineButton(cardLabelStateAttached, "✅ "+colorEmoji(label.Color)+" "+label.Name)
 			}
 			return err
@@ -1236,7 +1218,6 @@ func inlineCardButtonPressed(c *integram.Context, cardID string) error {
 
 			if c.User.IsPrivateStarted() {
 				msg.SetChat(c.User.ID)
-				//msg.Set(c.Callback.Message.MsgID)
 
 			} else {
 				msg.SetReplyToMsgID(c.Callback.Message.MsgID)
@@ -1383,8 +1364,6 @@ func inlineCardButtonPressed(c *integram.Context, cardID string) error {
 
 		buts.Append("back", "←⃪⃪⃪ Back")
 
-		//c.Callback.Message.SetCallbackAction(inlineCardAssignButtonPressed, cardID)
-
 		kb := buts.Markup(1, "assign")
 		kb.FixedWidth = true
 		return c.EditInlineKeyboard(c.Callback.Message, "actions", kb)
@@ -1419,7 +1398,6 @@ func inlineCardButtonPressed(c *integram.Context, cardID string) error {
 					c.User.ResetOAuthToken()
 				}
 			}
-			//c.UpdateServiceCache("card_" + card.Id, bson.M{"$pull": bson.M{"val.membersvoted": me}}, card)
 		}
 
 		if err != nil {
@@ -1508,14 +1486,6 @@ func textForCardEntered(c *integram.Context, boardID string, boardName string, l
 		return err
 	}
 
-	//but, _ := getCardActionButtons(c, api, card)
-
-	//fmt.Printf("%+v\n", but)
-	//c.NewMessage().
-	//SetKeyboard(but.Markup(3), false).
-	//	SetText("Great! Card created").
-	//		SetReplyAction(afterCardCreatedActionSelected, card).
-	//	Send()
 	return nil
 }
 
@@ -1926,8 +1896,6 @@ func attachLabelID(c *integram.Context, api *t.Client, labelID string, unattach 
 				}
 
 			}
-			//spew.Dump("a1",unattach, alreadyAttached, err)
-			//spew.Dump("a2",b)
 
 		} else {
 			err = fmt.Errorf("can't find labelID inside board %s", card.Board.Id)
@@ -1990,8 +1958,6 @@ func assignMemberID(c *integram.Context, api *t.Client, memberID string, unassig
 				}
 
 			}
-			//spew.Dump("a1",unassign, alreadyAssigned, err)
-			//spew.Dump("a2",b)
 
 		} else {
 			err = fmt.Errorf("can't find memberID inside board %f", card.Board.Id)
@@ -2204,7 +2170,6 @@ func inlineQueryHandler(c *integram.Context) error {
 			return err
 		}
 
-		//c.User.SetCache("cards", cards, time.Hour)
 		c.Service().DoJob(cacheAllCards, c, boards)
 	}
 
@@ -2258,7 +2223,6 @@ func inlineQueryHandler(c *integram.Context) error {
 			}
 		}
 
-		//spew.Dump(lists)
 		list = listsFilterByID(listsByBoardIDMap[card.IdBoard], card.IdList)
 
 		if list == nil {
@@ -2270,7 +2234,6 @@ func inlineQueryHandler(c *integram.Context) error {
 			continue
 		}
 
-		//spew.Dump(list)
 		res = append(res,
 			tg.InlineQueryResultArticle{
 				ID:          "c_" + card.Id,
@@ -2364,16 +2327,10 @@ func newMessageHandler(c *integram.Context) error {
 		return err
 	case "search":
 		var err error
-		//if c.User.OAuthValid() {
 		kb := integram.InlineButtons{integram.InlineButton{Text: "Tap to see how it's works", SwitchInlineQuery: "bug"}}
 
 		err = c.NewMessage().SetReplyToMsgID(c.Message.MsgID).SetText("To search and share cards just type in any chat " + m.Bold("@"+c.Bot().Username+" fragment of card's name")).EnableHTML().SetInlineKeyboard(kb.Markup(3, "")).Send()
-		/*} else {
-			kb := integram.InlineKeyboard{}
-			kb.AddPMSwitchButton(c, "👉  Tap me to auth", "auth")
 
-			err = c.NewMessage().SetReplyToMsgID(c.Message.MsgID).SetText("You need to auth me to be able to create cards").SetInlineKeyboard(kb).Send()
-		}*/
 		return err
 	case "start":
 

@@ -164,8 +164,6 @@ func updateRoutine(b *Bot, u *tg.Update) {
 }
 
 func (bot *Bot) listen() {
-	//	db := mongoSession.Clone().DB(mongo.Database)
-
 	api := bot.API
 	if bot.updatesChan == nil {
 		log.Debug("Open UpdatesChan for bot " + bot.Username)
@@ -228,7 +226,6 @@ func incomingMessageFromTGMessage(m *tg.Message) IncomingMessage {
 	im.Date = time.Unix(int64(m.Date), 0)
 	im.Text = m.Text
 
-	// incomingMessage struct
 	im.From = tgUser(m.From)
 	im.Chat = Chat{ID: m.Chat.ID, Type: m.Chat.Type, FirstName: m.Chat.FirstName, LastName: m.Chat.LastName, UserName: m.Chat.UserName, Title: m.Chat.Title}
 
@@ -274,7 +271,6 @@ func tgCallbackHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service, *Conte
 	}
 	if rm != nil {
 		service, err := detectServiceByBot(b.ID)
-		//fmt.Printf("detectService: %+v\n", service)
 
 		if err != nil {
 			log.WithError(err).WithField("bot", b.ID).Error("Can't detect service")
@@ -308,7 +304,6 @@ func tgCallbackHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service, *Conte
 				handlerArgsInterfaces := make([]interface{}, handlerType.NumIn()-1)
 				handlerArgs := make([]reflect.Value, handlerType.NumIn())
 
-				//handlerArgsInterfaces[0] = &ctx
 				for i := 1; i < handlerType.NumIn(); i++ {
 					dataVal := reflect.New(handlerType.In(i))
 					handlerArgsInterfaces[i-1] = dataVal.Interface()
@@ -381,7 +376,6 @@ func tgChosenInlineResultHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Servi
 			InlineMsgID: u.ChosenInlineResult.InlineMessageID,
 			Text:        u.ChosenInlineResult.Query, // Todo: thats a lie. The actual message content is known while producing inline results
 			FromID:      u.ChosenInlineResult.From.ID,
-			//ChatID:u.ChosenInlineResult.From.ID, //todo: thats a lie. But not critical
 			BotID: b.ID,
 			Date:  time.Now(),
 		}}
@@ -407,12 +401,7 @@ func tgChosenInlineResultHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Servi
 	}
 	// we need to save this message!
 
-	//if msg.MsgID==0{
 	err = db.C("messages").Insert(&msg)
-	//}else{
-	//	msg.ID=bson.ObjectId("")
-	//	err=db.C("messages").Update(bson.M{"chatid":msg.ChatID, "botid":b.ID, "msgid": msg.MsgID},bson.M{"$set":&msg})
-	//}
 
 	if err != nil {
 		ctx.Log().WithError(err).Error("tgChosenInlineResultHandler: msg insert")
@@ -433,7 +422,6 @@ func tgIncomingMessageHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service,
 			l = time.Now().Sub(lm.TS).Nanoseconds()
 
 			if l < 1000000000 {
-				//time.Sleep(time.Second)
 				dupFound = true
 				log.Debugf("message: dup found (inlinemsgid %v) for %v (user %v), after %d", lm.InlineID, u.Message.MessageID, u.Message.From.ID, l)
 				db.C("messages").Update(bson.M{"botid": b.ID, "inlinemsgid": lm.InlineID}, bson.M{"$set": bson.M{"chatid": im.ChatID, "msgid": im.MsgID}})
@@ -443,7 +431,6 @@ func tgIncomingMessageHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service,
 		}
 	}
 	if !dupFound {
-		//log.Debugf("message: dup not found for %v (user %v), after %d", u.Message.MessageID, u.Message.From.ID, l)
 		lastMsgIDByUser[u.Message.From.ID] = msgInfo{ID: u.Message.MessageID, TS: time.Now(), BotID: b.ID, ChatID: u.Message.Chat.ID}
 	}
 
@@ -514,7 +501,6 @@ func tgIncomingMessageHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service,
 				handlerArgsInterfaces := make([]interface{}, handlerType.NumIn()-1)
 				handlerArgs := make([]reflect.Value, handlerType.NumIn())
 
-				//handlerArgsInterfaces[0] = &ctx
 				for i := 1; i < handlerType.NumIn(); i++ {
 					dataVal := reflect.New(handlerType.In(i))
 					handlerArgsInterfaces[i-1] = dataVal.Interface()
@@ -553,7 +539,7 @@ func tgIncomingMessageHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service,
 			ctx.User.saveProtectedSettings()
 		}
 	}
-	//return nil, nil
+
 	return service, ctx
 
 }

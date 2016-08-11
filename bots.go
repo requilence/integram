@@ -1015,7 +1015,6 @@ func botByID(ID int64) *Bot {
 }
 
 func sendMessage(m *OutgoingMessage) error {
-	log.Debugf("Trying to send message: %+v\n", m)
 	msg := tg.MessageConfig{Text: m.Text, BaseChat: tg.BaseChat{ChatID: m.ChatID}}
 
 	if m.ChatID == 0 {
@@ -1127,7 +1126,6 @@ func sendMessage(m *OutgoingMessage) error {
 
 			// todo: in rare case this can produce duplicate messages for incoming webhooks
 			m.ChatID = chatID
-			//_, err := sendMessageJob.Schedule(0, time.Now(), &m)
 			if err != nil {
 				log.WithField("message", m).WithError(err).Error("Can't reschedule sendMessageJob")
 			}

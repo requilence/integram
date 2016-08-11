@@ -185,65 +185,6 @@ func (o *OAuthProvider) OAuth2Client(c *Context) *oauth2.Config {
 	return &config
 }
 
-/*func getTokenForApplication(c *integram.Context, app *Application, authID string, code string) (clientExists bool, token string, err error) {
-
-	oauth2.SetAuthURLParam()
-	data := url.Values{}
-	data.Set("client_id", app.Key)
-	data.Set("client_secret", app.Secret)
-	data.Set("code", code)
-	data.Add("grant_type", "authorization_code")
-	data.Add("redirect_uri", integram.BaseURL+"/auth?id="+authID)
-	req, _ := http.NewRequest("POST", app.BaseURL+"/oauth/token", bytes.NewBufferString(data.Encode()))
-	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-	b, err := httputil.DumpRequestOut(req, true)
-
-	resp, err := http.DefaultClient.Do(req)
-	fmt.Printf("req err: %v\n%v", err, string(b))
-
-	if err != nil {
-		return
-		//c.Log().WithError(err).Error("Error checking application id and secret")
-
-	}
-	defer resp.Body.Close()
-
-	if err != nil {
-		return
-
-		//c.Log().WithError(err).Error("Error checking application id and secret")
-		//return false
-	}
-
-	//b, err = ioutil.ReadAll(resp.Body)
-	//fmt.Printf("resp err: %v\n%v", err, string(b))
-
-	d := json.NewDecoder(resp.Body)
-	res := struct {
-		Error             string
-		Error_description string
-		Access_token      string
-	}{}
-
-	err = d.Decode(&res)
-
-	if err != nil {
-		return
-	}
-	fmt.Printf("%+v\n", res)
-
-	if res.Error == "invalid_client" {
-		// invalid_client error means Application with this Id and Secret doesn't exists
-		return false, "", errors.New(res.Error + ": " + res.Error_description)
-	}
-
-	if res.Error != "" {
-		return true, "", errors.New(res.Error + ": " + res.Error_description)
-	}
-
-	return true, res.Access_token, nil
-}*/
-
 // WebhookContext is passed to WebhookHandler of service
 type WebhookContext struct {
 	gin        *gin.Context
@@ -509,6 +450,7 @@ func (c *Context) EditMessageText(om *OutgoingMessage, text string) error {
 			ReplyMarkup: &tg.InlineKeyboardMarkup{InlineKeyboard: om.InlineKeyboardMarkup.tg()},
 		},
 		ParseMode: om.ParseMode,
+		DisableWebPagePreview: !om.WebPreview,
 		Text:      text,
 	})
 	if err != nil {
@@ -686,13 +628,11 @@ func (c *Context) EditInlineStateButton(om *OutgoingMessage, kbState string, old
 
 	var msg OutgoingMessage
 	c.db.C("messages").Find(bson.M{"_id": om.ID, "inlinekeyboardmarkup.state": kbState}).One(&msg)
-	//spew.Dump(msg)
 	// need a more thread safe solution to switch stored keyboard
 	if msg.BotID == 0 {
 		return fmt.Errorf("EditInlineButton – message (botid=%v id=%v(%v) state %s) not found", bot.ID, om.MsgID, om.InlineMsgID, kbState)
 	}
 	i, j, _ := msg.InlineKeyboardMarkup.Find(buttonData)
-	//spew.Dump(i, j)
 
 	if i < 0 {
 		return fmt.Errorf("EditInlineButton – button %v not found in message (botid=%v id=%v(%v) state %s) not found", buttonData, bot.ID, om.MsgID, om.InlineMsgID, kbState)
@@ -707,7 +647,6 @@ func (c *Context) EditInlineStateButton(om *OutgoingMessage, kbState string, old
 
 	info, err := c.db.C("messages").UpdateAll(bson.M{"_id": msg.ID, "inlinekeyboardmarkup.state": kbState, fmt.Sprintf("inlinekeyboardmarkup.buttons.%d.%d.data", i, j): buttonData}, bson.M{"$set": set})
 
-	//spew.Dump(info)
 	if info.Updated == 0 {
 		// another one thread safe check
 		return fmt.Errorf("EditInlineButton – button[%d][%d] %v not found in message (botid=%v id=%v(%v) state %s) not found", i, j, buttonData, bot.ID, om.MsgID, om.InlineMsgID, kbState)

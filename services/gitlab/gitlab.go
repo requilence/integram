@@ -126,6 +126,16 @@ type commit struct {
 	Removed   []string
 }
 
+type commitWithoutID struct {
+	Message   string
+	Timestamp time.Time
+	Author    author
+	URL       string `json:"url"`
+	Added     []string
+	Modified  []string
+	Removed   []string
+}
+
 type attributes struct {
 	ID           int `json:"id"`
 	Title        string
@@ -174,7 +184,11 @@ type snippet struct {
 }
 
 type webhook struct {
-	ObjectKind       string `json:"object_kind"`
+	ObjectKind       string  `json:"object_kind"`
+	SHA              string  `json:"sha"`
+	BuildID          int     `json:"build_id"`
+	BuildStatus      string  `json:"build_status"`
+	BuildDuration    float32 `json:"build_duration"`
 	Ref              string
 	Before           string
 	User             user
@@ -190,14 +204,14 @@ type webhook struct {
 	Snippet      *snippet
 	After        string
 	Commits      []commit
-	Commit       *commit
+	Commit       *commitWithoutID
 	MergeRequest *mergeRequest `json:"merge_request"`
 }
 
 func mention(c *integram.Context, name string, email string) string {
 	userName := ""
 	c.ServiceCache("nick_map_"+name, &userName)
-	if userName == "" {
+	if userName == "" && email != "" {
 		c.ServiceCache("nick_map_"+email, &userName)
 	}
 	if userName == "" {
@@ -541,7 +555,7 @@ func webhookHandler(c *integram.Context, request *integram.WebhookContext) (err 
 			} else {
 				msg.SetReplyAction(commitsReplied, c.ServiceBaseURL.String(), wh.ProjectID, wh.Commits)
 			}
-			err = msg.AddEventID("commit_" + wh.Commits[0].ID).SetText(fmt.Sprintf("%s %s to %s\n%s", mention(c, wh.UserName, wh.UserEmail), m.URL("pushed", wp), m.URL(wh.Repository.Name+"/"+branch, wh.Repository.Homepage+"/tree/"+url.QueryEscape(branch)), text)).
+			err = msg.AddEventID("commit_" + wh.Commits[len(wh.Commits)-1].ID).SetText(fmt.Sprintf("%s %s to %s\n%s", mention(c, wh.UserName, wh.UserEmail), m.URL("pushed", wp), m.URL(wh.Repository.Name+"/"+branch, wh.Repository.Homepage+"/tree/"+url.QueryEscape(branch)), text)).
 				EnableHTML().
 				Send()
 
@@ -615,11 +629,11 @@ func webhookHandler(c *integram.Context, request *integram.WebhookContext) (err 
 		switch wh.ObjectAttributes.NoteableType {
 		case "Commit":
 			noteType = "commit"
-			originMsg, _ = c.FindMessageByEventID(fmt.Sprintf("commit_%s", wh.Commit.ID))
+			originMsg, _ = c.FindMessageByEventID(fmt.Sprintf("commit_%s", wh.ObjectAttributes.CommitID))
 			if originMsg != nil {
 				break
 			}
-			wp = c.WebPreview("Commit", "@"+wh.Commit.ID[0:10], wh.User.Username+" / "+wh.Repository.Name, wh.ObjectAttributes.URL, "")
+			wp = c.WebPreview("Commit", "@"+wh.ObjectAttributes.CommitID[0:10], wh.User.Username+" / "+wh.Repository.Name, wh.ObjectAttributes.URL, "")
 		case "MergeRequest":
 			noteType = "merge request"
 			originMsg, _ = c.FindMessageByEventID(fmt.Sprintf("mr_%d", wh.MergeRequest.ID))

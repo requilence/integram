@@ -36,8 +36,6 @@ func init() {
 
 	if Debug {
 		mgo.SetDebug(true)
-		//	mgo.SetLogger(log.WithField("mongo", "mongo").Out)
-
 		gin.SetMode(gin.DebugMode)
 		log.SetLevel(log.DebugLevel)
 	} else {
@@ -120,11 +118,8 @@ func Run() {
 
 	router.LoadHTMLFiles(pwd+"/webpreview.tmpl", pwd+"/oauthredirect.tmpl")
 
-	//router.POST("/:param/tg", tgwebhook)
 	router.GET("/a/:param", webPreviewHandler)
-	/*router.GET("/", func(c *gin.Context) {
-		c.Redirect(http.StatusMovedPermanently, "https://integram.org/"+c.Request.RequestURI)
-	})*/
+
 	router.StaticFile("/", "index.html")
 
 	router.GET("/oauth1/:param", oAuthInitRedirect)
@@ -141,8 +136,6 @@ func Run() {
 
 	router.POST("/:param/:service", serviceHookHandler)
 
-	//}
-
 	// Start listening
 	port := os.Getenv("INTEGRAM_PORT")
 	if port == "" {
@@ -153,8 +146,6 @@ func Run() {
 	} else {
 		router.Run(":" + port)
 	}
-	//RunWorkers()
-
 }
 
 func webPreviewHandler(c *gin.Context) {
@@ -283,8 +274,7 @@ func serviceHookHandler(c *gin.Context) {
 			log.WithFields(log.Fields{"token": token}).Error(err)
 			// Todo: Some services(f.e. Trello) removes webhook after received 410 HTTP Gone
 			// But this is not safe in case of db unavailable
-			//
-			// c.AbortWithError(http.StatusGone, err)
+
 			return
 		}
 		hooks = chat.Hooks
@@ -295,12 +285,7 @@ func serviceHookHandler(c *gin.Context) {
 		return
 	}
 
-	//if ctx.Chat.ID > 0 {
-	//	ctx.User = User{ID: ctx.User.ID, FirstName: ctx.User.FirstName, LastName: ctx.User.LastName, UserName: ctx.Chat.UserName}
-	//	ctx.User.ctx = ctx
-	//}
 
-	//var msg *OutgoingMessage
 	wctx := &WebhookContext{gin: c, requestID: rndStr.Get(10)}
 
 	for _, hook := range hooks {
@@ -317,7 +302,6 @@ func serviceHookHandler(c *gin.Context) {
 					if len(hook.Chats) > 0 {
 						for _, chatID := range hook.Chats {
 							ctx.Chat = Chat{ID: chatID, ctx: ctx}
-							//spew.Dump("WebhookHandler", ctx)
 							err := s.WebhookHandler(ctx, wctx)
 
 							if err != nil {
@@ -333,9 +317,7 @@ func serviceHookHandler(c *gin.Context) {
 					}
 				}
 			}
-			if isHandled {
-				//c.AbortWithStatus(200)
-			} else {
+			if !isHandled {
 				log.WithField("token", token).Warn("Hook not handled")
 			}
 			c.AbortWithStatus(200)
@@ -460,7 +442,6 @@ func oAuthCallback(c *gin.Context) {
 			var otoken *oauth2.Token
 			otoken, err = ctx.OAuthProvider().OAuth2Client(ctx).Exchange(oauth2.NoContext, code)
 			if otoken != nil {
-				//domain, _ := getDomainFromUrl(baseURL)
 				accessToken = otoken.AccessToken
 				refreshToken = otoken.RefreshToken
 				expiresAt = &otoken.Expiry

@@ -134,13 +134,8 @@ func findUsernameByID(db *mgo.Database, id int64) string {
 func (c *Context) findChat(query bson.M) (chatData, error) {
 	chat := chatData{}
 	serviceID := c.getServiceID()
-	/*bot := c.Bot()
-	botId := -1
-	if bot != nil {
-		botId = bot.ID
-	}*/
+
 	err := c.db.C("chats").Find(query).Select(bson.M{"firstname": 1, "lastname": 1, "username": 1, "title": 1, "settings." + serviceID: 1, "keyboardperbot": 1, "tz": 1, "hooks": 1}).One(&chat)
-	//spew.Dump(chat)
 	if err != nil {
 		//c.Log().WithError(err).WithField("query", query).Error("Can't find chat")
 		return chat, err
@@ -161,7 +156,6 @@ func (c *Context) findUser(query bson.M) (userData, error) {
 	}
 
 	if err != nil {
-		//	log.WithError(err).WithField("query", query).Error("Can't find user")
 		return user, err
 	}
 	user.ctx = c
@@ -188,7 +182,6 @@ func (c *Context) updateCacheVal(cacheType string, key string, update interface{
 		panic("updateCacheVal, type " + cacheType + " not exists")
 	}
 
-	//spew.Dump("updateCacheVal", info, err)
 	if err != nil {
 		log.WithField("service", serviceID).WithField("key", key).WithField("user", c.User.ID).WithField("chat", c.Chat.ID).Debugf(cacheType+" cache updating error: %v", err)
 		return false
@@ -243,7 +236,6 @@ func (c *Context) getCacheVal(cacheType string, key string, res interface{}) (ex
 	}
 
 	if err != nil {
-		//	log.WithField("service", serviceID).WithField("key", key).WithField("user", ctx.User.ID).WithField("chat", ctx.Chat.ID).Debugf(cacheType+" cache fetching error: %v", err)
 		return false
 	}
 
@@ -409,7 +401,6 @@ func (user *User) getData() (*userData, error) {
 
 	udata, err := user.ctx.findUser(bson.M{"_id": user.ID})
 
-	//fmt.Printf("Found user: %+v %v\n", udata, err)
 	user.data = &udata
 	user.Tz = user.data.Tz
 
@@ -429,7 +420,6 @@ func (c *Context) getServiceID() string {
 	}
 
 	if c.ServiceBaseURL.Host == "" {
-		//c.Log().Errorf("c.ServiceBaseURL is empty")
 		return c.ServiceName
 	}
 

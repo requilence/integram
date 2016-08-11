@@ -61,7 +61,6 @@ func (o *OAuthProvider) internalID() string {
 		log.Errorf("OAuthProvider is empty")
 	}
 	s, _ := serviceByName(o.Service)
-	//spew.Dump(oap, s)
 
 	if s != nil && o.BaseURL.Host == s.DefaultBaseURL.Host {
 		return s.Name
