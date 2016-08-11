@@ -79,7 +79,6 @@ func updateRoutine(b *Bot, u *tg.Update) {
 	}
 
 	if context.Message != nil {
-		fmt.Printf(" %s: %+v\n", service.NameToPrint, u.Message.Text)
 
 		if service.TGNewMessageHandler == nil {
 			context.Log().Warn("Received Message but TGNewMessageHandler not set for service")
@@ -100,7 +99,6 @@ func updateRoutine(b *Bot, u *tg.Update) {
 		}
 
 	} else if context.InlineQuery != nil {
-		fmt.Printf(" %s: %+v\n", service.NameToPrint, u.InlineQuery.Query)
 		start := time.Now()
 		if service.TGInlineQueryHandler == nil {
 			context.Log().Warn("Received InlineQuery but TGInlineQueryHandler not set for service")
@@ -124,7 +122,6 @@ func updateRoutine(b *Bot, u *tg.Update) {
 
 		return
 	} else if context.ChosenInlineResult != nil {
-		fmt.Printf(" %s: %+v\n", service.NameToPrint, u.ChosenInlineResult.Query)
 
 		if service.TGChosenInlineResultHandler == nil {
 			context.Log().Warn("Received ChosenInlineResult but TGChosenInlineResultHandler not set for service")
@@ -170,7 +167,6 @@ func (bot *Bot) listen() {
 	//	db := mongoSession.Clone().DB(mongo.Database)
 
 	api := bot.API
-	fmt.Printf("%+v\n", bot)
 	if bot.updatesChan == nil {
 		log.Debug("Open UpdatesChan for bot " + bot.Username)
 		var err error
