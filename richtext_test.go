@@ -180,8 +180,8 @@ func TestMarkdownRichText_Esc(t *testing.T) {
 		args args
 		want string
 	}{
-		{"test1", MarkdownRichText{}, args{"[a](b)"}, "⟦a⟧❨b❩"},
-		{"test2", MarkdownRichText{}, args{"`here is the*_text"}, "‛here is the∗＿text"},
+		{"test1", MarkdownRichText{}, args{"[a](b)"}, "\\[a\\]\\(b\\)"},
+		{"test2", MarkdownRichText{}, args{"`here is the*_text"}, "\\`here is the\\*\\_text"},
 	}
 	for _, tt := range tests {
 		mrt := MarkdownRichText{}
