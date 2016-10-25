@@ -13,6 +13,7 @@ type Config struct{}
 
 type webhook struct {
 	Text        string
+	Mrkdwn      bool
 	Channel     string
 	Attachments []struct {
 		Pretext    string `json:"pretext"`
@@ -51,7 +52,7 @@ func update(c *integram.Context) error {
 
 	case "start":
 		return c.NewMessage().EnableAntiFlood().EnableHTML().
-			SetText("Hi here! You can send Slack-compatible simple webhooks to " + m.Bold("this chat") + " using this URL: \n" + m.Fixed(c.Chat.ServiceHookURL()) + "\n\nExample (JSON payload):\n" + m.Pre("{\"text\":\"So advanced\\nMuch innovations 🙀\"}")).Send()
+			SetText("Hi here! You can send " + m.URL("Slack-compatible", "https://api.slack.com/docs/message-formatting#message_formatting") + " simple webhooks to " + m.Bold("this chat") + " using this URL: \n" + m.Fixed(c.Chat.ServiceHookURL()) + "\n\nExample (JSON payload):\n" + m.Pre("{\"text\":\"So _advanced_\\nMuch *innovations* 🙀\"}")).Send()
 
 	}
 	return nil
@@ -59,7 +60,7 @@ func update(c *integram.Context) error {
 
 func webhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error) {
 
-	wh := webhook{}
+	wh := webhook{Mrkdwn: true}
 	err = wc.JSON(&wh)
 
 	if err != nil {
@@ -82,7 +83,11 @@ func webhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 	}
 
 	if wh.Text != "" {
-		return c.NewMessage().SetText(wh.Text + " " + wh.Channel).EnableAntiFlood().Send()
+		m := c.NewMessage().SetText(wh.Text + " " + wh.Channel).EnableAntiFlood()
+		if wh.Mrkdwn {
+			m.EnableMarkdown()
+		}
+		return m.Send()
 	}
 
 	return errors.New("Text and Attachments not found")
