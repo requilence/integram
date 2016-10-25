@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -90,6 +92,31 @@ func (e Error) IsCantAccessChat() bool {
 		return true
 	}
 	return false
+}
+
+func (e Error) IsParseError() bool {
+	if strings.HasPrefix(e.Description, "Bad Request: Can't parse message text") {
+		return true
+	}
+	return false
+}
+
+var REParseErrorOffset = regexp.MustCompile("starting at byte offset ([0-9]*)")
+
+func (e Error) ParseErrorOffset() int {
+
+	b := REParseErrorOffset.FindStringSubmatch(e.Description)
+
+	if len(b) < 2 {
+		return -1
+	}
+
+	of, err := strconv.Atoi(b[1])
+	if err != nil {
+		return -1
+	}
+
+	return of
 }
 
 // Update is an update response, from GetUpdates.

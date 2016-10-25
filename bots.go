@@ -1208,6 +1208,13 @@ func sendMessage(m *OutgoingMessage) error {
 
 			_, err := sendMessageJob.Schedule(0, time.Now().Add(time.Duration(10+rand.Intn(30))*time.Second), &m)
 			return err
+		} else if tgErr.IsParseError() {
+			if offset := tgErr.ParseErrorOffset(); offset > -1 {
+				mrk := MarkdownRichText{}
+				m.SetText(m.Text[0:offset] + mrk.Esc(m.Text[offset:offset+1]) + m.Text[offset+1:])
+				_, err := sendMessageJob.Schedule(0, time.Now(), &m)
+				return err
+			}
 		}
 
 		log.WithError(err).WithField("message", m).Error("TG error while sending a message")
