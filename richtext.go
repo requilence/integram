@@ -72,7 +72,7 @@ func (mrt MarkdownRichText) Fixed(text string) string {
 
 // Esc replace '[', ']', '(', ')', "`", "_", "*" with similar symbols
 func (mrt MarkdownRichText) Esc(s string) string {
-	repalcer := strings.NewReplacer("[", "⟦", "]", "⟧", "(", "❨", ")", "❩", "`", "‛", "_", "＿", "*", "∗")
+	repalcer := strings.NewReplacer("[", "\\[", "]", "\\]", "(", "\\(", ")", "\\)", "`", "\\`", "_", "\\_", "*", "\\*")
 	return repalcer.Replace(s)
 }
 
