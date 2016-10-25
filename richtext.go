@@ -59,7 +59,8 @@ func (mrt MarkdownRichText) Pre(text string) string {
 	if text == "" {
 		return ""
 	}
-	return "```\n" + mrt.Esc(text) + "\n```"
+	repalcer := strings.NewReplacer("`", "‛")
+	return "```\n" + repalcer.Replace(text) + "\n```"
 }
 
 // Fixed generates`text`
@@ -67,10 +68,11 @@ func (mrt MarkdownRichText) Fixed(text string) string {
 	if text == "" {
 		return ""
 	}
-	return "`" + mrt.Esc(text) + "`"
+	repalcer := strings.NewReplacer("`", "‛")
+	return "`" + repalcer.Replace(text) + "`"
 }
 
-// Esc replace '[', ']', '(', ')', "`", "_", "*" with similar symbols
+// Esc escapes '[', ']', '(', ')', "`", "_", "*" with \
 func (mrt MarkdownRichText) Esc(s string) string {
 	repalcer := strings.NewReplacer("[", "\\[", "]", "\\]", "(", "\\(", ")", "\\)", "`", "\\`", "_", "\\_", "*", "\\*")
 	return repalcer.Replace(s)
@@ -78,7 +80,8 @@ func (mrt MarkdownRichText) Esc(s string) string {
 
 // URL generates [text](URL)
 func (mrt MarkdownRichText) URL(text string, url string) string {
-	text = fmt.Sprintf("[%s](%s)", mrt.Esc(text), mrt.Esc(url))
+	repalcer := strings.NewReplacer("[", "⟦", "]", "⟧", "(", "❨", ")", "❩")
+	text = fmt.Sprintf("[%s](%s)", repalcer.Replace(text), url)
 	return text
 }
 
@@ -87,7 +90,8 @@ func (mrt MarkdownRichText) Bold(text string) string {
 	if text == "" {
 		return ""
 	}
-	return "*" + mrt.Esc(text) + "*"
+	repalcer := strings.NewReplacer("*", "∗")
+	return "*" + repalcer.Replace(text) + "*"
 }
 
 // Italic generates _text_
@@ -95,6 +99,6 @@ func (mrt MarkdownRichText) Italic(text string) string {
 	if text == "" {
 		return ""
 	}
-
-	return "_" + mrt.Esc(text) + "_"
+	repalcer := strings.NewReplacer("_", "＿")
+	return "_" + repalcer.Replace(text) + "_"
 }
