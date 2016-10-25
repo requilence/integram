@@ -188,6 +188,7 @@ type webhook struct {
 	SHA              string  `json:"sha"`
 	BuildID          int     `json:"build_id"`
 	BuildStatus      string  `json:"build_status"`
+	BuildStage       string  `json:"build_stage"`
 	BuildDuration    float32 `json:"build_duration"`
 	Ref              string
 	Before           string
@@ -703,27 +704,28 @@ func webhookHandler(c *integram.Context, request *integram.WebhookContext) (err 
 
 		text := ""
 		commit := ""
-		build := m.URL("Build", fmt.Sprintf("%s/builds/%d", wh.Repository.Homepage, wh.BuildID))
+
+		build := m.URL(strings.ToUpper(wh.BuildStage[0:1])+wh.BuildStage[1:], fmt.Sprintf("%s/builds/%d", wh.Repository.Homepage, wh.BuildID))
 
 		if commitMsg == nil {
 			hpURL := strings.Split(wh.Repository.Homepage, "/")
 			username := hpURL[len(hpURL)-2]
 			commit = m.URL("Commit", c.WebPreview("Commit", "@"+wh.SHA[0:10], username+" / "+wh.Repository.Name, wh.Repository.URL+"/commit/"+wh.SHA, "")) + " "
-			build = m.URL("build", fmt.Sprintf("%s/builds/%d", wh.Repository.Homepage, wh.BuildID))
+			build = m.URL(wh.BuildStage, fmt.Sprintf("%s/builds/%d", wh.Repository.Homepage, wh.BuildID))
 		} else {
 			msg.SetReplyToMsgID(commitMsg.MsgID).DisableWebPreview()
 		}
 
 		if wh.BuildStatus == "pending" {
-			text = "⏳ " + commit + build + " is pending"
+			text = "⏳ CI: " + commit + build + " is pending"
 		} else if wh.BuildStatus == "running" {
-			text = "⚙ " + commit + build + " is running"
+			text = "⚙ CI: " + commit + build + " is running"
 		} else if wh.BuildStatus == "success" {
-			text = fmt.Sprintf("✅ "+commit+build+" succeeded after %.1f sec", wh.BuildDuration)
+			text = fmt.Sprintf("✅ CI: "+commit+build+" succeeded after %.1f sec", wh.BuildDuration)
 		} else if wh.BuildStatus == "failed" {
-			text = fmt.Sprintf("‼️ "+commit+build+" failed after %.1f sec", wh.BuildDuration)
+			text = fmt.Sprintf("‼️ CI: "+commit+build+" failed after %.1f sec", wh.BuildDuration)
 		} else if wh.BuildStatus == "canceled" {
-			text = fmt.Sprintf("🔚 "+commit+build+" canceled by %s after %.1f sec", mention(c, wh.User.Name, ""), wh.BuildDuration)
+			text = fmt.Sprintf("🔚 CI: "+commit+build+" canceled by %s after %.1f sec", mention(c, wh.User.Name, ""), wh.BuildDuration)
 		}
 		if commitMsg != nil {
 			lines := strings.Split(commitMsg.Text, "\n")
@@ -731,8 +733,8 @@ func webhookHandler(c *integram.Context, request *integram.WebhookContext) (err 
 			if strings.Contains(lines[len(lines)-1], wh.Repository.Homepage+"/builds/") {
 				prevText = strings.Join(lines[0:len(lines)-1], "\n")
 			}
-			text = prevText + "\n" + text
-			_, err = c.EditMessagesTextWithEventID(commitMsg.EventID[0], text)
+			prevText = prevText + "\n" + text
+			_, err = c.EditMessagesTextWithEventID(commitMsg.EventID[0], prevText)
 		}
 
 		if wh.BuildStatus != "pending" && wh.BuildStatus != "running" {
