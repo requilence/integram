@@ -20,6 +20,27 @@ type Config struct {
 	integram.OAuthProvider
 }
 
+// ChatSettings contains notification settings
+type ChatSettings struct {
+	MR struct {
+		Open   bool
+		Close  bool
+		Update bool
+		Merge  bool
+	}
+	CI struct {
+		Success bool
+		Fail    bool
+		Cancel  bool
+	}
+}
+
+func chatSettings(c *integram.Context) ChatSettings {
+	s := ChatSettings{}
+	c.Chat.Settings(&s)
+	return s
+}
+
 const apiSuffixURL = "/api/v3/"
 
 // Service returns integram.Service from gitlab.Config
@@ -47,6 +68,7 @@ func (c Config) Service() *integram.Service {
 			commitReplied,
 			commitToReplySelected,
 			commitsReplied,
+			settingsKeyboardPressed,
 		},
 		DefaultOAuth2: &integram.DefaultOAuth2{
 			Config: oauth2.Config{
@@ -675,6 +697,23 @@ func webhookHandler(c *integram.Context, request *integram.WebhookContext) (err 
 			DisableWebPreview().EnableHTML().SetReplyToMsgID(originMsg.MsgID).Send()
 	case "merge_request":
 
+		cs := chatSettings(c)
+		if !cs.MR.Open && (wh.ObjectAttributes.Action == "open" || wh.ObjectAttributes.Action == "reopen") {
+			return nil
+		}
+
+		if !cs.MR.Close && (wh.ObjectAttributes.Action == "close") {
+			return nil
+		}
+
+		if !cs.MR.Update && (wh.ObjectAttributes.Action == "update") {
+			return nil
+		}
+
+		if !cs.MR.Merge && (wh.ObjectAttributes.Action == "merge") {
+			return nil
+		}
+
 		if wh.ObjectAttributes.Action == "open" {
 			if wh.ObjectAttributes.Description != "" {
 				wh.ObjectAttributes.Description = "\n" + wh.ObjectAttributes.Description
@@ -737,12 +776,97 @@ func webhookHandler(c *integram.Context, request *integram.WebhookContext) (err 
 			_, err = c.EditMessagesTextWithEventID(commitMsg.EventID[0], prevText)
 		}
 
-		if wh.BuildStatus != "pending" && wh.BuildStatus != "running" {
+		cs := chatSettings(c)
+		if cs.CI.Success && (wh.BuildStatus == "success") || cs.CI.Cancel && (wh.BuildStatus == "canceled") || cs.CI.Fail && (wh.BuildStatus == "failed") {
 			return msg.SetText(text).
 				EnableHTML().Send()
 		}
 	}
 	return
+}
+
+func boolToMark(b bool) string {
+	if b {
+		return "☑️ "
+	}
+	return ""
+}
+
+func boolToState(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+func stateToBool(state int) bool {
+	if state == 1 {
+		return true
+	}
+	return false
+}
+
+func settingsKeyboardPressed(c *integram.Context) error {
+	cs := chatSettings(c)
+
+	state := c.Callback.Message.InlineKeyboardMarkup.State
+
+	if state == "categories" {
+		state = c.Callback.Data
+	}
+
+	btns := integram.InlineButtons{}
+
+	if c.Callback.Data == "back" {
+		btns.Append("ci", "CI")
+		btns.Append("mr", "Merge requests")
+		state = "categories"
+	} else if state == "mr" {
+		btns.Append("back", "← Back")
+		switch c.Callback.Data {
+		case "open":
+			cs.MR.Open = !stateToBool(c.Callback.State)
+		case "close":
+			cs.MR.Close = !stateToBool(c.Callback.State)
+		case "update":
+			cs.MR.Update = !stateToBool(c.Callback.State)
+		case "merge":
+			cs.MR.Merge = !stateToBool(c.Callback.State)
+		}
+
+		c.Chat.SaveSettings(cs)
+
+		btns.AppendWithState(boolToState(cs.MR.Open), "open", boolToMark(cs.MR.Open)+"Open")
+		btns.AppendWithState(boolToState(cs.MR.Update), "update", boolToMark(cs.MR.Update)+"Update")
+		btns.AppendWithState(boolToState(cs.MR.Merge), "merge", boolToMark(cs.MR.Merge)+"Merge")
+		btns.AppendWithState(boolToState(cs.MR.Close), "close", boolToMark(cs.MR.Close)+"Close")
+
+	} else if state == "ci" {
+		btns.Append("back", "← Back")
+		switch c.Callback.Data {
+		case "success":
+			cs.CI.Success = !stateToBool(c.Callback.State)
+		case "fail":
+			cs.CI.Fail = !stateToBool(c.Callback.State)
+		case "cancel":
+			cs.CI.Cancel = !stateToBool(c.Callback.State)
+		}
+
+		c.Chat.SaveSettings(cs)
+
+		btns.AppendWithState(boolToState(cs.CI.Success), "success", boolToMark(cs.CI.Success)+"Success")
+		btns.AppendWithState(boolToState(cs.CI.Fail), "fail", boolToMark(cs.CI.Fail)+"Fail")
+		btns.AppendWithState(boolToState(cs.CI.Cancel), "cancel", boolToMark(cs.CI.Cancel)+"Cancel")
+	}
+	return c.EditPressedInlineKeyboard(btns.Markup(1, state))
+}
+func settings(c *integram.Context) error {
+	btns := integram.InlineButtons{}
+
+	btns.Append("ci", "CI")
+	btns.Append("mr", "Merge requests")
+
+	return c.NewMessage().SetText("Tune the notifications").SetInlineKeyboard(btns.Markup(1, "categories")).SetCallbackAction(settingsKeyboardPressed).Send()
 }
 
 func update(c *integram.Context) error {
@@ -759,12 +883,13 @@ func update(c *integram.Context) error {
 	switch command {
 
 	case "start":
-		c.Log().Debug("hm")
 		return c.NewMessage().EnableAntiFlood().EnableHTML().
 			SetText("Hi here! To setup notifications " + m.Bold("for this chat") + " your GitLab project(repo), open Settings -> Web Hooks and add this URL:\n" + m.Fixed(c.Chat.ServiceHookURL())).EnableHTML().Send()
 
 	case "cancel", "clean", "reset":
 		return c.NewMessage().SetText("Clean").HideKeyboard().Send()
+	case "settings":
+		return settings(c)
 	}
 	return nil
 }
