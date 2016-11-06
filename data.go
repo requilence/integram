@@ -336,6 +336,10 @@ func (c *Context) SetServiceCache(key string, val interface{}, ttl time.Duration
 
 	_, err := c.db.C("services_cache").Upsert(bson.M{"service": serviceID, "key": key}, bson.M{"$set": bson.M{"val": val, "expiresat": expiresAt}})
 	if err != nil {
+		// workaround for WiredTiger bug: https://jira.mongodb.org/browse/SERVER-14322
+		if mgo.IsDup(err) {
+			return c.db.C("services_cache").Update(bson.M{"service": serviceID, "key": key}, bson.M{"$set": bson.M{"val": val, "expiresat": expiresAt}})
+		}
 		log.WithError(err).WithField("key", key).Error("Can't set sevices cache value")
 	}
 	return err
