@@ -149,13 +149,16 @@ type commit struct {
 }
 
 type commitWithoutID struct {
-	Message   string
-	Timestamp time.Time
-	Author    author
-	URL       string `json:"url"`
-	Added     []string
-	Modified  []string
-	Removed   []string
+	SHA         string `json:"sha"`
+	Message     string
+	Timestamp   time.Time
+	Author      author
+	AuthorName  string `json:"author_name"`
+	AuthorEmail string `json:"author_email"`
+	URL         string `json:"url"`
+	Added       []string
+	Modified    []string
+	Removed     []string
 }
 
 type attributes struct {
@@ -210,6 +213,7 @@ type webhook struct {
 	SHA              string  `json:"sha"`
 	BuildID          int     `json:"build_id"`
 	BuildStatus      string  `json:"build_status"`
+	BuildName        string  `json:"build_name"`
 	BuildStage       string  `json:"build_stage"`
 	BuildDuration    float32 `json:"build_duration"`
 	Ref              string
@@ -514,6 +518,9 @@ func webhookHandler(c *integram.Context, request *integram.WebhookContext) (err 
 	if wh.Repository.Homepage != "" {
 		c.SetServiceBaseURL(wh.Repository.Homepage)
 	} else if wh.ObjectAttributes != nil {
+		if wh.ObjectAttributes.URL == "" {
+			c.Log().WithField("wh", wh).Error("gitlab webhook empty url")
+		}
 		c.SetServiceBaseURL(wh.ObjectAttributes.URL)
 	}
 
@@ -578,7 +585,10 @@ func webhookHandler(c *integram.Context, request *integram.WebhookContext) (err 
 			} else {
 				msg.SetReplyAction(commitsReplied, c.ServiceBaseURL.String(), wh.ProjectID, wh.Commits)
 			}
-			err = msg.AddEventID("commit_" + wh.Commits[len(wh.Commits)-1].ID).SetText(fmt.Sprintf("%s %s to %s\n%s", mention(c, wh.UserName, wh.UserEmail), m.URL("pushed", wp), m.URL(wh.Repository.Name+"/"+branch, wh.Repository.Homepage+"/tree/"+url.QueryEscape(branch)), text)).
+			text := fmt.Sprintf("%s %s to %s\n%s", mention(c, wh.UserName, wh.UserEmail), m.URL("pushed", wp), m.URL(wh.Repository.Name+"/"+branch, wh.Repository.Homepage+"/tree/"+url.QueryEscape(branch)), text)
+			c.Chat.SetCache("commit_"+wh.Commits[len(wh.Commits)-1].ID, text, time.Hour*24*30)
+
+			err = msg.AddEventID("commit_" + wh.Commits[len(wh.Commits)-1].ID).SetText(text).
 				EnableHTML().
 				Send()
 
@@ -755,6 +765,10 @@ func webhookHandler(c *integram.Context, request *integram.WebhookContext) (err 
 			msg.SetReplyToMsgID(commitMsg.MsgID).DisableWebPreview()
 		}
 
+		if strings.ToLower(wh.BuildStage) != strings.ToLower(wh.BuildName) {
+			build += " #" + wh.BuildName
+		}
+
 		if wh.BuildStatus == "pending" {
 			text = "⏳ CI: " + commit + build + " is pending"
 		} else if wh.BuildStatus == "running" {
@@ -767,13 +781,12 @@ func webhookHandler(c *integram.Context, request *integram.WebhookContext) (err 
 			text = fmt.Sprintf("🔚 CI: "+commit+build+" canceled by %s after %.1f sec", mention(c, wh.User.Name, ""), wh.BuildDuration)
 		}
 		if commitMsg != nil {
-			lines := strings.Split(commitMsg.Text, "\n")
-			prevText := commitMsg.Text
-			if strings.Contains(lines[len(lines)-1], wh.Repository.Homepage+"/builds/") {
-				prevText = strings.Join(lines[0:len(lines)-1], "\n")
+			var commitMsgText string
+			c.Chat.Cache("commit_"+wh.Commit.SHA, &commitMsgText)
+
+			if commitMsgText != "" {
+				_, err = c.EditMessagesTextWithEventID(commitMsg.EventID[0], commitMsgText+"\n"+text)
 			}
-			prevText = prevText + "\n" + text
-			_, err = c.EditMessagesTextWithEventID(commitMsg.EventID[0], prevText)
 		}
 
 		cs := chatSettings(c)
