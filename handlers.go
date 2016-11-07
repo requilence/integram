@@ -465,12 +465,19 @@ func oAuthCallback(c *gin.Context) {
 
 	ps, err := ctx.User.protectedSettings()
 
+	if err != nil {
+		ctx.Log().WithError(err).WithError(err).Error("oAuthCallback: can't get User.protectedSettings() ")
+	}
+
 	ps.OAuthToken = accessToken
 	ps.OAuthRefreshToken = refreshToken
 	if expiresAt != nil {
 		ps.OAuthExpireDate = expiresAt
 	}
-	ctx.User.saveProtectedSettings()
+	err = ctx.User.saveProtectedSettings()
+	if err != nil {
+		ctx.Log().WithError(err).WithError(err).Error("oAuthCallback: can't saveProtectedSettings")
+	}
 
 	if s.OAuthSuccessful != nil {
 		s.DoJob(s.OAuthSuccessful, ctx)
