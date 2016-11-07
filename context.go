@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"crypto/md5"
 	log "github.com/Sirupsen/logrus"
 	"github.com/gin-gonic/gin"
 	"github.com/mrjones/oauth"
@@ -438,8 +439,9 @@ func (c *Context) EditMessageText(om *OutgoingMessage, text string) error {
 	if om == nil {
 		return errors.New("Empty message provided")
 	}
+	textHash := fmt.Sprintf("%x", md5.Sum([]byte(text)))
 	bot := c.Bot()
-	if om.Text == text {
+	if om.TextHash == textHash {
 		return errors.New("EditMessageText: text not mofified")
 	}
 
@@ -449,9 +451,9 @@ func (c *Context) EditMessageText(om *OutgoingMessage, text string) error {
 			MessageID:   om.MsgID,
 			ReplyMarkup: &tg.InlineKeyboardMarkup{InlineKeyboard: om.InlineKeyboardMarkup.tg()},
 		},
-		ParseMode: om.ParseMode,
+		ParseMode:             om.ParseMode,
 		DisableWebPagePreview: !om.WebPreview,
-		Text:      text,
+		Text: text,
 	})
 	if err != nil {
 		if err.(tg.Error).IsCantAccessChat() || err.(tg.Error).ChatMigratedToChatID() != 0 {
@@ -462,7 +464,7 @@ func (c *Context) EditMessageText(om *OutgoingMessage, text string) error {
 			c.Log().WithError(err).Warn("TG Anti flood activated")
 		}
 	} else {
-		err = c.db.C("messages").UpdateId(om.ID, bson.M{"$set": bson.M{"text": text}})
+		err = c.db.C("messages").UpdateId(om.ID, bson.M{"$set": bson.M{"texthash": textHash}})
 	}
 	return err
 }

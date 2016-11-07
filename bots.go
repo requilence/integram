@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"crypto/md5"
 	log "github.com/Sirupsen/logrus"
 	"github.com/kennygrant/sanitize"
 	"github.com/requilence/jobs"
@@ -24,6 +25,8 @@ import (
 
 const inlineButtonStateKeyword = '`'
 const antiFloodTimeout = 60
+const antiFloodChatDuration = 20
+const antiFloodChatLimit = 10
 
 var botPerID = make(map[int64]*Bot)
 var botPerService = make(map[string]*Bot)
@@ -111,6 +114,7 @@ type IncomingMessage struct {
 // OutgoingMessage specispecifiesfy data of performing or performed outgoing message
 type OutgoingMessage struct {
 	Message              `bson:",inline"`
+	TextHash             string         `bson:",omitempty"`
 	KeyboardHide         bool           `bson:",omitempty"`
 	ResizeKeyboard       bool           `bson:",omitempty"`
 	KeyboardMarkup       Keyboard       `bson:"-"`
@@ -762,6 +766,8 @@ type scheduleMessageSender struct{}
 
 var activeMessageSender = messageSender(scheduleMessageSender{})
 
+var ErrorFlood = fmt.Errorf("Too many messages. You could not send the same message more than once per %d sec. The number of messages sent to chat must not exceed %d in %d sec", antiFloodTimeout, antiFloodChatLimit, antiFloodChatDuration)
+
 func (t scheduleMessageSender) Send(m *OutgoingMessage) error {
 	if m.processed {
 		return nil
@@ -771,9 +777,19 @@ func (t scheduleMessageSender) Send(m *OutgoingMessage) error {
 		db := mongoSession.Clone().DB(mongo.Database)
 		defer db.Session.Close()
 		msg, _ := findLastOutgoingMessageInChat(db, m.BotID, m.ChatID)
-		if msg != nil && msg.Text == m.Text && time.Now().Sub(msg.Date).Seconds() < antiFloodTimeout {
-			log.Errorf("flood. mins %v", time.Now().Sub(msg.Date).Minutes())
-			return errors.New("AntiFlood is active. Flood detected")
+		if msg != nil && msg.om.TextHash == m.GetTextHash() && time.Now().Sub(msg.Date).Seconds() < antiFloodTimeout {
+			//log.Errorf("flood. mins %v", time.Now().Sub(msg.Date).Minutes())
+			return ErrorFlood
+		}
+
+		total, err := db.C("messages").Find(bson.M{"chatid": m.ChatID, "botid": m.BotID, "date": bson.M{"$gt": time.Now().Add(time.Duration(-1 * int64(time.Second) * int64(antiFloodChatDuration)))}}).Count()
+		if err != nil {
+			log.WithField("message", m).WithError(err).Error("AntiFlood: find messages")
+		}
+
+		if total > antiFloodChatLimit {
+			log.WithField("message", m).WithField("total", total).Error("antiFloodChatLimit exceed")
+			return ErrorFlood
 		}
 	}
 	if m.Selective && m.ChatID > 0 {
@@ -887,6 +903,14 @@ func (m *OutgoingMessage) SetParseMode(s string) *OutgoingMessage {
 func (m *OutgoingMessage) SetReplyToMsgID(id int) *OutgoingMessage {
 	m.ReplyToMsgID = id
 	return m
+}
+
+// GetTextHash generate MD5 hash of message's text
+func (m *Message) GetTextHash() string {
+	if m.Text != "" {
+		return fmt.Sprintf("%x", md5.Sum([]byte(m.Text)))
+	}
+	return ""
 }
 
 // UpdateEventsID sets the event id and update it in DB
@@ -1083,6 +1107,8 @@ func sendMessage(m *OutgoingMessage) error {
 		log.Debugf("Successfully sent, id=%v\n", tgMsg.MessageID)
 		m.MsgID = tgMsg.MessageID
 		m.Date = time.Now()
+		m.TextHash = m.GetTextHash()
+		m.Text = ""
 
 		err = db.C("messages").Insert(&m)
 		if err != nil {
@@ -1206,7 +1232,9 @@ func sendMessage(m *OutgoingMessage) error {
 		} else if tgErr.TooManyRequests() {
 			log.WithField("chat", m.ChatID).WithField("bot", m.BotID).Warn("sendMessage error: TooManyRequests")
 
-			_, err := sendMessageJob.Schedule(0, time.Now().Add(time.Duration(10+rand.Intn(30))*time.Second), &m)
+			delay := tgErr.ParseTooManyRequestsDelay()
+
+			_, err := sendMessageJob.Schedule(0, time.Now().Add(time.Duration(delay+rand.Intn(10))*time.Second), &m)
 			return err
 		} else if tgErr.IsParseError() {
 			if offset := tgErr.ParseErrorOffset(); offset > -1 {

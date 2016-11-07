@@ -306,6 +306,10 @@ func serviceHookHandler(c *gin.Context) {
 
 							if err != nil {
 								ctx.Log().WithFields(log.Fields{"token": token}).WithError(err).Error("WebhookHandler returned error")
+								if err == ErrorFlood {
+									c.String(http.StatusTooManyRequests, err.Error())
+									return
+								}
 							} else {
 								isHandled = true
 							}

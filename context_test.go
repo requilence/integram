@@ -22,6 +22,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"crypto/md5"
 )
 
 func TestContext_SetServiceBaseURL(t *testing.T) {
@@ -666,8 +667,9 @@ func TestContext_EditPressedMessageText(t *testing.T) {
 		time.Sleep(time.Millisecond * 1000)
 
 		msg, _ := findMessageByBsonID(db, msg.ID)
-		if msg.Text != tt.args.text {
-			t.Errorf("%q. Context.EditPressedMessageText() db check got text = %s, want %s", tt.name, msg.Text, tt.args.text)
+		textHash:=fmt.Sprintf(fmt.Sprintf("%x", md5.Sum([]byte(tt.args.text))))
+		if msg.om.TextHash != textHash {
+			t.Errorf("%q. Context.EditPressedMessageText() db check got text hash = %s, want %s", tt.name, msg.om.TextHash, textHash)
 		}
 	}
 }
@@ -893,9 +895,10 @@ func TestContext_EditMessageText(t *testing.T) {
 		}
 		time.Sleep(time.Millisecond * 100)
 		msg, _ := findMessageByBsonID(db, msg.ID)
+		textHash:=fmt.Sprintf(fmt.Sprintf("%x", md5.Sum([]byte(tt.args.text))))
 
-		if msg.Text != tt.args.text {
-			t.Errorf("%q. Context.EditMessageText() db check got text = %s, want %s", tt.name, msg.Text, tt.args.text)
+		if msg.om.TextHash !=  textHash {
+			t.Errorf("%q. Context.EditMessageText() db check got text hash = %s, want %s", tt.name, msg.om.TextHash, textHash)
 		}
 
 	}
