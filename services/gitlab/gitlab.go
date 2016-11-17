@@ -35,8 +35,21 @@ type ChatSettings struct {
 	}
 }
 
+var defaultChatSettings = ChatSettings{
+	MR: struct {
+		Open   bool
+		Close  bool
+		Update bool
+		Merge  bool
+	}{true, true, true, true},
+	CI: struct {
+		Success bool
+		Fail    bool
+		Cancel  bool
+	}{false, true, true}}
+
 func chatSettings(c *integram.Context) ChatSettings {
-	s := ChatSettings{}
+	s := defaultChatSettings
 	c.Chat.Settings(&s)
 	return s
 }
