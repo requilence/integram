@@ -2057,6 +2057,8 @@ func inlineCardCreate(c *integram.Context, listID string) error {
 	storeCard(c, card)
 	c.ChosenInlineResult.Message.AddEventID("card_" + card.Id)
 	c.ChosenInlineResult.Message.SetCallbackAction(inlineCardButtonPressed, card.Id)
+	c.ChosenInlineResult.Message.SetReplyAction(cardReplied, card.Id)
+
 	err = c.ChosenInlineResult.Message.Update(c.Db())
 	if err != nil {
 		return err
@@ -2073,6 +2075,8 @@ func inlineGetExistingCard(c *integram.Context, cardID string) error {
 
 	c.ChosenInlineResult.Message.AddEventID("card_" + card.Id)
 	c.ChosenInlineResult.Message.SetCallbackAction(inlineCardButtonPressed, card.Id)
+	c.ChosenInlineResult.Message.SetReplyAction(cardReplied, card.Id)
+
 	err = c.ChosenInlineResult.Message.Update(c.Db())
 
 	if err != nil {
