@@ -994,8 +994,8 @@ func TestContext_EditMessagesWithEventID(t *testing.T) {
 		wantEdited int
 		wantErr    bool
 	}{
-		{"test1", fields{ServiceName: "servicewithbottoken", db: db, User: User{ID: chatID}, Chat: Chat{ID: chatID}}, args{msg.EventID[0], "kbstateval", fmt.Sprintf("EditMessagesTextWithEventID: edited msg with event id <b>%s</b>", msg.EventID[0]), msg.om.InlineKeyboardMarkup}, 1, false},
-		{"test2", fields{ServiceName: "servicewithbottoken", db: db, User: User{ID: chatID}, Chat: Chat{ID: chatID}}, args{msg.EventID[0], "", fmt.Sprintf("EditMessagesTextWithEventID: edited msg with event id <b>%s</b>", msg.EventID[0]), msg.om.InlineKeyboardMarkup}, 2, false},
+		{"test1", fields{ServiceName: "servicewithbottoken", db: db, User: User{ID: chatID}, Chat: Chat{ID: chatID}}, args{msg.EventID[0], "kbstateval", fmt.Sprintf("EditMessagesTextWithEventID: edited msg with event id <b>%s</b> 1", msg.EventID[0]), msg.om.InlineKeyboardMarkup}, 1, false},
+		{"test2", fields{ServiceName: "servicewithbottoken", db: db, User: User{ID: chatID}, Chat: Chat{ID: chatID}}, args{msg.EventID[0], "",           fmt.Sprintf("EditMessagesTextWithEventID: edited msg with event id <b>%s</b> 2", msg.EventID[0]), msg.om.InlineKeyboardMarkup}, 2, false},
 	}
 	for _, tt := range tests {
 		c := &Context{
