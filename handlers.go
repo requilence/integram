@@ -470,7 +470,9 @@ func oAuthCallback(c *gin.Context) {
 	}
 
 	ps.OAuthToken = accessToken
-	ps.OAuthRefreshToken = refreshToken
+	if refreshToken!="" {
+		ps.OAuthRefreshToken = refreshToken
+	}
 	if expiresAt != nil {
 		ps.OAuthExpireDate = expiresAt
 	}
