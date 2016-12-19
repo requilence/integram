@@ -1,4 +1,4 @@
-// Copyright 2012 The Go Authors.  All rights reserved.
+// Copyright 2012 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -97,7 +97,7 @@
 // between the protocol stack within the kernel.  When the application
 // needs a destination address on an incoming packet,
 // SetControlMessage of ipv4.PacketConn is used to enable control
-// message transmissons.
+// message transmissions.
 //
 //	if err := p.SetControlMessage(ipv4.FlagDst, true); err != nil {
 //		// error handling

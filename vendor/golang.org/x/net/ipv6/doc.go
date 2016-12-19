@@ -1,4 +1,4 @@
-// Copyright 2013 The Go Authors.  All rights reserved.
+// Copyright 2013 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -9,12 +9,13 @@
 // manipulation of IPv6 facilities.
 //
 // The IPv6 protocol is defined in RFC 2460.
-// Basic and advanced socket interface extensions are defined in RFC
-// 3493 and RFC 3542.
-// Socket interface extensions for multicast source filters are
-// defined in RFC 3678.
+// Socket interface extensions are defined in RFC 3493, RFC 3542 and
+// RFC 3678.
 // MLDv1 and MLDv2 are defined in RFC 2710 and RFC 3810.
 // Source-specific multicast is defined in RFC 4607.
+//
+// On Darwin, this package requires OS X Mavericks version 10.9 or
+// above, or equivalent.
 //
 //
 // Unicasting
@@ -97,7 +98,7 @@
 // between the protocol stack within the kernel.  When the application
 // needs a destination address on an incoming packet,
 // SetControlMessage of ipv6.PacketConn is used to enable control
-// message transmissons.
+// message transmissions.
 //
 //	if err := p.SetControlMessage(ipv6.FlagDst, true); err != nil {
 //		// error handling
@@ -130,7 +131,7 @@
 //			// error handling
 //		}
 //		dst := &net.UDPAddr{IP: group, Port: 1024}
-//		wcm := ipv6.ControlMessage{TrafficClass: DiffServCS7, HopLimit: 1}
+//		wcm := ipv6.ControlMessage{TrafficClass: 0xe0, HopLimit: 1}
 //		for _, ifi := range []*net.Interface{en0, en1} {
 //			wcm.IfIndex = ifi.Index
 //			if _, err := p.WriteTo(data[:n], &wcm, dst); err != nil {

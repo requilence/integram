@@ -1,4 +1,4 @@
-// Copyright 2012 The Go Authors.  All rights reserved.
+// Copyright 2012 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -48,7 +48,7 @@ func (cm *ControlMessage) String() string {
 	if cm == nil {
 		return "<nil>"
 	}
-	return fmt.Sprintf("ttl: %v, src: %v, dst: %v, ifindex: %v", cm.TTL, cm.Src, cm.Dst, cm.IfIndex)
+	return fmt.Sprintf("ttl=%d src=%v dst=%v ifindex=%d", cm.TTL, cm.Src, cm.Dst, cm.IfIndex)
 }
 
 // Ancillary data socket options

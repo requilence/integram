@@ -1,4 +1,4 @@
-// Copyright 2013 The Go Authors.  All rights reserved.
+// Copyright 2013 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -29,14 +29,14 @@ var packetConnReadWriteMulticastUDPTests = []struct {
 
 func TestPacketConnReadWriteMulticastUDP(t *testing.T) {
 	switch runtime.GOOS {
-	case "freebsd": // due to a bug on loopback marking
-		// See http://www.freebsd.org/cgi/query-pr.cgi?pr=180065.
-		t.Skipf("not supported on %s", runtime.GOOS)
-	case "nacl", "plan9", "solaris", "windows":
+	case "nacl", "plan9", "windows":
 		t.Skipf("not supported on %s", runtime.GOOS)
 	}
 	if !supportsIPv6 {
 		t.Skip("ipv6 is not supported")
+	}
+	if !nettest.SupportsIPv6MulticastDeliveryOnLoopback() {
+		t.Skipf("multicast delivery doesn't work correctly on %s", runtime.GOOS)
 	}
 	ifi := nettest.RoutedInterface("ip6", net.FlagUp|net.FlagMulticast|net.FlagLoopback)
 	if ifi == nil {
@@ -110,12 +110,10 @@ func TestPacketConnReadWriteMulticastUDP(t *testing.T) {
 				t.Fatal(err)
 			}
 			rb := make([]byte, 128)
-			if n, cm, _, err := p.ReadFrom(rb); err != nil {
+			if n, _, _, err := p.ReadFrom(rb); err != nil {
 				t.Fatal(err)
 			} else if !bytes.Equal(rb[:n], wb) {
 				t.Fatalf("got %v; want %v", rb[:n], wb)
-			} else {
-				t.Logf("rcvd cmsg: %v", cm)
 			}
 		}
 	}
@@ -131,14 +129,14 @@ var packetConnReadWriteMulticastICMPTests = []struct {
 
 func TestPacketConnReadWriteMulticastICMP(t *testing.T) {
 	switch runtime.GOOS {
-	case "freebsd": // due to a bug on loopback marking
-		// See http://www.freebsd.org/cgi/query-pr.cgi?pr=180065.
-		t.Skipf("not supported on %s", runtime.GOOS)
-	case "nacl", "plan9", "solaris", "windows":
+	case "nacl", "plan9", "windows":
 		t.Skipf("not supported on %s", runtime.GOOS)
 	}
 	if !supportsIPv6 {
 		t.Skip("ipv6 is not supported")
+	}
+	if !nettest.SupportsIPv6MulticastDeliveryOnLoopback() {
+		t.Skipf("multicast delivery doesn't work correctly on %s", runtime.GOOS)
 	}
 	if m, ok := nettest.SupportsRawIPSocket(); !ok {
 		t.Skip(m)
@@ -207,7 +205,11 @@ func TestPacketConnReadWriteMulticastICMP(t *testing.T) {
 			if toggle {
 				psh = nil
 				if err := p.SetChecksum(true, 2); err != nil {
-					t.Fatal(err)
+					// Solaris never allows to
+					// modify ICMP properties.
+					if runtime.GOOS != "solaris" {
+						t.Fatal(err)
+					}
 				}
 			} else {
 				psh = pshicmp
@@ -243,7 +245,7 @@ func TestPacketConnReadWriteMulticastICMP(t *testing.T) {
 				t.Fatalf("got %v; want %v", n, len(wb))
 			}
 			rb := make([]byte, 128)
-			if n, cm, _, err := p.ReadFrom(rb); err != nil {
+			if n, _, _, err := p.ReadFrom(rb); err != nil {
 				switch runtime.GOOS {
 				case "darwin": // older darwin kernels have some limitation on receiving icmp packet through raw socket
 					t.Logf("not supported on %s", runtime.GOOS)
@@ -251,7 +253,6 @@ func TestPacketConnReadWriteMulticastICMP(t *testing.T) {
 				}
 				t.Fatal(err)
 			} else {
-				t.Logf("rcvd cmsg: %v", cm)
 				if m, err := icmp.ParseMessage(iana.ProtocolIPv6ICMP, rb[:n]); err != nil {
 					t.Fatal(err)
 				} else if m.Type != ipv6.ICMPTypeEchoReply || m.Code != 0 {

@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"net"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 
@@ -101,7 +102,7 @@ func benchmarkReadWriteIPv6UDP(b *testing.B, p *ipv6.PacketConn, wb, rb []byte, 
 
 func TestPacketConnConcurrentReadWriteUnicastUDP(t *testing.T) {
 	switch runtime.GOOS {
-	case "nacl", "plan9", "solaris", "windows":
+	case "nacl", "plan9", "windows":
 		t.Skipf("not supported on %s", runtime.GOOS)
 	}
 	if !supportsIPv6 {
@@ -143,7 +144,10 @@ func TestPacketConnConcurrentReadWriteUnicastUDP(t *testing.T) {
 			t.Errorf("got %v; want %v", rb[:n], wb)
 			return
 		} else {
-			t.Logf("rcvd cmsg: %v", cm)
+			s := cm.String()
+			if strings.Contains(s, ",") {
+				t.Errorf("should be space-separated values: %s", s)
+			}
 		}
 	}
 	writer := func(toggle bool) {
