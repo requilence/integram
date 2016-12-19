@@ -95,7 +95,14 @@ func Run() {
 		log.SetLevel(log.InfoLevel)
 	}
 
-	hooker, err := mgorus.NewHooker("localhost:27017", "integram", "logs")
+	uri := os.Getenv("INTEGRAM_MONGO_URL")
+
+	if uri == "" {
+		uri = "mongodb://localhost:27017/integram"
+	}
+	uriParsed,_:=url.Parse(uri)
+
+	hooker, err := mgorus.NewHooker(uriParsed.Host, uriParsed.Path[1:], "logs")
 	// This will test TG tokens and creates API
 	time.Sleep(time.Second * 1)
 	initBots()
