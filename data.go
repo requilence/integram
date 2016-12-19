@@ -793,7 +793,7 @@ func (user *User) OauthInitURL() string {
 	if s.DefaultOAuth2 != nil {
 		provider := user.ctx.OAuthProvider()
 
-		return provider.OAuth2Client(user.ctx).AuthCodeURL(authTempToken)
+		return provider.OAuth2Client(user.ctx).AuthCodeURL(authTempToken, oauth2.AccessTypeOffline)
 	}
 	if s.DefaultOAuth1 != nil {
 		return BaseURL + "/oauth1/" + authTempToken
