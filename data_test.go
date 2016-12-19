@@ -1478,7 +1478,7 @@ func TestUser_OauthInitURL(t *testing.T) {
 		fields fields
 		want   string
 	}{
-		{"oauth2", fields{ID: 9999999999, ctx: &Context{db: db, ServiceName: "servicewithoauth2"}}, "https://sub.example.com/oauth/authorize?client_id=ID&response_type=code&state=fake1"},
+		{"oauth2", fields{ID: 9999999999, ctx: &Context{db: db, ServiceName: "servicewithoauth2"}}, "https://sub.example.com/oauth/authorize?access_type=offline&client_id=ID&response_type=code&state=fake1"},
 		{"oauth1", fields{ID: 9999999999, ctx: &Context{db: db, ServiceName: "servicewithoauth1"}}, "https://integram.org/oauth1/fake1"},
 	}
 	for _, tt := range tests {

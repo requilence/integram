@@ -54,7 +54,7 @@ func TestHTMLRichText_EncodeEntities(t *testing.T) {
 		args args
 		want string
 	}{
-		{"test1", HTMLRichText{}, args{"<a href=\"index.html?a=1&b=2\">abc</a>"}, "&lt;a href=\"index.html?a=1&amp;b=2\"&gt;abc&lt;/a&gt;"},
+		{"test1", HTMLRichText{}, args{"<a href=\"index.html?a=1&b=2\">abc</a>"}, "&lt;a href=\"index.html?a=1&b=2\"&gt;abc&lt;/a&gt;"},
 	}
 	for _, tt := range tests {
 		hrt := HTMLRichText{}
