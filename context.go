@@ -245,13 +245,13 @@ func saveKeyboard(m *OutgoingMessage, db *mgo.Database) error {
 			Date:     time.Now(),
 			Keyboard: m.KeyboardMarkup.db(),
 		}
-
+		OUTER:
 		if m.Selective && m.ChatID < 0 {
 			// For groups save keyboard for all mentioned users to know who exactly can press the button
 			usersID := detectTargetUsersID(db, &m.Message)
 			if len(usersID) == 0 {
-				//TODO: There is workaround for this by ignoring selective
-				return errors.New("You don't specify any valid users via @mentions or via reply to msg_id")
+				m.Selective = false
+				goto OUTER
 			}
 			var info *mgo.ChangeInfo
 
