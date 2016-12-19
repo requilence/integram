@@ -28,7 +28,7 @@ type msgInfo struct {
 }
 
 var lastMsgIDByUser = make(map[int64]msgInfo)
-
+var lastMsgIDByUserMutex = sync.Mutex{}
 func updateRoutine(b *Bot, u *tg.Update) {
 
 	if !Debug {
@@ -383,6 +383,7 @@ func tgChosenInlineResultHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Servi
 	// workaround to match between inline_msg_id and msg_id
 	dupFound := false
 	var l int64
+	lastMsgIDByUserMutex.Lock()
 	if lm, exists := lastMsgIDByUser[u.ChosenInlineResult.From.ID]; exists {
 		if lm.BotID == b.ID && lm.ID != 0 {
 			l = time.Now().Sub(lm.TS).Nanoseconds()
@@ -399,6 +400,8 @@ func tgChosenInlineResultHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Servi
 		log.Debugf("chosen: dup not found for %v (user %v), after %d", u.ChosenInlineResult.InlineMessageID, u.ChosenInlineResult.From.ID, l)
 		lastMsgIDByUser[u.ChosenInlineResult.From.ID] = msgInfo{InlineID: u.ChosenInlineResult.InlineMessageID, TS: time.Now(), BotID: b.ID}
 	}
+	lastMsgIDByUserMutex.Unlock()
+
 	// we need to save this message!
 
 	err = db.C("messages").Insert(&msg)
