@@ -112,6 +112,14 @@ func init() {
 		BaseURL = baseURL
 	}
 
+	redisURL := os.Getenv("INTEGRAM_REDIS_URL")
+
+	if redisURL == "" {
+		redisURL = "127.0.0.1:6379"
+	}
+
+	jobs.Config.Db.Address = redisURL
+
 	go func() {
 		var b *Bot
 		for {
@@ -168,6 +176,8 @@ type Servicer interface {
 
 // Register the service's config and corresponding botToken
 func Register(servicer Servicer, botToken string) {
+	//jobs.Config.Db.Address="192.168.1.101:6379"
+
 	service := servicer.Service()
 	if service.DefaultOAuth1 != nil {
 		if service.DefaultOAuth1.AccessTokenReceiver == nil {
