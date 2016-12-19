@@ -22,9 +22,9 @@ func (hrt HTMLRichText) Fixed(s string) string {
 	return "<code>" + hrt.EncodeEntities(s) + "</code>"
 }
 
-// EncodeEntities encodes '<', '>' and '&'
+// EncodeEntities encodes '<', '>'
 func (hrt HTMLRichText) EncodeEntities(s string) string {
-	repalcer := strings.NewReplacer("<", "&lt;", ">", "&gt;", "&", "&amp;")
+	repalcer := strings.NewReplacer("<", "&lt;", ">", "&gt;")
 	return repalcer.Replace(s)
 }
 
