@@ -1107,6 +1107,12 @@ func sendMessage(m *OutgoingMessage) error {
 		log.Debugf("Successfully sent, id=%v\n", tgMsg.MessageID)
 		m.MsgID = tgMsg.MessageID
 		m.Date = time.Now()
+
+		err = saveKeyboard(m, db)
+		if err != nil {
+			log.WithError(err).Error("Error processing keyboard")
+		}
+
 		m.TextHash = m.GetTextHash()
 		m.Text = ""
 
@@ -1115,10 +1121,6 @@ func sendMessage(m *OutgoingMessage) error {
 			log.WithError(err).Error("Error outgoing inserting message in db")
 		}
 
-		err = saveKeyboard(m, db)
-		if err != nil {
-			log.WithError(err).Error("Error processing keyboard")
-		}
 		return nil
 	}
 
