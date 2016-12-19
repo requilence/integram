@@ -518,11 +518,15 @@ func (c *Context) EditMessageTextAndInlineKeyboard(om *OutgoingMessage, fromStat
 
 	var msg OutgoingMessage
 	var ci *mgo.ChangeInfo
+	var err error
 	if fromState != "" {
-		ci, _ = c.db.C("messages").Find(bson.M{"_id": om.ID, "inlinekeyboardmarkup.state": fromState}).Apply(mgo.Change{Update: bson.M{"$set": bson.M{"inlinekeyboardmarkup": kb, "text": text}}}, &msg)
+		ci, err = c.db.C("messages").Find(bson.M{"_id": om.ID, "inlinekeyboardmarkup.state": fromState}).Apply(mgo.Change{Update: bson.M{"$set": bson.M{"inlinekeyboardmarkup": kb, "text": text}}}, &msg)
 	} else {
-		ci, _ = c.db.C("messages").Find(bson.M{"_id": om.ID}).Apply(mgo.Change{Update: bson.M{"$set": bson.M{"inlinekeyboardmarkup": kb, "text": text}}}, &msg)
+		ci, err = c.db.C("messages").Find(bson.M{"_id": om.ID}).Apply(mgo.Change{Update: bson.M{"$set": bson.M{"inlinekeyboardmarkup": kb, "text": text}}}, &msg)
 
+	}
+	if err!=nil{
+		c.Log().WithError(err).Error("EditMessageTextAndInlineKeyboard messages update error")
 	}
 
 	if msg.BotID == 0 {
@@ -531,10 +535,12 @@ func (c *Context) EditMessageTextAndInlineKeyboard(om *OutgoingMessage, fromStat
 
 	}
 	if ci.Updated == 0 {
+		c.Log().Warn(fmt.Sprintf("EditMessageTextAndInlineKeyboard – message (_id=%s botid=%v id=%v state %s) not updated ", om.ID, bot.ID, om.MsgID, fromState))
+
 		return nil
 	}
 
-	_, err := bot.API.Send(tg.EditMessageTextConfig{
+	_, err = bot.API.Send(tg.EditMessageTextConfig{
 		BaseEdit: tg.BaseEdit{
 			ChatID:          om.ChatID,
 			InlineMessageID: om.InlineMsgID,
@@ -555,7 +561,7 @@ func (c *Context) EditMessageTextAndInlineKeyboard(om *OutgoingMessage, fromStat
 			c.Log().WithError(err).Warn("TG Anti flood activated")
 		}
 		// Oops. error is occurred – revert the original keyboard
-		err := c.db.C("messages").Update(bson.M{"_id": msg.ID}, bson.M{"$set": bson.M{"inlinekeyboardmarkup": msg.InlineKeyboardMarkup}})
+		c.db.C("messages").Update(bson.M{"_id": msg.ID}, bson.M{"$set": bson.M{"inlinekeyboardmarkup": msg.InlineKeyboardMarkup}})
 		return err
 	}
 
