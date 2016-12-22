@@ -492,5 +492,5 @@ func oAuthCallback(c *gin.Context) {
 		s.DoJob(s.OAuthSuccessful, ctx)
 	}
 
-	c.Redirect(302, "telegram://"+s.Bot().Username)
+	c.Redirect(302, "https://telegram.me/"+s.Bot().Username)
 }
