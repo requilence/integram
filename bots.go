@@ -161,12 +161,14 @@ type Button struct {
 // One of URL, Data, SwitchInlineQuery must be specified
 // If more than one specified the first in order of (URL, Data, SwitchInlineQuery) will be used
 type InlineButton struct {
-	Text              string
-	State             int
-	URL               string `bson:",omitempty"`
-	Data              string `bson:",omitempty"`          // maximum 64 bytes
-	SwitchInlineQuery string `bson:",omitempty"`          //
-	OutOfPagination   bool   `bson:",omitempty" json:"-"` // Only for the single button in first or last row. Use together with InlineKeyboard.MaxRows – for buttons outside of pagination list
+	Text                         string
+	State                        int
+	URL                          string `bson:",omitempty"`
+	Data                         string `bson:",omitempty"` // maximum 64 bytes
+	SwitchInlineQuery            string `bson:",omitempty"` //
+	SwitchInlineQueryCurrentChat string `bson:",omitempty"`
+
+	OutOfPagination bool `bson:",omitempty" json:"-"` // Only for the single button in first or last row. Use together with InlineKeyboard.MaxRows – for buttons outside of pagination list
 }
 
 // InlineKeyboardMarkup allow to generate TG and DB data from different states - (InlineButtons, []InlineButtons and InlineKeyboard)
@@ -374,6 +376,11 @@ func (buttons InlineButtons) tg() [][]tg.InlineKeyboardButton {
 	return buttons.Keyboard().tg()
 }
 
+func stringPointer(s string) *string {
+	b := s
+	return &b
+}
+
 func (keyboard InlineKeyboard) tg() [][]tg.InlineKeyboardButton {
 	res := make([][]tg.InlineKeyboardButton, len(keyboard.Buttons))
 
@@ -404,8 +411,10 @@ func (keyboard InlineKeyboard) tg() [][]tg.InlineKeyboardButton {
 				res[r][c] = tg.InlineKeyboardButton{Text: button.Text, URL: button.URL}
 			} else if button.Data != "" {
 				res[r][c] = tg.InlineKeyboardButton{Text: button.Text, CallbackData: button.Data}
+			} else if button.SwitchInlineQueryCurrentChat != "" {
+				res[r][c] = tg.InlineKeyboardButton{Text: button.Text, SwitchInlineQueryCurrentChat: stringPointer(button.SwitchInlineQueryCurrentChat)}
 			} else {
-				res[r][c] = tg.InlineKeyboardButton{Text: button.Text, SwitchInlineQuery: &button.SwitchInlineQuery}
+				res[r][c] = tg.InlineKeyboardButton{Text: button.Text, SwitchInlineQuery: stringPointer(button.SwitchInlineQuery)}
 			}
 			c++
 		}

@@ -444,10 +444,11 @@ type InlineKeyboardMarkup struct {
 // Note that some values are references as even an empty string
 // will change behavior.
 type InlineKeyboardButton struct {
-	Text              string  `json:"text"`
-	URL               string  `json:"url,omitempty"`                 // optional
-	CallbackData      string  `json:"callback_data,omitempty"`       // optional
-	SwitchInlineQuery *string `json:"switch_inline_query,omitempty"` // optional
+	Text                         string  `json:"text"`
+	URL                          string  `json:"url,omitempty"`                              // optional
+	CallbackData                 string  `json:"callback_data,omitempty"`                    // optional
+	SwitchInlineQuery            *string `json:"switch_inline_query,omitempty"`              // optional
+	SwitchInlineQueryCurrentChat *string `json:"switch_inline_query_current_chat,omitempty"` // optional
 }
 
 // CallbackQuery is data sent when a keyboard button with callback data
