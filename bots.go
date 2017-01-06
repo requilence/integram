@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"net/url"
 	"os"
+	"path/filepath"
 	"reflect"
 	"regexp"
 	"runtime"
@@ -997,6 +998,188 @@ func (m *Message) findUsernames() []string {
 	}
 	return usernames
 
+}
+
+func getFilePath(c *Context, fileID string) (string, error) {
+
+	var fileLocalPath string
+	c.User.Cache("file_"+fileID, &fileLocalPath)
+
+	if fileLocalPath != "" {
+		if _, err := os.Stat(fileLocalPath); os.IsNotExist(err) {
+			fileLocalPath = ""
+		}
+	}
+
+	if fileLocalPath == "" {
+		url, err := c.Bot().API.GetFileDirectURL(fileID)
+		if err != nil {
+			return "", err
+		}
+		fileLocalPath, err = c.DownloadURL(url)
+		if err != nil {
+			return "", err
+		}
+		c.User.SetCache("file_"+fileID, fileLocalPath, time.Hour*24)
+	}
+
+	return fileLocalPath, nil
+}
+
+var GetFileMaxSizeExceedError = errors.New("Maximum allowed file size exceed")
+
+type FileType string
+
+const (
+	FileTypeDocument FileType = "document"
+	FileTypePhoto    FileType = "photo"
+	FileTypeAudio    FileType = "audio"
+	FileTypeSticker  FileType = "sticker"
+	FileTypeVideo    FileType = "video"
+	FileTypeVoice    FileType = "voice"
+)
+
+func fileTypeAllowed(allowedTypes []FileType, fileType FileType) bool {
+	if len(allowedTypes) == 0 {
+		return true
+	}
+
+	for _, t := range allowedTypes {
+		if t == fileType {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *IncomingMessage) GetFile(c *Context, allowedTypes []FileType, maxSize int) (localPath string, fileName string, fileType FileType, err error) {
+	if m.Sticker != nil && fileTypeAllowed(allowedTypes, FileTypeSticker) {
+		fileType = FileTypeSticker
+		if maxSize > 0 && m.Sticker.FileSize > maxSize {
+			err = GetFileMaxSizeExceedError
+			return
+		}
+		localPath, err = getFilePath(c, m.Sticker.FileID)
+		if err != nil {
+			return
+		}
+
+		fileName = "sticker.webp"
+		return
+	}
+
+	if m.Audio != nil && fileTypeAllowed(allowedTypes, FileTypeAudio) {
+		fileType = FileTypeAudio
+
+		if maxSize > 0 && m.Audio.FileSize > maxSize {
+			err = GetFileMaxSizeExceedError
+			return
+		}
+
+		localPath, err = getFilePath(c, m.Audio.FileID)
+		if err != nil {
+			return
+		}
+
+		fileName = filepath.Clean(m.Audio.Performer + "-" + m.Audio.Title)
+		return
+	}
+
+	if m.Document != nil && fileTypeAllowed(allowedTypes, FileTypeDocument) {
+		fileType = FileTypeDocument
+
+		if maxSize > 0 && m.Document.FileSize > maxSize {
+			err = GetFileMaxSizeExceedError
+			return
+		}
+
+		localPath, err = getFilePath(c, m.Document.FileID)
+		if err != nil {
+			return
+		}
+		fileName = m.Document.FileName
+
+		return
+	}
+
+	if m.Video != nil && fileTypeAllowed(allowedTypes, FileTypeVideo) {
+		fileType = FileTypeVideo
+
+		if maxSize > 0 && m.Video.FileSize > maxSize {
+			err = GetFileMaxSizeExceedError
+			return
+		}
+
+		localPath, err = getFilePath(c, m.Video.FileID)
+		if err != nil {
+			return
+		}
+
+		fileName = m.Document.FileName
+		return
+	}
+
+	if m.Voice != nil && fileTypeAllowed(allowedTypes, FileTypeVoice) {
+		fileType = FileTypeVoice
+
+		if maxSize > 0 && m.Voice.FileSize > maxSize {
+			err = GetFileMaxSizeExceedError
+			return
+		}
+
+		localPath, err = getFilePath(c, m.Voice.FileID)
+		if err != nil {
+			return
+		}
+
+		if c.User.UserName != "" {
+			fileName += c.User.UserName
+		} else if c.User.FirstName != "" {
+			fileName += filepath.Clean(c.User.FirstName)
+		}
+		if m.Caption != "" {
+			fileName += "_" + filepath.Clean(m.Caption)
+		} else {
+			fileName += fmt.Sprintf("_%d", m.MsgID)
+		}
+
+		return
+	}
+
+	if m.Photo != nil && len(*m.Photo) > 0 && fileTypeAllowed(allowedTypes, FileTypePhoto) {
+		fileType = FileTypePhoto
+
+		if c.User.UserName != "" {
+			fileName += c.User.UserName
+		} else if c.User.FirstName != "" {
+			fileName += filepath.Clean(c.User.FirstName)
+		}
+		if m.Caption != "" {
+			fileName += "_" + filepath.Clean(m.Caption)
+		} else {
+			fileName += fmt.Sprintf("_%d", m.MsgID)
+		}
+		fileName += ".jpg"
+
+		for i := len((*m.Photo)) - 1; i >= 0; i-- {
+			if maxSize > 0 && (*m.Photo)[i].FileSize <= maxSize {
+				localPath, err = getFilePath(c, (*m.Photo)[i].FileID)
+				break
+			}
+		}
+
+		if err != nil {
+			return
+		}
+
+		if localPath == "" {
+			err = GetFileMaxSizeExceedError
+			return
+		}
+
+		return
+	}
+	return
 }
 
 func detectTargetUsersID(db *mgo.Database, m *Message) []int64 {
