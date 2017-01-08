@@ -486,6 +486,21 @@ func (c *Context) EditMessagesTextWithEventID(eventID string, text string) (edit
 	return edited, err
 }
 
+// EditMessagesTextWithMessageID edit the one message text with by message BSON ID
+func (c *Context) EditMessageTextWithMessageID(msgID bson.ObjectId, text string) (edited int, err error) {
+	var message OutgoingMessage
+
+	c.db.C("messages").Find(bson.M{"_id": msgID, "botid": c.Bot().ID}).One(&message)
+	err = c.EditMessageText(&message, text)
+	if err != nil {
+		c.Log().WithError(err).WithField("msgid", msgID).Error("EditMessageTextWithMessageID")
+	} else {
+		edited++
+	}
+
+	return edited, err
+}
+
 // EditMessagesWithEventID edit the last MaxMsgsToUpdateWithEventID messages' text and inline keyboard with the corresponding eventID in ALL chats
 func (c *Context) EditMessagesWithEventID(eventID string, fromState string, text string, kb InlineKeyboard) (edited int, err error) {
 	var messages []OutgoingMessage
