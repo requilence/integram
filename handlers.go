@@ -100,7 +100,7 @@ func Run() {
 	if uri == "" {
 		uri = "mongodb://localhost:27017/integram"
 	}
-	uriParsed,_:=url.Parse(uri)
+	uriParsed, _ := url.Parse(uri)
 
 	hooker, err := mgorus.NewHooker(uriParsed.Host, uriParsed.Path[1:], "logs")
 	// This will test TG tokens and creates API
@@ -292,7 +292,6 @@ func serviceHookHandler(c *gin.Context) {
 		return
 	}
 
-
 	wctx := &WebhookContext{gin: c, requestID: rndStr.Get(10)}
 
 	for _, hook := range hooks {
@@ -477,7 +476,7 @@ func oAuthCallback(c *gin.Context) {
 	}
 
 	ps.OAuthToken = accessToken
-	if refreshToken!="" {
+	if refreshToken != "" {
 		ps.OAuthRefreshToken = refreshToken
 	}
 	if expiresAt != nil {

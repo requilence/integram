@@ -246,7 +246,7 @@ func saveKeyboard(m *OutgoingMessage, db *mgo.Database) error {
 			Date:     time.Now(),
 			Keyboard: m.KeyboardMarkup.db(),
 		}
-		OUTER:
+	OUTER:
 		if m.Selective && m.ChatID < 0 {
 			// For groups save keyboard for all mentioned users to know who exactly can press the button
 			usersID := detectTargetUsersID(db, &m.Message)

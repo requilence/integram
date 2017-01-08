@@ -845,7 +845,7 @@ func (user *User) OAuthHTTPClient() *http.Client {
 		ts := user.ctx.OAuthProvider().OAuth2Client(user.ctx).TokenSource(oauth2.NoContext, &oauth2.Token{AccessToken: ps.OAuthToken, RefreshToken: ps.OAuthRefreshToken, Expiry: *ps.OAuthExpireDate, TokenType: "Bearer"})
 		if ps.OAuthExpireDate != nil && ps.OAuthExpireDate.Before(time.Now().Add(time.Second*5)) {
 			token, err := ts.Token()
-			if err != nil || token == nil{
+			if err != nil || token == nil {
 				user.ctx.Log().WithError(err).Error("OAuth token refresh failed")
 				return nil
 			}

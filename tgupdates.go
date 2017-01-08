@@ -376,8 +376,8 @@ func tgChosenInlineResultHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Servi
 			InlineMsgID: u.ChosenInlineResult.InlineMessageID,
 			Text:        u.ChosenInlineResult.Query, // Todo: thats a lie. The actual message content is known while producing inline results
 			FromID:      u.ChosenInlineResult.From.ID,
-			BotID: b.ID,
-			Date:  time.Now(),
+			BotID:       b.ID,
+			Date:        time.Now(),
 		}}
 
 	// workaround to match between inline_msg_id and msg_id
