@@ -520,12 +520,12 @@ func (c *Context) EditMessageTextAndInlineKeyboard(om *OutgoingMessage, fromStat
 	var ci *mgo.ChangeInfo
 	var err error
 	if fromState != "" {
-		ci, err = c.db.C("messages").Find(bson.M{"_id": om.ID, "inlinekeyboardmarkup.state": fromState}).Apply(mgo.Change{Update: bson.M{"$set": bson.M{"inlinekeyboardmarkup": kb, "text": text}}}, &msg)
+		ci, err = c.db.C("messages").Find(bson.M{"_id": om.ID, "$or": []bson.M{{"inlinekeyboardmarkup.state": fromState}, {"inlinekeyboardmarkup": bson.M{"$exists": false}}}}).Apply(mgo.Change{Update: bson.M{"$set": bson.M{"inlinekeyboardmarkup": kb, "text": text}}}, &msg)
 	} else {
 		ci, err = c.db.C("messages").Find(bson.M{"_id": om.ID}).Apply(mgo.Change{Update: bson.M{"$set": bson.M{"inlinekeyboardmarkup": kb, "text": text}}}, &msg)
-
 	}
-	if err!=nil{
+
+	if err != nil {
 		c.Log().WithError(err).Error("EditMessageTextAndInlineKeyboard messages update error")
 	}
 
@@ -580,7 +580,8 @@ func (c *Context) EditInlineKeyboard(om *OutgoingMessage, fromState string, kb I
 		log.WithField("inlineMsgID", om.InlineMsgID).Debug("EditMessageTextAndInlineKeyboard")
 	}
 	var msg OutgoingMessage
-	ci, err := c.db.C("messages").Find(bson.M{"_id": om.ID, "inlinekeyboardmarkup.state": fromState}).Apply(mgo.Change{Update: bson.M{"$set": bson.M{"inlinekeyboardmarkup": kb}}}, &msg)
+
+	ci, err := c.db.C("messages").Find(bson.M{"_id": om.ID, "$or": []bson.M{{"inlinekeyboardmarkup.state": fromState}, {"inlinekeyboardmarkup": bson.M{"$exists": false}}}}).Apply(mgo.Change{Update: bson.M{"$set": bson.M{"inlinekeyboardmarkup": kb}}}, &msg)
 
 	if msg.BotID == 0 {
 		return fmt.Errorf("EditInlineKeyboard – message (botid=%v id=%v state %s) not found", bot.ID, om.MsgID, fromState)
