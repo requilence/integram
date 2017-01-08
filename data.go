@@ -306,6 +306,17 @@ func (user *User) SetCache(key string, val interface{}, ttl time.Duration) error
 	return err
 }
 
+// UpdateCache updates the per User cache using MongoDB Update query
+func (user *User) UpdateCache(key string, update interface{}, res interface{}) error {
+
+	exists := user.ctx.updateCacheVal("user", key, update, res)
+
+	if !exists {
+		log.WithField("key", key).Error("Can't update user cache value")
+	}
+	return nil
+}
+
 // SetCache set the Chats's cache with specific key and TTL
 func (chat *Chat) SetCache(key string, val interface{}, ttl time.Duration) error {
 	expiresAt := time.Now().Add(ttl)
@@ -321,6 +332,17 @@ func (chat *Chat) SetCache(key string, val interface{}, ttl time.Duration) error
 		log.WithError(err).WithField("key", key).Error("Can't set user cache value")
 	}
 	return err
+}
+
+// UpdateCache updates the per Chat cache using MongoDB Update query (see trello service as example)
+func (chat *Chat) UpdateCache(key string, update interface{}, res interface{}) error {
+
+	exists := chat.ctx.updateCacheVal("chat", key, update, res)
+
+	if !exists {
+		log.WithField("key", key).Error("Can't update chat cache value")
+	}
+	return nil
 }
 
 // SetServiceCache set the Services's cache with specific key and TTL
