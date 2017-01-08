@@ -35,6 +35,7 @@ type Context struct {
 	User               User                // User associated with current webhook or Telegram update.
 	Chat               Chat                // Chat associated with current webhook or Telegram update
 	Message            *IncomingMessage    // Telegram incoming message if it triggired current request
+	MessageEdited      bool                // True if Message is edited message instead of the new one
 	InlineQuery        *tg.InlineQuery     // Telegram inline query if it triggired current request
 	ChosenInlineResult *chosenInlineResult // Telegram chosen inline result if it triggired current request
 

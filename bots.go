@@ -72,6 +72,8 @@ type Message struct {
 	OnCallbackData   []byte           `bson:",omitempty"` // Args to send to this func
 	OnReplyAction    string           `bson:",omitempty"` // Func to call on message reply
 	OnReplyData      []byte           `bson:",omitempty"` // Args to send to this func
+	OnEditAction     string           `bson:",omitempty"` // Func to call on message edit
+	OnEditData       []byte           `bson:",omitempty"` // Args to send to this func
 	om               *OutgoingMessage // Cache when retreiving original replied message
 }
 
@@ -680,6 +682,14 @@ func (m *OutgoingMessage) SetCallbackAction(handlerFunc interface{}, args ...int
 	return m
 }
 
+// SetEditAction sets the edited func that will be called when user edit the message
+// !!! Please note that you must omit first arg *integram.Context, because it will be automatically prepended as message reply received and will contain actual context
+func (m *IncomingMessage) SetEditAction(handlerFunc interface{}, args ...interface{}) *IncomingMessage {
+	m.Message.SetEditAction(handlerFunc, args...)
+
+	return m
+}
+
 // SetReplyAction sets the reply func that will be called when user reply the message
 // !!! Please note that you must omit first arg *integram.Context, because it will be automatically prepended as message reply received and will contain actual context
 func (m *IncomingMessage) SetReplyAction(handlerFunc interface{}, args ...interface{}) *IncomingMessage {
@@ -752,6 +762,36 @@ func (m *Message) SetReplyAction(handlerFunc interface{}, args ...interface{}) *
 
 	m.OnReplyData = bytes
 	m.OnReplyAction = funcName
+
+	return m
+}
+
+// SetEditAction sets the edited func that will be called when user edit the message
+// !!! Please note that you must omit first arg *integram.Context, because it will be automatically prepended as message reply received and will contain actual context
+func (m *Message) SetEditAction(handlerFunc interface{}, args ...interface{}) *Message {
+	funcName := runtime.FuncForPC(reflect.ValueOf(handlerFunc).Pointer()).Name()
+
+	if _, ok := actionFuncs[funcName]; !ok {
+		log.Panic(errors.New("Action for '" + funcName + "' not registred in service's configuration!"))
+		return m
+	}
+
+	err := verifyTypeMatching(handlerFunc, args...)
+
+	if err != nil {
+		log.WithError(err).Error("Can't verify onEdit args for " + funcName + ". Be sure to omit first arg of type '*integram.Context'")
+		return m
+	}
+
+	bytes, err := encode(args)
+
+	if err != nil {
+		log.WithError(err).Error("Can't encode onEdit args")
+		return m
+	}
+
+	m.OnEditData = bytes
+	m.OnEditAction = funcName
 
 	return m
 }

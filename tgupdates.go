@@ -78,7 +78,7 @@ func updateRoutine(b *Bot, u *tg.Update) {
 		return
 	}
 
-	if context.Message != nil {
+	if context.Message != nil && !context.MessageEdited {
 
 		if service.TGNewMessageHandler == nil {
 			context.Log().Warn("Received Message but TGNewMessageHandler not set for service")
@@ -413,6 +413,67 @@ func tgChosenInlineResultHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Servi
 	ctx.Log().WithField("message", &msg).Debug("tgChosenInlineResultHandler")
 	return service, ctx
 }
+
+func tgEditedMessageHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service, *Context) {
+	im := incomingMessageFromTGMessage(u.EditedMessage)
+	im.BotID = b.ID
+	service, err := detectServiceByBot(b.ID)
+
+	if err != nil {
+		log.WithError(err).WithField("bot", b.ID).Error("Can't detect service")
+	}
+	ctx := &Context{ServiceName: service.Name, User: im.From, Chat: im.Chat, db: db}
+	ctx.User.ctx = ctx
+	ctx.Chat.ctx = ctx
+
+	ctx.Message = &im
+	ctx.MessageEdited = true
+	rm, _ := findMessage(db, im.ChatID, b.ID, im.MsgID)
+	if rm != nil {
+		log.Debugf("Received edit for message %d", rm.MsgID)
+
+		if rm.OnEditAction != "" {
+			log.Debugf("onEditHandler found %s", rm.OnEditAction)
+			// Instantiate a new variable to hold this argument
+			if handler, ok := actionFuncs[rm.OnEditAction]; ok {
+				handlerType := reflect.TypeOf(handler)
+				log.Debugf("handler %v: %v %v\n", rm.OnEditAction, handlerType.String(), handlerType.Kind().String())
+				handlerArgsInterfaces := make([]interface{}, handlerType.NumIn()-1)
+				handlerArgs := make([]reflect.Value, handlerType.NumIn())
+
+				for i := 1; i < handlerType.NumIn(); i++ {
+					dataVal := reflect.New(handlerType.In(i))
+					handlerArgsInterfaces[i-1] = dataVal.Interface()
+				}
+				if err := decode(rm.OnEditData, &handlerArgsInterfaces); err != nil {
+					log.WithField("handler", rm.OnEditAction).WithError(err).Error("Can't decode editHandler's args")
+				}
+				handlerArgs[0] = reflect.ValueOf(ctx)
+				for i := 0; i < len(handlerArgsInterfaces); i++ {
+					handlerArgs[i+1] = reflect.ValueOf(handlerArgsInterfaces[i])
+				}
+
+				if len(handlerArgs) > 0 {
+					handlerVal := reflect.ValueOf(handler)
+					returnVals := handlerVal.Call(handlerArgs)
+
+					if !returnVals[0].IsNil() {
+						err := returnVals[0].Interface().(error)
+						// NOTE: panics will be caught by the recover statement above
+						log.WithField("handler", rm.OnEditAction).WithError(err).Error("editHandler failed")
+					}
+				}
+			} else {
+				log.WithField("handler", rm.OnEditAction).Error("Edit handler not registered")
+			}
+
+		}
+
+	}
+
+	return service, ctx
+}
+
 func tgIncomingMessageHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service, *Context) {
 	im := incomingMessageFromTGMessage(u.Message)
 	im.BotID = b.ID
@@ -609,6 +670,9 @@ func tgUpdateHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service, *Context
 	} else if u.ChosenInlineResult != nil {
 
 		return tgChosenInlineResultHandler(u, b, db)
+	} else if u.EditedMessage != nil {
+
+		return tgEditedMessageHandler(u, b, db)
 	}
 
 	return nil, nil
