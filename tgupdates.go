@@ -532,12 +532,14 @@ func tgIncomingMessageHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service,
 				}
 			}
 
-			if rm == nil {
+			// removed due to bugs with false replies in the private chat
+
+			/*if rm == nil {
 				rm, err = findLastOutgoingMessageInChat(db, b.ID, im.ChatID)
 				if err != nil {
 					ctx.Log().WithError(err).Error("Error on findLastOutgoingMessageInChat")
 				}
-			}
+			}*/
 			if rm != nil {
 				fmt.Printf("rm: %v\n", rm.Text)
 			} else {
