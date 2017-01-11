@@ -21,6 +21,8 @@ import (
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 	tg "gopkg.in/telegram-bot-api.v3"
+	"path/filepath"
+	"os"
 )
 
 // MaxMsgsToUpdateWithEventID set the maximum number of last messages to update with EditMessagesTextWithEventID
@@ -761,8 +763,18 @@ func (c *Context) SendAction(s string) error {
 
 // DownloadURL downloads the remote URL and returns the local file path
 func (c *Context) DownloadURL(url string) (filePath string, err error) {
+
+	ext:=filepath.Ext(url)
 	out, err := ioutil.TempFile("", fmt.Sprintf("%d_%d", c.Bot().ID, c.Chat.ID))
 
+	if err != nil {
+		return "", err
+	}
+
+	out.Close()
+	os.Rename(out.Name(),out.Name()+ext)
+
+	out, err = os.OpenFile(out.Name() + ext, os.O_RDWR, 0666)
 	if err != nil {
 		return "", err
 	}
