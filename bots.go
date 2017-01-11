@@ -1113,7 +1113,9 @@ func (m *IncomingMessage) GetFile(c *Context, allowedTypes []FileType, maxSize i
 			return
 		}
 
-		fileName = "sticker.webp"
+		fileName = "sticker"
+		fileName += filepath.Ext(localPath)
+
 		return
 	}
 
@@ -1144,6 +1146,8 @@ func (m *IncomingMessage) GetFile(c *Context, allowedTypes []FileType, maxSize i
 		}else {
 			fileName = filepath.Clean(m.Audio.Performer + "-" + m.Audio.Title)
 		}
+		fileName += filepath.Ext(localPath)
+
 		return
 	}
 
@@ -1188,6 +1192,8 @@ func (m *IncomingMessage) GetFile(c *Context, allowedTypes []FileType, maxSize i
 			fileName += fmt.Sprintf("_%d", m.MsgID)
 		}
 
+		fileName += filepath.Ext(localPath)
+
 		return
 	}
 
@@ -1215,6 +1221,7 @@ func (m *IncomingMessage) GetFile(c *Context, allowedTypes []FileType, maxSize i
 			fileName += fmt.Sprintf("_%d", m.MsgID)
 		}
 
+		fileName += filepath.Ext(localPath)
 		return
 	}
 
