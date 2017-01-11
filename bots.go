@@ -1130,7 +1130,20 @@ func (m *IncomingMessage) GetFile(c *Context, allowedTypes []FileType, maxSize i
 			return
 		}
 
-		fileName = filepath.Clean(m.Audio.Performer + "-" + m.Audio.Title)
+		if m.Audio.Performer == "" && m.Audio.Title == ""{
+			if c.User.UserName != "" {
+				fileName += c.User.UserName
+			} else if c.User.FirstName != "" {
+				fileName += filepath.Clean(c.User.FirstName)
+			}
+			if m.Caption != "" {
+				fileName += "_" + filepath.Clean(m.Caption)
+			} else {
+				fileName += fmt.Sprintf("_%d", m.MsgID)
+			}
+		}else {
+			fileName = filepath.Clean(m.Audio.Performer + "-" + m.Audio.Title)
+		}
 		return
 	}
 
@@ -1164,7 +1177,17 @@ func (m *IncomingMessage) GetFile(c *Context, allowedTypes []FileType, maxSize i
 			return
 		}
 
-		fileName = m.Document.FileName
+		if c.User.UserName != "" {
+			fileName += c.User.UserName
+		} else if c.User.FirstName != "" {
+			fileName += filepath.Clean(c.User.FirstName)
+		}
+		if m.Caption != "" {
+			fileName += "_" + filepath.Clean(m.Caption)
+		} else {
+			fileName += fmt.Sprintf("_%d", m.MsgID)
+		}
+
 		return
 	}
 
