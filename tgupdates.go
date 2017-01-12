@@ -72,7 +72,12 @@ func updateRoutine(b *Bot, u *tg.Update) {
 
 	db := mongoSession.Clone().DB(mongo.Database)
 	defer db.Session.Close()
-	defer updateMutexPerBotPerChat[mutexID].Unlock()
+
+	defer func(){
+		updateMapMutex.Lock()
+		updateMutexPerBotPerChat[mutexID].Unlock()
+		updateMapMutex.Unlock()
+	}()
 
 	service, context := tgUpdateHandler(u, b, db)
 
