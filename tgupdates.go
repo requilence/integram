@@ -59,9 +59,11 @@ func updateRoutine(b *Bot, u *tg.Update) {
 	}
 	mutexID := fmt.Sprintf("%d_%d", b.ID, chatID)
 	updateMapMutex.RLock()
-	if mutex, ok := updateMutexPerBotPerChat[mutexID]; ok {
+	if _, ok := updateMutexPerBotPerChat[mutexID]; ok {
 		updateMapMutex.RUnlock()
-		mutex.Lock()
+		updateMapMutex.Lock()
+		updateMutexPerBotPerChat[mutexID].Lock()
+		updateMapMutex.Unlock()
 	} else {
 		updateMapMutex.RUnlock()
 		updateMapMutex.Lock()
