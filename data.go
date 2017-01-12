@@ -850,7 +850,9 @@ func (user *User) OAuthHTTPClient() *http.Client {
 				return nil
 			}
 			ps.OAuthToken = token.AccessToken
-			ps.OAuthRefreshToken = token.RefreshToken
+			if token.RefreshToken != "" {
+				ps.OAuthRefreshToken = token.RefreshToken
+			}
 			ps.OAuthExpireDate = &token.Expiry
 			user.saveProtectedSettings()
 		}
@@ -896,7 +898,9 @@ func (user *User) OAuthToken() string {
 				return ""
 			}
 			ps.OAuthToken = token.AccessToken
-			ps.OAuthRefreshToken = token.RefreshToken
+			if token.RefreshToken != "" {
+				ps.OAuthRefreshToken = token.RefreshToken
+			}
 			ps.OAuthExpireDate = &token.Expiry
 			user.saveProtectedSettings()
 
