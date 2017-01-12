@@ -76,7 +76,7 @@ func (e Error) ParseTooManyRequestsDelay() int {
 }
 
 func (e Error) BotStoppedForUser() bool {
-	if e.Description == "Bot was blocked by the user" {
+	if strings.Contains(e.Description, "Bot was blocked") {
 		return true
 	}
 	return false
@@ -92,28 +92,28 @@ func (e Error) ChatMigratedToChatID() int64 {
 }
 
 func (e Error) IsMessageNotFound() bool {
-	if e.Description == "Bad Request: message not found" {
+	if strings.Contains(e.Description, "message not found") {
 		return true
 	}
 	return false
 }
 
 func (e Error) IsAntiFlood() bool {
-	if strings.HasPrefix(e.Description, "Bad Request: Too big total timeout") {
+	if strings.Contains(e.Description, "Too big total timeout") {
 		return true
 	}
 	return false
 }
 
 func (e Error) IsCantAccessChat() bool {
-	if e.Description == "Bad Request: Can't access the chat" {
+	if strings.Contains(e.Description,"Can't access the chat") {
 		return true
 	}
 	return false
 }
 
 func (e Error) IsParseError() bool {
-	if strings.HasPrefix(e.Description, "Bad Request: Can't parse message text") {
+	if strings.Contains(e.Description, "Can't parse message text") {
 		return true
 	}
 	return false
