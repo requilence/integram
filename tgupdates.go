@@ -16,7 +16,7 @@ import (
 	tg "gopkg.in/telegram-bot-api.v3"
 )
 
-var updateMapMutex = &sync.Mutex{}
+var updateMapMutex = &sync.RWMutex{}
 var updateMutexPerBotPerChat = make(map[string]*sync.Mutex)
 
 type msgInfo struct {
@@ -58,10 +58,12 @@ func updateRoutine(b *Bot, u *tg.Update) {
 		chatID = u.InlineQuery.From.ID
 	}
 	mutexID := fmt.Sprintf("%d_%d", b.ID, chatID)
-
+	updateMapMutex.RLock()
 	if mutex, ok := updateMutexPerBotPerChat[mutexID]; ok {
+		updateMapMutex.RUnlock()
 		mutex.Lock()
 	} else {
+		updateMapMutex.RUnlock()
 		updateMapMutex.Lock()
 		updateMutexPerBotPerChat[mutexID] = &sync.Mutex{}
 		updateMutexPerBotPerChat[mutexID].Lock()
