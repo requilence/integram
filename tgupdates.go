@@ -59,18 +59,29 @@ func updateRoutine(b *Bot, u *tg.Update) {
 	}
 	mutexID := fmt.Sprintf("%d_%d", b.ID, chatID)
 
-	if mutex, ok := updateMutexPerBotPerChat[mutexID]; ok {
-		mutex.Lock()
+	updateMapMutex.Lock()
+	m, exists:= updateMutexPerBotPerChat[mutexID]
+	updateMapMutex.Unlock()
+
+	if exists {
+		m.Lock()
 	} else {
+		m:=sync.Mutex{}
 		updateMapMutex.Lock()
-		updateMutexPerBotPerChat[mutexID] = &sync.Mutex{}
-		updateMutexPerBotPerChat[mutexID].Lock()
+		updateMutexPerBotPerChat[mutexID] = &m
 		updateMapMutex.Unlock()
+
+		m.Lock()
 	}
 
 	db := mongoSession.Clone().DB(mongo.Database)
 	defer db.Session.Close()
-	defer updateMutexPerBotPerChat[mutexID].Unlock()
+
+	defer func(){
+		updateMapMutex.Lock()
+		updateMutexPerBotPerChat[mutexID].Unlock()
+		updateMapMutex.Unlock()
+	}()
 
 	service, context := tgUpdateHandler(u, b, db)
 
