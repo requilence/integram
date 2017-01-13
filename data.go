@@ -243,6 +243,9 @@ func (c *Context) getCacheVal(cacheType string, key string, res interface{}) (ex
 		return false
 	}
 
+	if !reflect.ValueOf(mi).MapIndex(reflect.ValueOf("val")).IsValid(){
+		return false
+	}
 	// Wow. Such reflection. Much deep.
 	val := reflect.ValueOf(reflect.ValueOf(mi).MapIndex(reflect.ValueOf("val")).Interface())
 
