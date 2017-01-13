@@ -304,6 +304,10 @@ func (user *User) SetCache(key string, val interface{}, ttl time.Duration) error
 	}
 	_, err := user.ctx.db.C("users_cache").Upsert(bson.M{"userid": user.ID, "service": serviceID, "key": key}, bson.M{"$set": bson.M{"val": val, "expiresat": expiresAt}})
 	if err != nil {
+		// workaround for WiredTiger bug: https://jira.mongodb.org/browse/SERVER-14322
+		if mgo.IsDup(err) {
+			return user.ctx.db.C("users_cache").Update(bson.M{"userid": user.ID, "service": serviceID, "key": key}, bson.M{"$set": bson.M{"val": val, "expiresat": expiresAt}})
+		}
 		log.WithError(err).WithField("key", key).Error("Can't set user cache value")
 	}
 	return err
@@ -332,6 +336,10 @@ func (chat *Chat) SetCache(key string, val interface{}, ttl time.Duration) error
 	}
 	_, err := chat.ctx.db.C("chats_cache").Upsert(bson.M{"chatid": chat.ID, "service": serviceID, "key": key}, bson.M{"$set": bson.M{"val": val, "expiresat": expiresAt}})
 	if err != nil {
+		// workaround for WiredTiger bug: https://jira.mongodb.org/browse/SERVER-14322
+		if mgo.IsDup(err) {
+			return chat.ctx.db.C("chats_cache").Update(bson.M{"chatid": chat.ID, "service": serviceID, "key": key}, bson.M{"$set": bson.M{"val": val, "expiresat": expiresAt}})
+		}
 		log.WithError(err).WithField("key", key).Error("Can't set user cache value")
 	}
 	return err
