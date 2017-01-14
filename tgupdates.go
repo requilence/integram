@@ -336,6 +336,10 @@ func tgCallbackHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service, *Conte
 						// NOTE: panics will be caught by the recover statement above
 						ctx.Log().WithField("handler", rm.OnCallbackAction).WithError(err).Error("callbackAction failed")
 						ctx.AnswerCallbackQuery("Oops! Please try again", false)
+					} else {
+						if ctx.Callback.AnsweredAt == nil{
+							ctx.AnswerCallbackQuery("", false)
+						}
 					}
 				}
 			} else {
