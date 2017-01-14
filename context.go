@@ -23,6 +23,7 @@ import (
 	tg "gopkg.in/telegram-bot-api.v3"
 	"path/filepath"
 	"os"
+	"github.com/kennygrant/sanitize"
 )
 
 // MaxMsgsToUpdateWithEventID set the maximum number of last messages to update with EditMessagesTextWithEventID
@@ -448,6 +449,14 @@ func (c *Context) EditMessageText(om *OutgoingMessage, text string) error {
 		return errors.New("EditMessageText: text not mofified")
 	}
 
+	if om.ParseMode == "HTML" {
+		textCleared, err := sanitize.HTMLAllowing(text, []string{"a", "b", "strong", "i", "em", "a", "code", "pre"}, []string{"href"})
+
+		if err == nil && textCleared != "" {
+			text = textCleared
+		}
+	}
+
 	_, err := bot.API.Send(tg.EditMessageTextConfig{
 		BaseEdit: tg.BaseEdit{
 			ChatID:      om.ChatID,
@@ -556,6 +565,14 @@ func (c *Context) EditMessageTextAndInlineKeyboard(om *OutgoingMessage, fromStat
 		c.Log().Warn(fmt.Sprintf("EditMessageTextAndInlineKeyboard – message (_id=%s botid=%v id=%v state %s) not updated ", om.ID, bot.ID, om.MsgID, fromState))
 
 		return nil
+	}
+
+	if om.ParseMode == "HTML" {
+		textCleared, err := sanitize.HTMLAllowing(text, []string{"a", "b", "strong", "i", "em", "a", "code", "pre"}, []string{"href"})
+
+		if err == nil && textCleared != "" {
+			text = textCleared
+		}
 	}
 
 	_, err = bot.API.Send(tg.EditMessageTextConfig{
