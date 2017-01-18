@@ -21,6 +21,10 @@ type User struct {
 	data *userData
 }
 
+func (u *User) SetCTX(c *Context){
+	u.ctx=c
+}
+
 // Chat information initiated from TG
 type Chat struct {
 	ID        int64  `bson:"_id"`
