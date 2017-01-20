@@ -610,10 +610,14 @@ func tgIncomingMessageHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service,
 
 	// update PrivateStarted in case we received private message from user
 	if ctx != nil && ctx.Message != nil && ctx.Message.ChatID == ctx.User.ID {
-		protected, _ := ctx.User.protectedSettings()
-		if !protected.PrivateStarted {
-			protected.PrivateStarted = true
-			ctx.User.saveProtectedSettings()
+		protected, err := ctx.User.protectedSettings()
+		if err != nil {
+			log.WithError(err).Error("tgIncomingMessageHandler: protectedSettings error")
+		}else {
+			if !protected.PrivateStarted {
+				protected.PrivateStarted = true
+				ctx.User.saveProtectedSettings()
+			}
 		}
 	}
 
