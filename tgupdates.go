@@ -67,11 +67,12 @@ func updateRoutine(b *Bot, u *tg.Update) {
 		m.Lock()
 	} else {
 		m:=sync.Mutex{}
+		m.Lock()
+
 		updateMapMutex.Lock()
 		updateMutexPerBotPerChat[mutexID] = &m
 		updateMapMutex.Unlock()
 
-		m.Lock()
 	}
 
 	db := mongoSession.Clone().DB(mongo.Database)
