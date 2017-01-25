@@ -163,6 +163,29 @@ func (c *Context) findUser(query bson.M) (userData, error) {
 	return user, nil
 }
 
+func (c *Context) findUsers(query bson.M) ([]userData, error) {
+	users := []userData{}
+	serviceID := c.getServiceID()
+	var err error
+	if serviceID != "" {
+		err = c.db.C("users").Find(query).Select(bson.M{"firstname": 1, "lastname": 1, "username": 1, "settings." + serviceID: 1, "protected." + serviceID: 1, "keyboardperchat": bson.M{"$elemMatch": bson.M{"chatid": c.Chat.ID}}, "tz": 1, "hooks": 1}).All(&users) // TODO: IS it ok to lean on c.Chat.ID here?
+	} else {
+		err = c.db.C("users").Find(query).Select(bson.M{"firstname": 1, "lastname": 1, "username": 1, "settings": 1, "protected": 1, "keyboardperchat": bson.M{"$elemMatch": bson.M{"chatid": c.Chat.ID}}, "tz": 1, "hooks": 1}).All(&users) // TODO: IS it ok to lean on c.Chat.ID here?
+	}
+
+	if err != nil {
+		return users, err
+	}
+
+
+	for i, _:=range users{
+		users[i].ctx = c
+	}
+
+
+	return users, nil
+}
+
 func (c *Context) updateCacheVal(cacheType string, key string, update interface{}, res interface{}) (exists bool) {
 
 	KeyType := reflect.TypeOf("1")

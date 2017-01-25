@@ -53,6 +53,9 @@ type Service struct {
 	// F.e. when using action with onReply triggered with context of replied message (user, chat, bot).
 	Actions []interface{}
 
+	// Handler to produce the user/chat search query based on the http request
+	TokenHandler func(ctx *Context, request *WebhookContext) (map[string]interface{}, error)
+
 	// Handler to receive webhooks from outside
 	WebhookHandler func(ctx *Context, request *WebhookContext) error
 

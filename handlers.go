@@ -225,10 +225,46 @@ func serviceHookHandler(c *gin.Context) {
 
 	// If token starts with c - this is notification with TG Chat behavior
 	// So just one chat will receive this notification
+	wctx := &WebhookContext{gin: c, requestID: rndStr.Get(10)}
 
 	// If token starts with h - this auto detection. Used for backward compatibility with previous Integram version
+	if strings.HasPrefix(token,"service_") {
+		s,_:=serviceByName(token[8:])
+		if s == nil{
+			return
+		}
 
-	if token[0:1] == "u" {
+		ctx.ServiceName = s.Name
+
+		if s.TokenHandler == nil{
+			return
+		}
+
+		query,err:=s.TokenHandler(ctx, wctx)
+
+		if err!=nil{
+			log.WithFields(log.Fields{"token": token}).WithError(err).Error("TokenHandler error")
+		}
+		users, err := ctx.findUsers(query)
+
+		for _, user:=range users{
+			ctx.User = user.User
+			ctx.User.ctx=ctx
+			ctx.Chat = Chat{ID: user.ID, ctx: ctx}
+			err := s.WebhookHandler(ctx, wctx)
+
+			if err != nil {
+				ctx.Log().WithFields(log.Fields{"token": token}).WithError(err).Error("WebhookHandler returned error")
+				if err == ErrorFlood {
+					c.String(http.StatusTooManyRequests, err.Error())
+					return
+				}
+			}
+			//hooks=append(hooks, serviceHook{Token: token, Services: []string{"gmail"}, Chats: []int64{user.ID}})
+		}
+
+
+	} else if token[0:1] == "u" {
 		user, err := ctx.findUser(bson.M{"hooks.token": token})
 		// todo: improve this part
 
@@ -292,8 +328,6 @@ func serviceHookHandler(c *gin.Context) {
 		c.AbortWithError(http.StatusNotFound, nil)
 		return
 	}
-
-	wctx := &WebhookContext{gin: c, requestID: rndStr.Get(10)}
 
 	for _, hook := range hooks {
 		if hook.Token == token {
