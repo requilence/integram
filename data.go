@@ -22,6 +22,10 @@ var (
 	mongo        *mgo.DialInfo // MongoDB Connection info
 )
 
+func ObjectIdHex(s string) bson.ObjectId {
+	return bson.ObjectIdHex(s)
+}
+
 func ensureIndexes() {
 	db := mongoSession.DB(mongo.Database)
 	db.C("messages").DropIndex("chatid", "botid", "msgid")
