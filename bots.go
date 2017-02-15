@@ -1402,6 +1402,9 @@ func sendMessage(m *OutgoingMessage) error {
 		if err != nil {
 			log.WithError(err).Error("Error outgoing inserting message in db")
 		}
+		if m.ChatID > 0 {
+			db.C("users").UpdateId(m.ChatID, bson.M{"$unset": bson.M{"botstoppedat": ""}})
+		}
 
 		return nil
 	}
@@ -1443,7 +1446,13 @@ func sendMessage(m *OutgoingMessage) error {
 
 			return nil
 		} else if tgErr.BotStoppedForUser() {
+
 			// Todo: Problems can appear when we rely on this user message (e.g. not webhook msg)
+			db := mongoSession.Clone().DB(mongo.Database)
+			defer db.Session.Close()
+
+			db.C("users").Update(bson.M{"_id": m.ChatID, "botstoppedat": bson.M{"$exists": false}}, bson.M{"$set": bson.M{"botstoppedat": time.Now()}})
+
 			log.WithField("chat", m.ChatID).WithField("bot", m.BotID).Warn("sendMessage error: Bot stopped by user")
 			if m.BackupChatID != 0 {
 				if m.BackupChatID != m.ChatID {
