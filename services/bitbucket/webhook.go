@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
-	"strings"
 	"time"
 
 	api "github.com/ktrysmt/go-bitbucket"

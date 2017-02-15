@@ -29,6 +29,7 @@ type msgInfo struct {
 
 var lastMsgIDByUser = make(map[int64]msgInfo)
 var lastMsgIDByUserMutex = sync.Mutex{}
+
 func updateRoutine(b *Bot, u *tg.Update) {
 
 	if !Debug {
@@ -60,13 +61,13 @@ func updateRoutine(b *Bot, u *tg.Update) {
 	mutexID := fmt.Sprintf("%d_%d", b.ID, chatID)
 
 	updateMapMutex.Lock()
-	m, exists:= updateMutexPerBotPerChat[mutexID]
+	m, exists := updateMutexPerBotPerChat[mutexID]
 	updateMapMutex.Unlock()
 
 	if exists {
 		m.Lock()
 	} else {
-		m:=sync.Mutex{}
+		m := sync.Mutex{}
 		m.Lock()
 
 		updateMapMutex.Lock()
@@ -78,7 +79,7 @@ func updateRoutine(b *Bot, u *tg.Update) {
 	db := mongoSession.Clone().DB(mongo.Database)
 	defer db.Session.Close()
 
-	defer func(){
+	defer func() {
 		updateMapMutex.Lock()
 		updateMutexPerBotPerChat[mutexID].Unlock()
 		updateMapMutex.Unlock()
@@ -338,7 +339,7 @@ func tgCallbackHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service, *Conte
 						ctx.Log().WithField("handler", rm.OnCallbackAction).WithError(err).Error("callbackAction failed")
 						ctx.AnswerCallbackQuery("Oops! Please try again", false)
 					} else {
-						if ctx.Callback.AnsweredAt == nil{
+						if ctx.Callback.AnsweredAt == nil {
 							ctx.AnswerCallbackQuery("", false)
 						}
 					}
@@ -621,8 +622,8 @@ func tgIncomingMessageHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service,
 	if ctx != nil && ctx.Message != nil && ctx.Message.ChatID == ctx.User.ID {
 		protected, err := ctx.User.protectedSettings()
 		if err != nil {
-			log.WithError(err).Error("tgIncomingMessageHandler: protectedSettings error")
-		}else {
+			log.WithError(err).Error("tgIncomingMessageHandler protectedSettings error")
+		} else {
 			if !protected.PrivateStarted {
 				protected.PrivateStarted = true
 				ctx.User.saveProtectedSettings()

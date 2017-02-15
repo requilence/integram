@@ -1139,7 +1139,7 @@ func (m *IncomingMessage) GetFile(c *Context, allowedTypes []FileType, maxSize i
 			return
 		}
 
-		if m.Audio.Performer == "" && m.Audio.Title == ""{
+		if m.Audio.Performer == "" && m.Audio.Title == "" {
 			if c.User.UserName != "" {
 				fileName += c.User.UserName
 			} else if c.User.FirstName != "" {
@@ -1150,7 +1150,7 @@ func (m *IncomingMessage) GetFile(c *Context, allowedTypes []FileType, maxSize i
 			} else {
 				fileName += fmt.Sprintf("_%d", m.MsgID)
 			}
-		}else {
+		} else {
 			fileName = filepath.Clean(m.Audio.Performer + "-" + m.Audio.Title)
 		}
 		fileName += filepath.Ext(localPath)

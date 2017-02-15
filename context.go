@@ -15,15 +15,15 @@ import (
 	"crypto/md5"
 	log "github.com/Sirupsen/logrus"
 	"github.com/gin-gonic/gin"
+	"github.com/kennygrant/sanitize"
 	"github.com/mrjones/oauth"
 	"github.com/requilence/integram/url"
 	"golang.org/x/oauth2"
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 	tg "gopkg.in/telegram-bot-api.v3"
-	"path/filepath"
 	"os"
-	"github.com/kennygrant/sanitize"
+	"path/filepath"
 )
 
 // MaxMsgsToUpdateWithEventID set the maximum number of last messages to update with EditMessagesTextWithEventID
@@ -781,7 +781,7 @@ func (c *Context) SendAction(s string) error {
 // DownloadURL downloads the remote URL and returns the local file path
 func (c *Context) DownloadURL(url string) (filePath string, err error) {
 
-	ext:=filepath.Ext(url)
+	ext := filepath.Ext(url)
 	out, err := ioutil.TempFile("", fmt.Sprintf("%d_%d", c.Bot().ID, c.Chat.ID))
 
 	if err != nil {
@@ -789,9 +789,9 @@ func (c *Context) DownloadURL(url string) (filePath string, err error) {
 	}
 
 	out.Close()
-	os.Rename(out.Name(),out.Name()+ext)
+	os.Rename(out.Name(), out.Name()+ext)
 
-	out, err = os.OpenFile(out.Name() + ext, os.O_RDWR, 0666)
+	out, err = os.OpenFile(out.Name()+ext, os.O_RDWR, 0666)
 	if err != nil {
 		return "", err
 	}

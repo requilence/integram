@@ -268,7 +268,7 @@ func (c *Context) getCacheVal(cacheType string, key string, res interface{}) (ex
 		return false
 	}
 
-	if !reflect.ValueOf(mi).MapIndex(reflect.ValueOf("val")).IsValid(){
+	if !reflect.ValueOf(mi).MapIndex(reflect.ValueOf("val")).IsValid() {
 		return false
 	}
 	// Wow. Such reflection. Much deep.
@@ -415,14 +415,14 @@ func (c *Context) UpdateServiceCache(key string, update interface{}, res interfa
 }
 
 func (user *User) updateData() error {
-	_, err := user.ctx.db.C("users").UpsertId(user.ID,  bson.M{ "$set": user, "$setOnInsert":bson.M{"createdat":time.Now()}})
+	_, err := user.ctx.db.C("users").UpsertId(user.ID, bson.M{"$set": user, "$setOnInsert": bson.M{"createdat": time.Now()}})
 	user.data.User = *user
 
 	return err
 }
 
 func (chat *Chat) updateData() error {
-	_, err := chat.ctx.db.C("chats").UpsertId(chat.ID, bson.M{"$set": chat, "$setOnInsert":bson.M{"createdat":time.Now()}})
+	_, err := chat.ctx.db.C("chats").UpsertId(chat.ID, bson.M{"$set": chat, "$setOnInsert": bson.M{"createdat": time.Now()}})
 	chat.data.Chat = *chat
 	return err
 }
@@ -592,7 +592,7 @@ func (chat *Chat) SaveSettings(allSettings interface{}) error {
 
 	serviceID := chat.ctx.getServiceID()
 
-	_, err := chat.ctx.db.C("chats").UpsertId(chat.ID, bson.M{"$set": bson.M{"settings." + serviceID: allSettings}, "$setOnInsert":bson.M{"createdat":time.Now()}})
+	_, err := chat.ctx.db.C("chats").UpsertId(chat.ID, bson.M{"$set": bson.M{"settings." + serviceID: allSettings}, "$setOnInsert": bson.M{"createdat": time.Now()}})
 
 	if chat.data == nil {
 		chat.data = &chatData{}
@@ -612,7 +612,7 @@ func (user *User) SaveSettings(allSettings interface{}) error {
 
 	serviceID := user.ctx.getServiceID()
 
-	_, err := user.ctx.db.C("users").UpsertId(user.ID, bson.M{"$set": bson.M{"settings." + serviceID: allSettings}, "$setOnInsert":bson.M{"createdat":time.Now()}})
+	_, err := user.ctx.db.C("users").UpsertId(user.ID, bson.M{"$set": bson.M{"settings." + serviceID: allSettings}, "$setOnInsert": bson.M{"createdat": time.Now()}})
 
 	if user.data == nil {
 		user.data = &userData{}
@@ -729,7 +729,7 @@ func (user *User) saveProtectedSettings() error {
 	}
 
 	serviceID := user.ctx.getServiceID()
-	info, err := user.ctx.db.C("users").UpsertId(user.ID, bson.M{"$set": bson.M{"protected." + serviceID: user.data.Protected[serviceID]}, "$setOnInsert":bson.M{"createdat":time.Now()}})
+	info, err := user.ctx.db.C("users").UpsertId(user.ID, bson.M{"$set": bson.M{"protected." + serviceID: user.data.Protected[serviceID]}, "$setOnInsert": bson.M{"createdat": time.Now()}})
 
 	fmt.Printf("saveProtectedSettings %v, %+v, %+v\n", err, info, user.data.Protected[serviceID])
 
