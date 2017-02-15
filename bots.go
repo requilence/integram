@@ -132,6 +132,7 @@ type OutgoingMessage struct {
 	FilePath             string         `bson:",omitempty"`
 	FileName             string         `bson:",omitempty"`
 	FileType             string         `bson:",omitempty"`
+	FileRemoveAfter      bool           `bson:",omitempty"`
 	processed            bool
 }
 
@@ -625,6 +626,12 @@ func (m *OutgoingMessage) SetImage(localPath string, fileName string) *OutgoingM
 	m.FilePath = localPath
 	m.FileName = fileName
 	m.FileType = "image"
+	return m
+}
+
+// EnableFileRemoveAfter adds the flag to remove the file after message will be sent
+func (m *OutgoingMessage) EnableFileRemoveAfter() *OutgoingMessage {
+	m.FileRemoveAfter = true
 	return m
 }
 
@@ -1308,6 +1315,7 @@ func sendMessage(m *OutgoingMessage) error {
 	}
 	var err error
 	var tgMsg tg.Message
+	var rescheduled bool
 	if m.FilePath != "" {
 		if m.FileType == "image" {
 			msg := tg.NewPhotoUpload(m.ChatID, m.FilePath)
@@ -1327,6 +1335,18 @@ func sendMessage(m *OutgoingMessage) error {
 			}
 			tgMsg, err = botByID(m.BotID).API.Send(msg)
 
+		}
+
+		if m.FileRemoveAfter {
+			defer func() {
+				// message not rescheduled
+				if err == nil && !rescheduled {
+					err2 := os.Remove(m.FilePath)
+					if err2 != nil {
+						log.WithError(err).WithField("path", m.FilePath).Error("Error removing message's file")
+					}
+				}
+			}()
 		}
 
 	} else {
@@ -1401,6 +1421,7 @@ func sendMessage(m *OutgoingMessage) error {
 			log.WithError(err).WithFields(log.Fields{"msgid": m.ReplyToMsgID, "chat": m.ChatID, "bot": m.BotID}).Warn("TG message we are replying on is no longer exists")
 			// looks like the message we replying on is no longer exists...
 			m.ReplyToMsgID = 0
+			rescheduled = true
 			_, err := sendMessageJob.Schedule(0, time.Now(), &m)
 			if err != nil {
 				log.WithField("message", m).WithError(err).Error("Can't reschedule sendMessageJob")
@@ -1437,6 +1458,7 @@ func sendMessage(m *OutgoingMessage) error {
 						}
 					}
 					m.ChatID = m.BackupChatID
+					rescheduled = true
 					_, err := sendMessageJob.Schedule(0, time.Now(), &m)
 					return err
 				}
@@ -1460,6 +1482,7 @@ func sendMessage(m *OutgoingMessage) error {
 							m.Selective = true
 						}
 					}
+					rescheduled = true
 					m.ChatID = m.BackupChatID
 					_, err := sendMessageJob.Schedule(0, time.Now(), &m)
 					return err
@@ -1498,12 +1521,15 @@ func sendMessage(m *OutgoingMessage) error {
 
 			delay := tgErr.ParseTooManyRequestsDelay()
 
+			rescheduled = true
 			_, err := sendMessageJob.Schedule(0, time.Now().Add(time.Duration(delay+rand.Intn(10))*time.Second), &m)
 			return err
 		} else if tgErr.IsParseError() {
 			if offset := tgErr.ParseErrorOffset(); offset > -1 {
 				mrk := MarkdownRichText{}
 				m.SetText(m.Text[0:offset] + mrk.Esc(m.Text[offset:offset+1]) + m.Text[offset+1:])
+
+				rescheduled = true
 				_, err := sendMessageJob.Schedule(0, time.Now(), &m)
 				return err
 			}
