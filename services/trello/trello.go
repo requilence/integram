@@ -85,6 +85,7 @@ func (cfg Config) Service() *integram.Service {
 			{cacheAllCards, 1, integram.JobRetryFibonacci},
 			{commentCard, 10, integram.JobRetryFibonacci},
 			{downloadAttachment, 10, integram.JobRetryFibonacci},
+			{removeFile, 1, integram.JobRetryFibonacci},
 			{attachFileToCard, 3, integram.JobRetryFibonacci},
 			{resubscribeAllBoards, 1, integram.JobRetryFibonacci},
 		},

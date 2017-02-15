@@ -208,7 +208,6 @@ func webhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 		return
 	}
 
-
 	if wh.Action.ID == "" {
 		return
 	}
@@ -715,7 +714,7 @@ func attachFileToCard(c *integram.Context, cardID string, doc tg.Document) error
 		if err != nil {
 			return err
 		}
-		c.User.SetCache("file_"+doc.FileID, fileLocalPath, time.Hour*24)
+		c.User.SetCache("file_"+doc.FileID, fileLocalPath, time.Hour)
 	}
 
 	extra := url.Values{"mimeType": {doc.MimeType}, "name": {doc.FileName}, "url": {"null"}}
@@ -731,6 +730,8 @@ func attachFileToCard(c *integram.Context, cardID string, doc tg.Document) error
 	if err != nil {
 		return err
 	}
+
+	c.Service().SheduleJob(removeFile, 0, time.Now().Add(time.Hour), fileLocalPath)
 
 	var a action
 	err = json.Unmarshal(b, &a)
@@ -761,6 +762,10 @@ func commentCard(c *integram.Context, cardID string, text string) error {
 	return c.Message.UpdateEventsID(c.Db(), "action_"+a.ID)
 }
 
+func removeFile(path string) error {
+	return os.Remove(path)
+}
+
 func downloadAttachment(c *integram.Context, cardID string, replyToMsgID int, text string, attachment attachment) error {
 	if attachment.PreviewURL != "" {
 		c.SendAction(tg.ChatUploadPhoto)
@@ -787,9 +792,9 @@ func downloadAttachment(c *integram.Context, cardID string, replyToMsgID int, te
 	}
 	if attachment.PreviewURL != "" {
 		return c.NewMessage().SetReplyAction(cardReplied, cardID).SetText(text).SetReplyToMsgID(replyToMsgID).SetImage(fileLocalPath, attachment.Name).Send()
-
 	}
-	return c.NewMessage().SetReplyAction(cardReplied, cardID).SetText(text).SetReplyToMsgID(replyToMsgID).SetDocument(fileLocalPath, attachment.Name).Send()
+
+	return c.NewMessage().SetReplyAction(cardReplied, cardID).SetText(text).SetReplyToMsgID(replyToMsgID).SetDocument(fileLocalPath, attachment.Name).EnableFileRemoveAfter().Send()
 }
 
 func cardMessage(c *integram.Context, cardID string) (*integram.Message, error) {
