@@ -171,7 +171,7 @@ func webPreviewHandler(c *gin.Context) {
 		return
 	}
 	if wp.Text == "" && wp.ImageURL == "" {
-		wp.ImageURL = "http://fake"
+		wp.ImageURL = "http://fakeurlaaaaaaa.com/fake/url"
 	}
 
 	p := gin.H{"title": wp.Title, "headline": wp.Headline, "text": wp.Text, "imageURL": wp.ImageURL}
