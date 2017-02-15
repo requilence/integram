@@ -320,14 +320,13 @@ func webhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 				text += commit.Message + "\n"
 			}
 
-			change.New.Target.Author.User.Links.Avatar.Href = strings.Replace(change.New.Target.Author.User.Links.Avatar.Href, "/32/", "/128/", 1)
 			wp := ""
 			if change.Truncated {
-				wp = c.WebPreview("> 5 commits", "@"+commitShort(change.Old.Target.Hash)+" ... @"+commitShort(change.New.Target.Hash), "", change.Links.HTML.Href, change.New.Target.Author.User.Links.Avatar.Href)
+				wp = c.WebPreview("> 5 commits", "@"+commitShort(change.Old.Target.Hash)+" ... @"+commitShort(change.New.Target.Hash), "", change.Links.HTML.Href, "")
 			} else if commits > 1 {
-				wp = c.WebPreview(fmt.Sprintf("%d commits", commits), "@"+commitShort(change.Old.Target.Hash)+" ... @"+commitShort(change.New.Target.Hash), "", change.Links.HTML.Href, change.New.Target.Author.User.Links.Avatar.Href)
+				wp = c.WebPreview(fmt.Sprintf("%d commits", commits), "@"+commitShort(change.Old.Target.Hash)+" ... @"+commitShort(change.New.Target.Hash), "", change.Links.HTML.Href, "")
 			} else if commits == 1 {
-				wp = c.WebPreview("Commit", "@"+commitShort(change.New.Target.Hash), "", change.Commits[0].Links.HTML.Href, change.New.Target.Author.User.Links.Avatar.Href)
+				wp = c.WebPreview("Commit", "@"+commitShort(change.New.Target.Hash), "", change.Commits[0].Links.HTML.Href, "")
 			}
 
 			if commits > 0 {
