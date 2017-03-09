@@ -700,6 +700,12 @@ func tgUpdateHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service, *Context
 	} else if u.EditedMessage != nil {
 
 		return tgEditedMessageHandler(u, b, db)
+	} else if u.ChannelPost != nil {
+		u.Message = u.ChannelPost
+		return tgIncomingMessageHandler(u, b, db)
+	} else if u.EditedChannelPost != nil {
+		u.EditedMessage = u.EditedChannelPost
+		return tgEditedMessageHandler(u, b, db)
 	}
 
 	return nil, nil

@@ -106,7 +106,7 @@ func (e Error) IsAntiFlood() bool {
 }
 
 func (e Error) IsCantAccessChat() bool {
-	if strings.Contains(e.Description,"Can't access the chat") {
+	if strings.Contains(e.Description, "Can't access the chat") {
 		return true
 	}
 	return false
@@ -142,6 +142,8 @@ type Update struct {
 	UpdateID           int                 `json:"update_id"`
 	Message            *Message            `json:"message"`
 	EditedMessage      *Message            `json:"edited_message"`
+	ChannelPost        *Message            `json:"channel_post"`
+	EditedChannelPost  *Message            `json:"edited_channel_post"`
 	InlineQuery        *InlineQuery        `json:"inline_query"`
 	ChosenInlineResult *ChosenInlineResult `json:"chosen_inline_result"`
 	CallbackQuery      *CallbackQuery      `json:"callback_query"`
