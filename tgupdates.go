@@ -234,12 +234,16 @@ func incomingMessageFromTGMessage(m *tg.Message) IncomingMessage {
 
 	// Base message struct
 	im.MsgID = m.MessageID
-	im.FromID = m.From.ID
+	if m.From!=nil {
+		im.FromID = m.From.ID
+	}
 	im.ChatID = m.Chat.ID
 	im.Date = time.Unix(int64(m.Date), 0)
 	im.Text = m.Text
 
-	im.From = tgUser(m.From)
+	if m.From!=nil {
+		im.From = tgUser(m.From)
+	}
 	im.Chat = Chat{ID: m.Chat.ID, Type: m.Chat.Type, FirstName: m.Chat.FirstName, LastName: m.Chat.LastName, UserName: m.Chat.UserName, Title: m.Chat.Title}
 
 	im.ForwardFrom = tgUserPointer(m.ForwardFrom)
@@ -439,8 +443,11 @@ func tgEditedMessageHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service, *
 	if err != nil {
 		log.WithError(err).WithField("bot", b.ID).Error("Can't detect service")
 	}
-	ctx := &Context{ServiceName: service.Name, User: im.From, Chat: im.Chat, db: db}
-	ctx.User.ctx = ctx
+	ctx := &Context{ServiceName: service.Name, Chat: im.Chat, db: db}
+	if im.From.ID!=0 {
+		ctx.User = im.From
+		ctx.User.ctx = ctx
+	}
 	ctx.Chat.ctx = ctx
 
 	ctx.Message = &im
@@ -498,35 +505,39 @@ func tgIncomingMessageHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service,
 	// workaround to match between inline_msg_id and msg_id
 	dupFound := false
 	var l int64
-	lastMsgIDByUserMutex.Lock()
+	if u.Message.From != nil {
+		lastMsgIDByUserMutex.Lock()
 
-	if lm, exists := lastMsgIDByUser[u.Message.From.ID]; exists {
-		if lm.BotID == b.ID && lm.InlineID != "" {
-			l = time.Now().Sub(lm.TS).Nanoseconds()
+		if lm, exists := lastMsgIDByUser[u.Message.From.ID]; exists {
+			if lm.BotID == b.ID && lm.InlineID != "" {
+				l = time.Now().Sub(lm.TS).Nanoseconds()
 
-			if l < 1000000000 {
-				dupFound = true
-				log.Debugf("message: dup found (inlinemsgid %v) for %v (user %v), after %d", lm.InlineID, u.Message.MessageID, u.Message.From.ID, l)
-				db.C("messages").Update(bson.M{"botid": b.ID, "inlinemsgid": lm.InlineID}, bson.M{"$set": bson.M{"chatid": im.ChatID, "msgid": im.MsgID}})
-				lastMsgIDByUserMutex.Unlock()
-				//log.Error(bson.M{"botid": b.ID, "inlinemsgid": lm.InlineID}, bson.M{"$set": bson.M{"chatid": im.ChatID, "msgid": im.MsgID}}, err)
-				return nil, nil
+				if l < 1000000000 {
+					dupFound = true
+					log.Debugf("message: dup found (inlinemsgid %v) for %v (user %v), after %d", lm.InlineID, u.Message.MessageID, u.Message.From.ID, l)
+					db.C("messages").Update(bson.M{"botid": b.ID, "inlinemsgid": lm.InlineID}, bson.M{"$set": bson.M{"chatid": im.ChatID, "msgid": im.MsgID}})
+					lastMsgIDByUserMutex.Unlock()
+					//log.Error(bson.M{"botid": b.ID, "inlinemsgid": lm.InlineID}, bson.M{"$set": bson.M{"chatid": im.ChatID, "msgid": im.MsgID}}, err)
+					return nil, nil
+				}
 			}
 		}
+		if !dupFound {
+			lastMsgIDByUser[u.Message.From.ID] = msgInfo{ID: u.Message.MessageID, TS: time.Now(), BotID: b.ID, ChatID: u.Message.Chat.ID}
+		}
+		lastMsgIDByUserMutex.Unlock()
 	}
-	if !dupFound {
-		lastMsgIDByUser[u.Message.From.ID] = msgInfo{ID: u.Message.MessageID, TS: time.Now(), BotID: b.ID, ChatID: u.Message.Chat.ID}
-	}
-	lastMsgIDByUserMutex.Unlock()
-
 	service, err := detectServiceByBot(b.ID)
 	//fmt.Printf("detectService: %+v\n", service)
 
 	if err != nil {
 		log.WithError(err).WithField("bot", b.ID).Error("Can't detect service")
 	}
-	ctx := &Context{ServiceName: service.Name, User: im.From, Chat: im.Chat, db: db}
-	ctx.User.ctx = ctx
+	ctx := &Context{ServiceName: service.Name, Chat: im.Chat, db: db}
+	if im.From.ID != 0 {
+		ctx.User = im.From
+		ctx.User.ctx = ctx
+	}
 	ctx.Chat.ctx = ctx
 
 	var rm *Message
