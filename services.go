@@ -199,7 +199,7 @@ func Register(servicer Servicer, botToken string) {
 
 	services[service.Name] = service
 
-	if len(service.Jobs) > 0 {
+	if len(service.Jobs) > 0 || service.OAuthSuccessful != nil {
 		if service.JobsPool == 0 {
 			service.JobsPool = 1
 		}
