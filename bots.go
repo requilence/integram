@@ -1530,6 +1530,10 @@ func sendMessage(m *OutgoingMessage) error {
 
 			delay := tgErr.ParseTooManyRequestsDelay()
 
+			if delay == -1 {
+				delay = 10
+			}
+			
 			rescheduled = true
 			_, err := sendMessageJob.Schedule(0, time.Now().Add(time.Duration(delay+rand.Intn(10))*time.Second), &m)
 			return err

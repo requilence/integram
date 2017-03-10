@@ -44,14 +44,14 @@ func (e Error) ChatNotFound() bool {
 }
 
 func (e Error) BotKicked() bool {
-	if e.Description == "Forbidden: bot was kicked from the group chat" || e.Description == "Forbidden: bot was kicked from the supergroup chat" {
+	if strings.Contains(e.Description, "Forbidden: bot was kicked") {
 		return true
 	}
 	return false
 }
 
 func (e Error) TooManyRequests() bool {
-	if e.Description == "Too many requests: retry later" {
+	if strings.Contains(e.Description, "Too many requests: retry") {
 		return true
 	}
 	return false
@@ -64,7 +64,7 @@ func (e Error) ParseTooManyRequestsDelay() int {
 	b := REParseTooManyRequestsDelay.FindStringSubmatch(e.Description)
 
 	if len(b) < 2 {
-		return 10
+		return -1
 	}
 
 	delay, err := strconv.Atoi(b[1])
@@ -113,7 +113,7 @@ func (e Error) IsCantAccessChat() bool {
 }
 
 func (e Error) IsParseError() bool {
-	if strings.Contains(e.Description, "Can't parse message text") {
+	if strings.Contains(e.Description, "parse message text") {
 		return true
 	}
 	return false
