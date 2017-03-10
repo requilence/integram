@@ -33,12 +33,14 @@ func ensureIndexes() {
 	db.C("messages").EnsureIndex(mgo.Index{Key: []string{"botid", "eventid"}})
 	db.C("messages").EnsureIndex(mgo.Index{Key: []string{"chatid", "botid", "msgid", "inlinemsgid"}, Unique: true})
 	db.C("messages").EnsureIndex(mgo.Index{Key: []string{"chatid", "botid", "fromid"}})
+	db.C("messages").EnsureIndex(mgo.Index{Key: []string{"chatid", "botid", "-date"}})
 	db.C("messages").EnsureIndex(mgo.Index{Key: []string{"chatid", "botid", "eventid"}}) //todo: test eventID uniqueness
 
 	db.C("previews").EnsureIndex(mgo.Index{Key: []string{"hash"}, Unique: true, Sparse: true})
 
 	db.C("chats").EnsureIndex(mgo.Index{Key: []string{"hooks.token"}, Unique: true, Sparse: true})
 	db.C("chats").EnsureIndex(mgo.Index{Key: []string{"_id", "membersids"}, Unique: true})
+	db.C("chats").EnsureIndex(mgo.Index{Key: []string{"_id", "adminsids"}, Unique: true, Sparse: true})
 
 	db.C("users").EnsureIndex(mgo.Index{Key: []string{"hooks.token"}, Unique: true, Sparse: true})
 	db.C("users").EnsureIndex(mgo.Index{Key: []string{"username"}}) // should be unique but what if users swap usernames... hm
@@ -138,7 +140,7 @@ func (c *Context) findChat(query bson.M) (chatData, error) {
 	chat := chatData{}
 	serviceID := c.getServiceID()
 
-	err := c.db.C("chats").Find(query).Select(bson.M{"firstname": 1, "lastname": 1, "username": 1, "title": 1, "settings." + serviceID: 1, "keyboardperbot": 1, "tz": 1, "hooks": 1}).One(&chat)
+	err := c.db.C("chats").Find(query).Select(bson.M{"type":1, "firstname": 1, "lastname": 1, "username": 1, "title": 1, "settings." + serviceID: 1, "keyboardperbot": 1, "tz": 1, "hooks": 1}).One(&chat)
 	if err != nil {
 		//c.Log().WithError(err).WithField("query", query).Error("Can't find chat")
 		return chat, err
