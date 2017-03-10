@@ -67,11 +67,11 @@ func updateRoutine(b *Bot, u *tg.Update) {
 	if exists {
 		m.Lock()
 	} else {
-		m := sync.Mutex{}
-		m.Lock()
+		m2 := sync.Mutex{}
+		m2.Lock()
 
 		updateMapMutex.Lock()
-		updateMutexPerBotPerChat[mutexID] = &m
+		updateMutexPerBotPerChat[mutexID] = &m2
 		updateMapMutex.Unlock()
 
 	}
@@ -81,8 +81,12 @@ func updateRoutine(b *Bot, u *tg.Update) {
 
 	defer func() {
 		updateMapMutex.Lock()
-		updateMutexPerBotPerChat[mutexID].Unlock()
+		m3, exists := updateMutexPerBotPerChat[mutexID]
 		updateMapMutex.Unlock()
+
+		if exists {
+			m3.Unlock()
+		}
 	}()
 
 	service, context := tgUpdateHandler(u, b, db)
