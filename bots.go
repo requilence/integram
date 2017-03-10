@@ -1507,7 +1507,12 @@ func sendMessage(m *OutgoingMessage) error {
 
 			delay := tgErr.ParseTooManyRequestsDelay()
 
+			if delay == -1 {
+				delay = 10
+			}
+
 			_, err := sendMessageJob.Schedule(0, time.Now().Add(time.Duration(delay+rand.Intn(10))*time.Second), &m)
+
 			return err
 		} else if tgErr.IsParseError() {
 			if offset := tgErr.ParseErrorOffset(); offset > -1 {
