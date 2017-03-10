@@ -35,13 +35,12 @@ func ensureIndexes() {
 	db.C("messages").EnsureIndex(mgo.Index{Key: []string{"chatid", "botid", "fromid"}})
 	db.C("messages").EnsureIndex(mgo.Index{Key: []string{"chatid", "botid", "eventid"}}) //todo: test eventID uniqueness
 
-	db.C("previews").EnsureIndex(mgo.Index{Key: []string{"title", "headline", "text", "url", "imageURL"}})
+	db.C("previews").EnsureIndex(mgo.Index{Key: []string{"hash"}, Unique: true, Sparse: true})
 
 	db.C("chats").EnsureIndex(mgo.Index{Key: []string{"hooks.token"}, Unique: true, Sparse: true})
 	db.C("chats").EnsureIndex(mgo.Index{Key: []string{"_id", "membersids"}, Unique: true})
 
 	db.C("users").EnsureIndex(mgo.Index{Key: []string{"hooks.token"}, Unique: true, Sparse: true})
-	db.C("users").EnsureIndex(mgo.Index{Key: []string{"protected"}})
 	db.C("users").EnsureIndex(mgo.Index{Key: []string{"username"}}) // should be unique but what if users swap usernames... hm
 	db.C("users").EnsureIndex(mgo.Index{Key: []string{"keyboardperchat.chatid", "_id"}, Unique: true, Sparse: true})
 
@@ -1032,12 +1031,15 @@ func (c *Context) WebPreview(title string, headline string, text string, service
 		serviceURL,
 		imageURL,
 		token,
+		"",
 		0,
 		time.Now(),
 	}
 
+	wp.Hash = wp.CalculateHash()
+
 	var wpExists webPreview
-	c.db.C("previews").Find(bson.M{"title": title, "headline": headline, "text": text, "url": serviceURL, "imageurl": imageURL}).One(&wpExists)
+	c.db.C("previews").Find(bson.M{"hash": wp.Hash}).One(&wpExists)
 
 	if wpExists.Token != "" {
 		wp = wpExists

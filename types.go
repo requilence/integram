@@ -7,6 +7,8 @@ import (
 	"github.com/mrjones/oauth"
 	"github.com/requilence/integram/url"
 	"gopkg.in/mgo.v2/bson"
+	"crypto/md5"
+	"encoding/base64"
 )
 
 // User information initiated from TG
@@ -150,8 +152,15 @@ type webPreview struct {
 	URL       string
 	ImageURL  string
 	Token     string `bson:"_id"`
+	Hash	  string
 	Redirects int
 	Created   time.Time
+}
+
+func (wp *webPreview) CalculateHash() string{
+	md5Hash:=md5.Sum([]byte(wp.Title+wp.Headline+wp.Text+wp.URL+wp.ImageURL))
+
+	return base64.URLEncoding.EncodeToString(md5Hash[:])
 }
 
 // Mention returns @username if available. First + Last name otherwise
