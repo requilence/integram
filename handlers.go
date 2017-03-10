@@ -111,8 +111,6 @@ func Run() {
 		log.AddHook(hooker)
 	}
 
-	Papertrail()
-
 	// Configure
 	router := gin.New()
 
