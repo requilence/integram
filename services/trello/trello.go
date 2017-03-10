@@ -2371,6 +2371,12 @@ func newMessageHandler(c *integram.Context) error {
 			return err
 		}
 
+		if c.Chat.Type == "channel" {
+			return c.NewMessage().
+				SetText("Sorry, channels support for @trello_bot will coming soon").
+				Send()
+		}
+
 		if c.Chat.IsGroup() {
 			c.User.SaveSetting("TargetChat", c.Chat)
 
