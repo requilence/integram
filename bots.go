@@ -986,8 +986,8 @@ func initBots() error {
 	}
 	gob.Register(&OutgoingMessage{})
 
-	poolSize := 10 // Maximum simultaneously message sending
-	if p, err := strconv.Atoi(os.Getenv("INTEGRAM_TG_POOL")); err != nil && p > 0 {
+	poolSize := 50 // Maximum simultaneously message sending
+	if p, err := strconv.Atoi(os.Getenv("INTEGRAM_TG_POOL")); err == nil && p > 0 {
 		poolSize = p
 	}
 
