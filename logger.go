@@ -82,7 +82,7 @@ func (hook *hook) Levels() []log.Level {
 		log.FatalLevel,
 		log.ErrorLevel,
 		log.WarnLevel,
-		log.InfoLevel,
+		//log.InfoLevel,
 		//	logrus.DebugLevel,
 	}
 }
