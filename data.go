@@ -813,15 +813,13 @@ func (user *User) AuthTempToken() string {
 		fmt.Println("found AuthTempToken:" + ps.AuthTempToken)
 
 		oAuthIDCacheFound := oAuthIDCacheVal{}
-		if exists := user.Cache("auth_"+ps.AuthTempToken, &oAuthIDCacheFound); !exists {
-			oAuthIDCacheFound = oAuthIDCacheVal{BaseURL: serviceBaseURL}
-			user.SetCache("auth_"+ps.AuthTempToken, oAuthIDCacheFound, time.Hour*24)
-		}
+		if exists := user.Cache("auth_"+ps.AuthTempToken, &oAuthIDCacheFound); exists {
 
-		u, _ := url.Parse(oAuthIDCacheFound.BaseURL)
+			u, _ := url.Parse(oAuthIDCacheFound.BaseURL)
 
-		if u != nil && u.Host == host {
-			return ps.AuthTempToken
+			if u != nil && u.Host == host {
+				return ps.AuthTempToken
+			}
 		}
 	}
 
