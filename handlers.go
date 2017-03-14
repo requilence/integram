@@ -446,7 +446,7 @@ func oAuthCallback(c *gin.Context) {
 		err := errors.New("Unknown auth token")
 
 		log.WithFields(log.Fields{"token": authTempID}).Error(err)
-		c.AbortWithError(http.StatusForbidden, errors.New("can't find user"))
+		c.String(http.StatusForbidden, "The autorization URL is wrong or expired. Please send /start command to the bot again to repeat")
 		return
 	}
 	oauthProviderID := c.Param("param")
@@ -454,7 +454,7 @@ func oAuthCallback(c *gin.Context) {
 	oap, err := findOauthProviderByID(db, oauthProviderID)
 	if err != nil {
 		log.WithError(err).WithField("OauthProviderID", oauthProviderID).Error("Can't get OauthProvider")
-		c.String(http.StatusInternalServerError, "Error occured")
+		c.String(http.StatusInternalServerError, "Error occured. OAuth provider not found, please try to setup it again")
 		return
 	}
 
