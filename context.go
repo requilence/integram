@@ -390,6 +390,11 @@ func (c *Context) Db() *mgo.Database {
 	return c.db
 }
 
+// Set the mongodb instance. Useful when need to clone session
+func (c *Context) SetDb(db *mgo.Database) {
+	c.db = db
+}
+
 // Service related to the current context
 func (c *Context) Service() *Service {
 	s, _ := serviceByName(c.ServiceName)
