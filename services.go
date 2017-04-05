@@ -53,11 +53,17 @@ type Service struct {
 	// F.e. when using action with onReply triggered with context of replied message (user, chat, bot).
 	Actions []interface{}
 
-	// Handler to produce the user/chat search query based on the http request
-	TokenHandler func(ctx *Context, request *WebhookContext) (map[string]interface{}, error)
+	// Handler to produce the user/chat search query based on the http request. Set queryChat to true to perform chat search
+	TokenHandler func(ctx *Context, request *WebhookContext) (queryChat bool, bsonQuery map[string]interface{}, err error)
 
 	// Handler to receive webhooks from outside
 	WebhookHandler func(ctx *Context, request *WebhookContext) error
+
+	// Handler to receive already prepared data. Useful for manual interval grabbing jobs
+	EventHandler func(ctx *Context, data interface{}) error
+
+	// Worker wil be run in goroutine after service and framework started. In case of error or crash it will be restarted
+	Worker func(ctx *Context) error
 
 	// Handler to receive new messages from Telegram
 	TGNewMessageHandler func(ctx *Context) error
@@ -199,7 +205,7 @@ func Register(servicer Servicer, botToken string) {
 
 	services[service.Name] = service
 
-	if len(service.Jobs) > 0 {
+	if len(service.Jobs) > 0 || service.OAuthSuccessful != nil {
 		if service.JobsPool == 0 {
 			service.JobsPool = 1
 		}
@@ -214,10 +220,7 @@ func Register(servicer Servicer, botToken string) {
 			pool.SetMiddleware(beforeJob)
 			pool.SetAfterFunc(afterJob)
 		}
-		err = pool.Start()
-		if err != nil {
-			log.Panicf("Can't start jobs pool: %v\n", err)
-		}
+
 		log.Infof("Jobs pool %v[%d] is ready", "_"+service.Name, service.JobsPool)
 
 		jobsPerService[service.Name] = make(map[string]*jobs.Type)
@@ -227,6 +230,7 @@ func Register(servicer Servicer, botToken string) {
 				service.OAuthSuccessful, 10, JobRetryFibonacci,
 			})
 		}
+
 		for _, job := range service.Jobs {
 			handlerType := reflect.TypeOf(job.HandlerFunc)
 			m := make([]interface{}, handlerType.NumIn())
@@ -254,6 +258,19 @@ func Register(servicer Servicer, botToken string) {
 				jobsPerService[service.Name][jobName] = jobType
 			}
 		}
+		go func(pool *jobs.Pool) {
+
+			time.Sleep(time.Second * 30)
+
+			err = pool.Start()
+
+			if err != nil {
+				log.Panicf("Can't start jobs pool: %v\n", err)
+			}
+			log.Info("Service's pool started")
+
+		}(pool)
+
 	}
 	if len(service.Actions) > 0 {
 		for _, actionFunc := range service.Actions {
@@ -281,11 +298,31 @@ func Register(servicer Servicer, botToken string) {
 		log.WithError(err).WithField("token", botToken).Panic("Can't register the bot")
 	}
 
+	if service.Worker != nil {
+		go SeviceWorkerAutorespawnGoroutine(service)
+	}
 	// todo: here is possible bug if service just want to use inline keyboard callbacks via setCallbackAction
 	if service.TGNewMessageHandler == nil && service.TGInlineQueryHandler == nil {
 		return
 	}
 
+}
+
+func SeviceWorkerAutorespawnGoroutine(s *Service) {
+
+	c := s.EmptyContext()
+	defer func() {
+		if r := recover(); r != nil {
+			s.Log().Error(r)
+		}
+		go SeviceWorkerAutorespawnGoroutine(s) // restart
+	}()
+
+	err := s.Worker(c)
+
+	if err != nil {
+		s.Log().WithError(err).Error("Worker return error")
+	}
 }
 
 // Bot returns corresponding bot for the service
@@ -328,6 +365,14 @@ func (s *Service) SheduleJob(handlerFunc interface{}, priority int, time time.Ti
 		panic("SheduleJob: Job type not found")
 	}
 	panic("SheduleJob: Service pool not found")
+}
+
+// EmptyContext returns context on behalf of service without user/chat relation
+func (s *Service) EmptyContext() *Context {
+	db := mongoSession.DB(mongo.Database)
+
+	ctx := &Context{db: db, ServiceName: s.Name}
+	return ctx
 }
 
 func serviceByName(name string) (*Service, error) {

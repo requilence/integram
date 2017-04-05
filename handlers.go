@@ -110,7 +110,6 @@ func Run() {
 	if err == nil {
 		log.AddHook(hooker)
 	}
-	Papertrail()
 
 	// Configure
 	router := gin.New()
@@ -140,8 +139,9 @@ func Run() {
 		}
 	})
 	router.HEAD("/:param")
-	router.POST("/:param", serviceHookHandler)
+	router.GET("/service/:service", serviceHookHandler)
 
+	router.POST("/:param", serviceHookHandler)
 	router.POST("/:param/:service", serviceHookHandler)
 
 	// Start listening
@@ -172,7 +172,7 @@ func webPreviewHandler(c *gin.Context) {
 		return
 	}
 	if wp.Text == "" && wp.ImageURL == "" {
-		wp.ImageURL = "http://fake"
+		wp.ImageURL = "http://fakeurlaaaaaaa.com/fake/url"
 	}
 
 	p := gin.H{"title": wp.Title, "headline": wp.Headline, "text": wp.Text, "imageURL": wp.ImageURL}
@@ -203,6 +203,59 @@ func tgwebhook(c *gin.Context) {
 	}
 }
 
+// TriggerEventHandler perform search query and trigger EventHandler in context of each chat/user
+func (s *Service) TriggerEventHandler(queryChat bool, bsonQuery map[string]interface{}, data interface{}) error {
+
+	if s.EventHandler == nil {
+		return fmt.Errorf("EventHandler missed for %s service", s.Name)
+	}
+
+	if bsonQuery == nil {
+		return nil
+	}
+
+	db := mongoSession.Clone().DB(mongo.Database)
+	defer db.Session.Close()
+
+	ctx := &Context{db: db, ServiceName: s.Name}
+
+	if queryChat {
+		chats, err := ctx.findChats(bsonQuery)
+
+		if err != nil {
+			s.Log().WithError(err).Error("findChats error")
+		}
+
+		for _, chat := range chats {
+			ctx.Chat = chat.Chat
+			err := s.EventHandler(ctx, data)
+
+			if err != nil {
+				ctx.Log().WithError(err).Error("EventHandler returned error")
+			}
+		}
+	} else {
+		users, err := ctx.FindUsers(bsonQuery)
+
+		if err != nil {
+			s.Log().WithError(err).Error("findUsers error")
+		}
+
+		for _, user := range users {
+			ctx.User = user.User
+			ctx.User.ctx = ctx
+			ctx.Chat = Chat{ID: user.ID, ctx: ctx}
+			err := s.EventHandler(ctx, data)
+
+			if err != nil {
+				ctx.Log().WithError(err).Error("EventHandler returned error")
+			}
+			//hooks=append(hooks, serviceHook{Token: token, Services: []string{"gmail"}, Chats: []int64{user.ID}})
+		}
+	}
+	return nil
+}
+
 func serviceHookHandler(c *gin.Context) {
 
 	db := c.MustGet("db").(*mgo.Database)
@@ -228,45 +281,74 @@ func serviceHookHandler(c *gin.Context) {
 	wctx := &WebhookContext{gin: c, requestID: rndStr.Get(10)}
 
 	// If token starts with h - this auto detection. Used for backward compatibility with previous Integram version
-	if strings.HasPrefix(token,"service_") {
-		s,_:=serviceByName(token[8:])
-		if s == nil{
+	if service != "" && (token == "service" || token == "") {
+		s, _ := serviceByName(service)
+		if s == nil {
 			return
 		}
 
 		ctx.ServiceName = s.Name
 
-		if s.TokenHandler == nil{
+		if s.TokenHandler == nil {
 			return
 		}
 
-		query,err:=s.TokenHandler(ctx, wctx)
+		queryChat, query, err := s.TokenHandler(ctx, wctx)
 
-		if err!=nil{
+		if err != nil {
 			log.WithFields(log.Fields{"token": token}).WithError(err).Error("TokenHandler error")
 		}
-		users, err := ctx.findUsers(query)
 
-		for _, user:=range users{
-			ctxCopy := *ctx
-			ctxCopy.User = user.User
-			ctxCopy.User.ctx = &ctxCopy
-			ctxCopy.Chat = Chat{ID: user.ID, ctx: &ctxCopy}
-			err := s.WebhookHandler(&ctxCopy, wctx)
-
-			if err != nil {
-				ctxCopy.Log().WithFields(log.Fields{"token": token}).WithError(err).Error("WebhookHandler returned error")
-				if err == ErrorFlood {
-					c.String(http.StatusTooManyRequests, err.Error())
-					return
-				}
-			}
-			//hooks=append(hooks, serviceHook{Token: token, Services: []string{"gmail"}, Chats: []int64{user.ID}})
+		if query == nil {
+			return
 		}
 
+		if queryChat {
+			chats, err := ctx.findChats(query)
+
+			if err != nil {
+				log.WithFields(log.Fields{"token": token}).WithError(err).Error("findChats error")
+			}
+
+			for _, chat := range chats {
+				ctx.Chat = chat.Chat
+				err := s.WebhookHandler(ctx, wctx)
+
+				if err != nil {
+					ctx.Log().WithFields(log.Fields{"token": token}).WithError(err).Error("WebhookHandler returned error")
+					if err == ErrorFlood {
+						c.String(http.StatusTooManyRequests, err.Error())
+						return
+					}
+
+				}
+			}
+		} else {
+			users, err := ctx.FindUsers(query)
+
+			if err != nil {
+				log.WithFields(log.Fields{"token": token}).WithError(err).Error("findUsers error")
+			}
+
+			for _, user := range users {
+				ctx.User = user.User
+				ctx.User.ctx = ctx
+				ctx.Chat = Chat{ID: user.ID, ctx: ctx}
+				err := s.WebhookHandler(ctx, wctx)
+
+				if err != nil {
+					ctx.Log().WithFields(log.Fields{"token": token}).WithError(err).Error("WebhookHandler returned error")
+					if err == ErrorFlood {
+						c.String(http.StatusTooManyRequests, err.Error())
+						return
+					}
+				}
+				//hooks=append(hooks, serviceHook{Token: token, Services: []string{"gmail"}, Chats: []int64{user.ID}})
+			}
+		}
 
 	} else if token[0:1] == "u" {
-		user, err := ctx.findUser(bson.M{"hooks.token": token})
+		user, err := ctx.FindUser(bson.M{"hooks.token": token})
 		// todo: improve this part
 
 		for i, hook := range user.Hooks {
@@ -447,7 +529,7 @@ func oAuthCallback(c *gin.Context) {
 		err := errors.New("Unknown auth token")
 
 		log.WithFields(log.Fields{"token": authTempID}).Error(err)
-		c.String(http.StatusForbidden, "The autorization URL is wrong or expired. Please send /start command to the bot again to repeat")
+		c.AbortWithError(http.StatusForbidden, errors.New("can't find user"))
 		return
 	}
 	oauthProviderID := c.Param("param")
@@ -455,20 +537,20 @@ func oAuthCallback(c *gin.Context) {
 	oap, err := findOauthProviderByID(db, oauthProviderID)
 	if err != nil {
 		log.WithError(err).WithField("OauthProviderID", oauthProviderID).Error("Can't get OauthProvider")
-		c.String(http.StatusInternalServerError, "Error occured. OAuth provider not found, please try to setup it again")
+		c.String(http.StatusInternalServerError, "Error occured")
 		return
 	}
 
 	ctx := &Context{ServiceBaseURL: oap.BaseURL, ServiceName: oap.Service, db: db, gin: c}
 
-	userData, _ := ctx.findUser(bson.M{"_id": val.UserID})
+	userData, _ := ctx.FindUser(bson.M{"_id": val.UserID})
 	s := ctx.Service()
 
 	ctx.User = userData.User
 	ctx.User.data = &userData
-
 	ctx.User.ctx = ctx
-	ctx.Chat.ctx = ctx
+
+	ctx.Chat = ctx.User.Chat()
 
 	accessToken := ""
 	refreshToken := ""

@@ -91,7 +91,7 @@ Feel free to send PRs. If you want to contribute new service integration, please
 * [Gin – HTTP router and framework](https://github.com/gin-gonic/gin)
 * [Mgo – MongoDB driver](https://github.com/go-mgo/mgo)
 * [Jobs – background jobs](https://github.com/albrow/jobs) *
-* [Redigo – Redis driver](https://github.com/garyburd/redigo/redis)
+* [Redigo – Redis driver](https://github.com/garyburd/redigo)
 * [Logrus – structure logging](https://github.com/Sirupsen/logrus)
 * [Trello bindings](https://github.com/hackerlist/trello) *
 * [Gitlab bindings](https://github.com/xanzy/go-gitlab) * 

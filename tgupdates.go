@@ -29,6 +29,7 @@ type msgInfo struct {
 
 var lastMsgIDByUser = make(map[int64]msgInfo)
 var lastMsgIDByUserMutex = sync.Mutex{}
+
 func updateRoutine(b *Bot, u *tg.Update) {
 
 	if !Debug {
@@ -59,32 +60,32 @@ func updateRoutine(b *Bot, u *tg.Update) {
 	}
 	mutexID := fmt.Sprintf("%d_%d", b.ID, chatID)
 
-	updateMapMutex.RLock()
-	m, exists:= updateMutexPerBotPerChat[mutexID]
-	updateMapMutex.RUnlock()
+	updateMapMutex.Lock()
+	m, exists := updateMutexPerBotPerChat[mutexID]
+	updateMapMutex.Unlock()
 
 	if exists {
 		m.Lock()
 	} else {
-		m:=sync.Mutex{}
+		m = &sync.Mutex{}
 		m.Lock()
 
 		updateMapMutex.Lock()
-		updateMutexPerBotPerChat[mutexID] = &m
+		updateMutexPerBotPerChat[mutexID] = m
 		updateMapMutex.Unlock()
 
 	}
 
 	db := mongoSession.Clone().DB(mongo.Database)
 
-	defer func(){
-		updateMapMutex.RLock()
-		m2, exists := updateMutexPerBotPerChat[mutexID]
-		updateMapMutex.RUnlock()
+	defer func() {
+		m.Unlock()
 
-		if exists {
-			m2.Unlock()
-		}
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Println(r)
+			}
+		}()
 
 		db.Session.Close()
 	}()
@@ -219,6 +220,13 @@ func tgUserPointer(u *tg.User) *User {
 	return &User{ID: u.ID, FirstName: u.FirstName, LastName: u.LastName, UserName: u.UserName}
 }
 
+func tgChatPointer(c *tg.Chat) *Chat {
+	if c == nil {
+		return nil
+	}
+	return &Chat{ID: c.ID, FirstName: c.FirstName, LastName: c.LastName, UserName: c.UserName, Title: c.Title, Type: c.Type}
+}
+
 func tgUser(u *tg.User) User {
 	if u == nil {
 		return User{}
@@ -238,15 +246,20 @@ func incomingMessageFromTGMessage(m *tg.Message) IncomingMessage {
 
 	// Base message struct
 	im.MsgID = m.MessageID
-	im.FromID = m.From.ID
+	if m.From != nil {
+		im.FromID = m.From.ID
+	}
 	im.ChatID = m.Chat.ID
 	im.Date = time.Unix(int64(m.Date), 0)
 	im.Text = m.Text
 
-	im.From = tgUser(m.From)
+	if m.From != nil {
+		im.From = tgUser(m.From)
+	}
 	im.Chat = Chat{ID: m.Chat.ID, Type: m.Chat.Type, FirstName: m.Chat.FirstName, LastName: m.Chat.LastName, UserName: m.Chat.UserName, Title: m.Chat.Title}
 
 	im.ForwardFrom = tgUserPointer(m.ForwardFrom)
+	im.ForwardFromChat = tgChatPointer(m.ForwardFromChat)
 	im.ForwardDate = time.Unix(int64(m.ForwardDate), 0)
 
 	if m.ReplyToMessage != nil {
@@ -302,13 +315,26 @@ func tgCallbackHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service, *Conte
 				log.WithError(err).Errorf("INLINE_BUTTON_STATE_KEYWORD found but next symbol is %s", cbData[1:2])
 			}
 		}
+		ctx := &Context{
+			db:          db,
+			ServiceName: service.Name,
+			User:        tgUser(u.CallbackQuery.From),
+			Callback:    &callback{ID: u.CallbackQuery.ID, Data: cbData, Message: rm.om, State: cbState}}
 		var chat Chat
-		if u.CallbackQuery.Message != nil {
+		if u.CallbackQuery.InlineMessageID != "" && rm.ChatID != 0 {
+			chatData, err := ctx.findChat(bson.M{"_id": rm.ChatID})
+			if err != nil {
+				ctx.Log().WithError(err).Error("find chat for inline msg' callback")
+			} else {
+				chat = chatData.Chat
+			}
+
+		} else if u.CallbackQuery.Message != nil {
 			chat = tgChat(u.CallbackQuery.Message.Chat)
 		} else {
 			chat = tgChat(&tg.Chat{ID: u.CallbackQuery.From.ID, LastName: u.CallbackQuery.From.LastName, UserName: u.CallbackQuery.From.UserName, Type: "private", FirstName: u.CallbackQuery.From.FirstName})
 		}
-		ctx := &Context{ServiceName: service.Name, User: tgUser(u.CallbackQuery.From), Chat: chat, db: db, Callback: &callback{ID: u.CallbackQuery.ID, Data: cbData, Message: rm.om, State: cbState}}
+		ctx.Chat = chat
 		ctx.User.ctx = ctx
 		ctx.Chat.ctx = ctx
 
@@ -343,7 +369,7 @@ func tgCallbackHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service, *Conte
 						ctx.Log().WithField("handler", rm.OnCallbackAction).WithError(err).Error("callbackAction failed")
 						ctx.AnswerCallbackQuery("Oops! Please try again", false)
 					} else {
-						if ctx.Callback.AnsweredAt == nil{
+						if ctx.Callback.AnsweredAt == nil {
 							ctx.AnswerCallbackQuery("", false)
 						}
 					}
@@ -443,8 +469,11 @@ func tgEditedMessageHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service, *
 	if err != nil {
 		log.WithError(err).WithField("bot", b.ID).Error("Can't detect service")
 	}
-	ctx := &Context{ServiceName: service.Name, User: im.From, Chat: im.Chat, db: db}
-	ctx.User.ctx = ctx
+	ctx := &Context{ServiceName: service.Name, Chat: im.Chat, db: db}
+	if im.From.ID != 0 {
+		ctx.User = im.From
+		ctx.User.ctx = ctx
+	}
 	ctx.Chat.ctx = ctx
 
 	ctx.Message = &im
@@ -502,36 +531,39 @@ func tgIncomingMessageHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service,
 	// workaround to match between inline_msg_id and msg_id
 	dupFound := false
 	var l int64
-	lastMsgIDByUserMutex.Lock()
+	if u.Message.From != nil {
+		lastMsgIDByUserMutex.Lock()
 
+		if lm, exists := lastMsgIDByUser[u.Message.From.ID]; exists {
+			if lm.BotID == b.ID && lm.InlineID != "" {
+				l = time.Now().Sub(lm.TS).Nanoseconds()
 
-	if lm, exists := lastMsgIDByUser[u.Message.From.ID]; exists {
-		if lm.BotID == b.ID && lm.InlineID != "" {
-			l = time.Now().Sub(lm.TS).Nanoseconds()
-
-			if l < 1000000000 {
-				dupFound = true
-				log.Debugf("message: dup found (inlinemsgid %v) for %v (user %v), after %d", lm.InlineID, u.Message.MessageID, u.Message.From.ID, l)
-				db.C("messages").Update(bson.M{"botid": b.ID, "inlinemsgid": lm.InlineID}, bson.M{"$set": bson.M{"chatid": im.ChatID, "msgid": im.MsgID}})
-				lastMsgIDByUserMutex.Unlock()
-				//log.Error(bson.M{"botid": b.ID, "inlinemsgid": lm.InlineID}, bson.M{"$set": bson.M{"chatid": im.ChatID, "msgid": im.MsgID}}, err)
-				return nil, nil
+				if l < 1000000000 {
+					dupFound = true
+					log.Debugf("message: dup found (inlinemsgid %v) for %v (user %v), after %d", lm.InlineID, u.Message.MessageID, u.Message.From.ID, l)
+					db.C("messages").Update(bson.M{"botid": b.ID, "inlinemsgid": lm.InlineID}, bson.M{"$set": bson.M{"chatid": im.ChatID, "msgid": im.MsgID}})
+					lastMsgIDByUserMutex.Unlock()
+					//log.Error(bson.M{"botid": b.ID, "inlinemsgid": lm.InlineID}, bson.M{"$set": bson.M{"chatid": im.ChatID, "msgid": im.MsgID}}, err)
+					return nil, nil
+				}
 			}
 		}
+		if !dupFound {
+			lastMsgIDByUser[u.Message.From.ID] = msgInfo{ID: u.Message.MessageID, TS: time.Now(), BotID: b.ID, ChatID: u.Message.Chat.ID}
+		}
+		lastMsgIDByUserMutex.Unlock()
 	}
-	if !dupFound {
-		lastMsgIDByUser[u.Message.From.ID] = msgInfo{ID: u.Message.MessageID, TS: time.Now(), BotID: b.ID, ChatID: u.Message.Chat.ID}
-	}
-	lastMsgIDByUserMutex.Unlock()
-
 	service, err := detectServiceByBot(b.ID)
 	//fmt.Printf("detectService: %+v\n", service)
 
 	if err != nil {
 		log.WithError(err).WithField("bot", b.ID).Error("Can't detect service")
 	}
-	ctx := &Context{ServiceName: service.Name, User: im.From, Chat: im.Chat, db: db}
-	ctx.User.ctx = ctx
+	ctx := &Context{ServiceName: service.Name, Chat: im.Chat, db: db}
+	if im.From.ID != 0 {
+		ctx.User = im.From
+		ctx.User.ctx = ctx
+	}
 	ctx.Chat.ctx = ctx
 
 	var rm *Message
@@ -704,6 +736,12 @@ func tgUpdateHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service, *Context
 		return tgChosenInlineResultHandler(u, b, db)
 	} else if u.EditedMessage != nil {
 
+		return tgEditedMessageHandler(u, b, db)
+	} else if u.ChannelPost != nil {
+		u.Message = u.ChannelPost
+		return tgIncomingMessageHandler(u, b, db)
+	} else if u.EditedChannelPost != nil {
+		u.EditedMessage = u.EditedChannelPost
 		return tgEditedMessageHandler(u, b, db)
 	}
 

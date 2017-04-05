@@ -14,7 +14,7 @@ const (
 	format = "Jan 2 15:04:05"
 )
 
-func Papertrail() {
+func init() {
 
 	PThost := os.Getenv("PAPERTRAIL_HOST")
 	if PThost != "" {
