@@ -311,8 +311,10 @@ func serviceHookHandler(c *gin.Context) {
 			}
 
 			for _, chat := range chats {
-				ctx.Chat = chat.Chat
-				err := s.WebhookHandler(ctx, wctx)
+				ctxCopy := *ctx
+				ctxCopy.Chat = chat.Chat
+				ctxCopy.Chat.ctx = &ctxCopy
+				err := s.WebhookHandler(&ctxCopy, wctx)
 
 				if err != nil {
 					ctx.Log().WithFields(log.Fields{"token": token}).WithError(err).Error("WebhookHandler returned error")
@@ -331,10 +333,11 @@ func serviceHookHandler(c *gin.Context) {
 			}
 
 			for _, user := range users {
-				ctx.User = user.User
-				ctx.User.ctx = ctx
-				ctx.Chat = Chat{ID: user.ID, ctx: ctx}
-				err := s.WebhookHandler(ctx, wctx)
+				ctxCopy := *ctx
+				ctxCopy.User = user.User
+				ctxCopy.User.ctx = &ctxCopy
+				ctxCopy.Chat = Chat{ID: user.ID, ctx: &ctxCopy}
+				err := s.WebhookHandler(&ctxCopy, wctx)
 
 				if err != nil {
 					ctx.Log().WithFields(log.Fields{"token": token}).WithError(err).Error("WebhookHandler returned error")
