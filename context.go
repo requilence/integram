@@ -59,6 +59,10 @@ type callback struct {
 	State      int // state is used for checkbox buttons or for other switches
 }
 
+func (c *Context) SetDb(database *mgo.Database) {
+	c.db = database
+}
+
 // SetServiceBaseURL set the baseURL for the current request. Useful when service can be self-hosted. The actual service URL can be found in the incoming webhook
 func (c *Context) SetServiceBaseURL(domainOrURL string) {
 	u, _ := getBaseURL(domainOrURL)
