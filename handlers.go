@@ -95,21 +95,25 @@ func Run() {
 		log.SetLevel(log.InfoLevel)
 	}
 
-	uri := os.Getenv("INTEGRAM_MONGO_URL")
+	if os.Getenv("INTEGRAM_MONGO_LOGGING") == "1" {
+		uri := os.Getenv("INTEGRAM_MONGO_URL")
 
-	if uri == "" {
-		uri = "mongodb://localhost:27017/integram"
+		if uri == "" {
+			uri = "mongodb://localhost:27017/integram"
+		}
+
+		uriParsed, _ := url.Parse(uri)
+
+		hooker, err := mgorus.NewHooker(uriParsed.Host, uriParsed.Path[1:], "logs")
+
+		if err == nil {
+			log.AddHook(hooker)
+		}
 	}
-	uriParsed, _ := url.Parse(uri)
 
-	hooker, err := mgorus.NewHooker(uriParsed.Host, uriParsed.Path[1:], "logs")
 	// This will test TG tokens and creates API
 	time.Sleep(time.Second * 1)
 	initBots()
-
-	if err == nil {
-		log.AddHook(hooker)
-	}
 
 	// Configure
 	router := gin.New()
