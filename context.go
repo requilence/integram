@@ -371,7 +371,7 @@ func (c *Context) Log() *log.Entry {
 		fields["chat"] = c.Chat.ID
 	}
 	if c.Message != nil {
-		fields["msg"] = c.Message.Text
+		fields["msg"] = c.Message.GetTextHash()
 	}
 
 	if c.ChosenInlineResult != nil {
