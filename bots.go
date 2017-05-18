@@ -849,11 +849,11 @@ func (t scheduleMessageSender) Send(m *OutgoingMessage) error {
 
 		total, err := db.C("messages").Find(bson.M{"chatid": m.ChatID, "botid": m.BotID, "date": bson.M{"$gt": time.Now().Add(time.Duration(-1 * int64(time.Second) * int64(antiFloodChatDuration)))}}).Count()
 		if err != nil {
-			log.WithField("message", m).WithError(err).Error("AntiFlood: find messages")
+			log.WithField("chat", m.ChatID).WithError(err).Error("AntiFlood: find messages")
 		}
 
 		if total > antiFloodChatLimit {
-			log.WithField("message", m).WithField("total", total).Error("antiFloodChatLimit exceed")
+			log.WithField("chat", m.ChatID).WithField("total", total).Error("antiFloodChatLimit exceed")
 			return ErrorFlood
 		}
 	}
@@ -864,7 +864,7 @@ func (t scheduleMessageSender) Send(m *OutgoingMessage) error {
 
 	if m.Selective && len(m.findUsernames()) == 0 && m.ReplyToMsgID == 0 {
 		err := errors.New("Inconsistence. Selective is true but there are no @mention or ReplyToMsgID specified")
-		log.WithField("message", m).Error(err)
+		log.WithField("chat", m.ChatID).Error(err)
 		return err
 	}
 
@@ -890,7 +890,7 @@ func (t scheduleMessageSender) Send(m *OutgoingMessage) error {
 
 	_, err := sendMessageJob.Schedule(0, time.Now(), &m)
 	if err != nil {
-		log.WithField("message", m).WithError(err).Error("Can't schedule sendMessageJob")
+		log.WithField("chat", m.ChatID).WithError(err).Error("Can't schedule sendMessageJob")
 	} else {
 		m.processed = true
 	}
@@ -1437,7 +1437,7 @@ func sendMessage(m *OutgoingMessage) error {
 			rescheduled = true
 			_, err := sendMessageJob.Schedule(0, time.Now(), &m)
 			if err != nil {
-				log.WithField("message", m).WithError(err).Error("Can't reschedule sendMessageJob")
+				log.WithField("chat", m.ChatID).WithError(err).Error("Can't reschedule sendMessageJob")
 			}
 			return nil
 		} else if chatID := tgErr.ChatMigratedToChatID(); chatID != 0 {
@@ -1449,10 +1449,11 @@ func sendMessage(m *OutgoingMessage) error {
 			migrateToSuperGroup(db, m.ChatID, chatID)
 
 			// todo: in rare case this can produce duplicate messages for incoming webhooks
-			m.ChatID = chatID
 			if err != nil {
-				log.WithField("message", m).WithError(err).Error("Can't reschedule sendMessageJob")
+				log.WithField("chat", m.ChatID).WithError(err).Error("Can't reschedule sendMessageJob")
 			}
+
+			m.ChatID = chatID
 
 			return nil
 		} else if tgErr.BotStoppedForUser() {
@@ -1554,9 +1555,9 @@ func sendMessage(m *OutgoingMessage) error {
 			}
 		}
 
-		log.WithError(err).WithField("message", m).Error("TG error while sending a message")
+		log.WithError(err).WithField("chat", m.ChatID).Error("TG error while sending a message")
 		return nil
 	}
-	log.WithError(err).WithField("message", m).Error("Error while sending a message")
+	log.WithError(err).WithField("chat", m.ChatID).Error("Error while sending a message")
 	return err
 }
