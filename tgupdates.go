@@ -292,13 +292,17 @@ func tgCallbackHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service, *Conte
 	var err error
 	if u.CallbackQuery.Message != nil {
 		rm, err = findMessage(db, u.CallbackQuery.Message.Chat.ID, b.ID, u.CallbackQuery.Message.MessageID)
+		if err != nil {
+			log.WithError(err).WithField("bot_id", b.ID).WithField("msg_id", u.CallbackQuery.Message.MessageID).Error("tgCallbackHandler can't find source message")
+		}
 	} else {
 		rm, err = findInlineMessage(db, b.ID, u.CallbackQuery.InlineMessageID)
+		if err != nil {
+			log.WithError(err).WithField("bot_id", b.ID).WithField("msg_id", u.CallbackQuery.InlineMessageID).Error("tgCallbackHandler can't find source message")
+		}
 	}
 
-	if err != nil {
-		log.WithError(err).WithField("bot_id", b.ID).WithField("msg_id", u.CallbackQuery.Message.MessageID).Error("tgCallbackHandler can't find source message")
-	}
+
 	if rm != nil {
 		service, err := detectServiceByBot(b.ID)
 
