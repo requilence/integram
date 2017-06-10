@@ -116,24 +116,25 @@ type IncomingMessage struct {
 
 // OutgoingMessage specispecifiesfy data of performing or performed outgoing message
 type OutgoingMessage struct {
-	Message              `bson:",inline"`
-	TextHash             string         `bson:",omitempty"`
-	KeyboardHide         bool           `bson:",omitempty"`
-	ResizeKeyboard       bool           `bson:",omitempty"`
-	KeyboardMarkup       Keyboard       `bson:"-"`
-	InlineKeyboardMarkup InlineKeyboard `bson:",omitempty"`
-	Keyboard             bool           `bson:",omitempty"`
-	ParseMode            string         `bson:",omitempty"`
-	OneTimeKeyboard      bool           `bson:",omitempty"`
-	Selective            bool           `bson:",omitempty"`
-	ForceReply           bool           `bson:",omitempty"`
-	WebPreview           bool           `bson:",omitempty"`
-	Silent               bool           `bson:",omitempty"`
-	FilePath             string         `bson:",omitempty"`
-	FileName             string         `bson:",omitempty"`
-	FileType             string         `bson:",omitempty"`
-	FileRemoveAfter      bool           `bson:",omitempty"`
-	processed            bool
+	Message                 `bson:",inline"`
+	TextHash                string         `bson:",omitempty"`
+	KeyboardHide            bool           `bson:",omitempty"`
+	ResizeKeyboard          bool           `bson:",omitempty"`
+	KeyboardMarkup          Keyboard       `bson:"-"`
+	InlineKeyboardMarkup    InlineKeyboard `bson:",omitempty"`
+	Keyboard                bool           `bson:",omitempty"`
+	ParseMode               string         `bson:",omitempty"`
+	OneTimeKeyboard         bool           `bson:",omitempty"`
+	Selective               bool           `bson:",omitempty"`
+	ForceReply              bool           `bson:",omitempty"`
+	WebPreview              bool           `bson:",omitempty"`
+	Silent                  bool           `bson:",omitempty"`
+	FilePath                string         `bson:",omitempty"`
+	FileName                string         `bson:",omitempty"`
+	FileType                string         `bson:",omitempty"`
+	FileRemoveAfter         bool           `bson:",omitempty"`
+	DisablePMReplyIfTheLast bool           `bson:",omitempty"`
+	processed               bool
 }
 
 // Keyboard is a Shorthand for [][]Button
@@ -667,6 +668,12 @@ func (m *OutgoingMessage) SetSelective(b bool) *OutgoingMessage {
 // SetSilent turns off notifications on iOS and make it silent on Android
 func (m *OutgoingMessage) SetSilent(b bool) *OutgoingMessage {
 	m.Silent = b
+	return m
+}
+
+// DisablePMAutoReplyIfTheLast turns off the default behavior when the incoming message try to trigger reply action for the last outgoing message
+func (m *OutgoingMessage) DisablePMAutoReplyIfTheLast() *OutgoingMessage {
+	m.DisablePMReplyIfTheLast = true
 	return m
 }
 

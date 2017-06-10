@@ -596,12 +596,16 @@ func tgIncomingMessageHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service,
 
 			// removed due to bugs with false replies in the private chat
 
-			/*if rm == nil {
+			if rm == nil {
 				rm, err = findLastOutgoingMessageInChat(db, b.ID, im.ChatID)
+				if rm.om.DisablePMReplyIfTheLast || rm.om.OnReplyAction == "" {
+					rm = nil
+				}
+
 				if err != nil {
 					ctx.Log().WithError(err).Error("Error on findLastOutgoingMessageInChat")
 				}
-			}*/
+			}
 			if rm != nil {
 				fmt.Printf("rm: %v\n", rm.Text)
 			} else {
