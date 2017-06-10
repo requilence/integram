@@ -326,7 +326,7 @@ func tgCallbackHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service, *Conte
 			Callback:    &callback{ID: u.CallbackQuery.ID, Data: cbData, Message: rm.om, State: cbState}}
 		var chat Chat
 		if u.CallbackQuery.InlineMessageID != "" && rm.ChatID != 0 {
-			chatData, err := ctx.findChat(bson.M{"_id": rm.ChatID})
+			chatData, err := ctx.FindChat(bson.M{"_id": rm.ChatID})
 			if err != nil {
 				ctx.Log().WithError(err).Error("find chat for inline msg' callback")
 			} else {

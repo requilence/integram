@@ -224,10 +224,10 @@ func (s *Service) TriggerEventHandler(queryChat bool, bsonQuery map[string]inter
 	ctx := &Context{db: db, ServiceName: s.Name}
 
 	if queryChat {
-		chats, err := ctx.findChats(bsonQuery)
+		chats, err := ctx.FindChats(bsonQuery)
 
 		if err != nil {
-			s.Log().WithError(err).Error("findChats error")
+			s.Log().WithError(err).Error("FindChats error")
 		}
 
 		for _, chat := range chats {
@@ -308,10 +308,10 @@ func serviceHookHandler(c *gin.Context) {
 		}
 
 		if queryChat {
-			chats, err := ctx.findChats(query)
+			chats, err := ctx.FindChats(query)
 
 			if err != nil {
-				log.WithFields(log.Fields{"token": token}).WithError(err).Error("findChats error")
+				log.WithFields(log.Fields{"token": token}).WithError(err).Error("FindChats error")
 			}
 
 			for _, chat := range chats {
@@ -398,7 +398,7 @@ func serviceHookHandler(c *gin.Context) {
 		}
 		hooks = user.Hooks
 	} else if token[0:1] == "c" || token[0:1] == "h" {
-		chat, err := ctx.findChat(bson.M{"hooks.token": token})
+		chat, err := ctx.FindChat(bson.M{"hooks.token": token})
 
 		if !(err == nil && chat.ID != 0) {
 			x, _ := ioutil.ReadAll(c.Request.Body)

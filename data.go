@@ -139,7 +139,7 @@ func findUsernameByID(db *mgo.Database, id int64) string {
 	db.C("chats").FindId(id).Select(bson.M{"username": 1}).One(&d)
 	return d.Username
 }
-func (c *Context) findChat(query bson.M) (chatData, error) {
+func (c *Context) FindChat(query interface{}) (chatData, error) {
 	chat := chatData{}
 	serviceID := c.getServiceID()
 
@@ -149,11 +149,12 @@ func (c *Context) findChat(query bson.M) (chatData, error) {
 		return chat, err
 	}
 	chat.ctx = c
+	chat.Chat.data = &chat
 
 	return chat, nil
 }
 
-func (c *Context) findChats(query bson.M) ([]chatData, error) {
+func (c *Context) FindChats(query interface{}) ([]chatData, error) {
 	chats := []chatData{}
 	serviceID := c.getServiceID()
 
@@ -164,6 +165,7 @@ func (c *Context) findChats(query bson.M) ([]chatData, error) {
 	}
 	for i, _ := range chats {
 		chats[i].ctx = c
+		chats[i].Chat.data = &chats[i]
 	}
 
 	return chats, nil
@@ -479,7 +481,7 @@ func (chat *Chat) getData() (*chatData, error) {
 		fmt.Println("chat.data already loaded")
 		return chat.data, nil
 	}
-	cdata, _ := chat.ctx.findChat(bson.M{"_id": chat.ID})
+	cdata, _ := chat.ctx.FindChat(bson.M{"_id": chat.ID})
 	chat.data = &cdata
 
 	var err error
