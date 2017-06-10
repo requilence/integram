@@ -153,10 +153,15 @@ func Run() {
 	if port == "" {
 		port = "7000"
 	}
+	var err error
 	if port == "443" || port == "1443" {
-		router.RunTLS(":"+port, "integram.crt", "integram.key")
+		err = router.RunTLS(":"+port, "integram.crt", "integram.key")
+
 	} else {
-		router.Run(":" + port)
+		err = router.Run(":" + port)
+	}
+	if err != nil {
+		log.WithError(err).Error("Can't start router")
 	}
 }
 
