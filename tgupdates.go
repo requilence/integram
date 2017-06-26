@@ -598,7 +598,7 @@ func tgIncomingMessageHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service,
 
 			if rm == nil {
 				rm, err = findLastOutgoingMessageInChat(db, b.ID, im.ChatID)
-				if rm.om.DisablePMReplyIfTheLast || rm.om.OnReplyAction == "" {
+				if rm == nil || rm.om.DisablePMReplyIfTheLast || rm.om.OnReplyAction == "" {
 					rm = nil
 				}
 
