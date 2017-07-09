@@ -313,7 +313,8 @@ func SeviceWorkerAutorespawnGoroutine(s *Service) {
 	c := s.EmptyContext()
 	defer func() {
 		if r := recover(); r != nil {
-			s.Log().Error(r)
+			stack := stack(3)
+			log.Errorf("Panic recovery at SeviceWorkerAutorespawnGoroutine -> %s\n%s\n", r, stack)
 		}
 		go SeviceWorkerAutorespawnGoroutine(s) // restart
 	}()

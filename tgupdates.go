@@ -123,10 +123,11 @@ func updateRoutine(b *Bot, u *tg.Update) {
 			return
 		}
 
+		queryHandlerStarted := time.Now()
 		err := service.TGInlineQueryHandler(context)
 
 		if err != nil {
-			context.Log().WithError(err).Error("BotUpdateHandler InlineQuery error")
+			context.Log().WithError(err).WithField("secSpent", time.Now().Sub(queryHandlerStarted).Seconds()).Error("BotUpdateHandler InlineQuery error")
 		} else {
 			if context.inlineQueryAnsweredAt == nil {
 				context.Log().WithError(err).Error("BotUpdateHandler InlineQuery not answered")
@@ -264,7 +265,14 @@ func incomingMessageFromTGMessage(m *tg.Message) IncomingMessage {
 
 	if m.ReplyToMessage != nil {
 		rm := m.ReplyToMessage
-		im.ReplyToMessage = &Message{MsgID: rm.MessageID, FromID: rm.From.ID, ChatID: rm.Chat.ID, Date: time.Unix(int64(rm.Date), 0), Text: rm.Text}
+		im.ReplyToMessage = &Message{MsgID: rm.MessageID, Date: time.Unix(int64(rm.Date), 0), Text: rm.Text}
+		if rm.Chat != nil {
+			im.ReplyToMessage.ChatID = rm.Chat.ID
+		}
+
+		if rm.From != nil {
+			im.ReplyToMessage.FromID = rm.From.ID
+		}
 	}
 
 	im.Caption = m.Caption
@@ -302,7 +310,6 @@ func tgCallbackHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service, *Conte
 		}
 	}
 
-
 	if rm != nil {
 		service, err := detectServiceByBot(b.ID)
 
@@ -328,7 +335,8 @@ func tgCallbackHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service, *Conte
 		if u.CallbackQuery.InlineMessageID != "" && rm.ChatID != 0 {
 			chatData, err := ctx.FindChat(bson.M{"_id": rm.ChatID})
 			if err != nil {
-				ctx.Log().WithError(err).Error("find chat for inline msg' callback")
+				ctx.Log().WithError(err).WithField("chatID", rm.ChatID).Error("find chat for inline msg' callback")
+				chat = Chat{ID: rm.ChatID}
 			} else {
 				chat = chatData.Chat
 			}
@@ -586,31 +594,22 @@ func tgIncomingMessageHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service,
 			// If there is active keyboard – received message is reply for the source message
 			kb, _ := ctx.keyboard()
 			if kb.MsgID > 0 {
-				fmt.Printf("Reply for kb: %d\n", kb.MsgID)
-
 				rm, err = findMessage(db, im.Chat.ID, b.ID, kb.MsgID)
 				if rm == nil {
 					ctx.Log().WithError(err).WithField("msgid", kb.MsgID).WithField("botid", b.ID).Error("Keyboard message source not found")
 				}
 			}
 
-			// removed due to bugs with false replies in the private chat
-
 			if rm == nil {
-				rm, err = findLastOutgoingMessageInChat(db, b.ID, im.ChatID)
-				if rm == nil || rm.om.DisablePMReplyIfTheLast || rm.om.OnReplyAction == "" {
-					rm = nil
-				}
+				if !rm.om.DisablePMReplyIfTheLast && rm.om.OnReplyAction != "" {
+					rm, err = findLastOutgoingMessageInChat(db, b.ID, im.ChatID)
 
-				if err != nil {
-					ctx.Log().WithError(err).Error("Error on findLastOutgoingMessageInChat")
+					if err != nil && err.Error() != "not found" {
+						ctx.Log().WithError(err).Error("Error on findLastOutgoingMessageInChat")
+					}
 				}
 			}
-			if rm != nil {
-				fmt.Printf("rm: %v\n", rm.Text)
-			} else {
-				fmt.Printf("rm: nil %v, %v\n", b.ID, im.ChatID)
-			}
+
 			// Leave ReplyToMessage empty to avoid unnecessary db request in case we don't need prev message.
 			im.ReplyToMessage = rm
 			if rm != nil {
