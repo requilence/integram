@@ -601,11 +601,13 @@ func tgIncomingMessageHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service,
 			}
 
 			if rm == nil {
-				if !rm.om.DisablePMReplyIfTheLast && rm.om.OnReplyAction != "" {
-					rm, err = findLastOutgoingMessageInChat(db, b.ID, im.ChatID)
+				rm, err = findLastOutgoingMessageInChat(db, b.ID, im.ChatID)
 
-					if err != nil && err.Error() != "not found" {
-						ctx.Log().WithError(err).Error("Error on findLastOutgoingMessageInChat")
+				if err != nil && err.Error() != "not found" {
+					ctx.Log().WithError(err).Error("Error on findLastOutgoingMessageInChat")
+				} else if rm != nil {
+					if rm.om.DisablePMReplyIfTheLast || rm.om.OnReplyAction == "" {
+						rm = nil
 					}
 				}
 			}
