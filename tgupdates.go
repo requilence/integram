@@ -41,6 +41,7 @@ func updateRoutine(b *Bot, u *tg.Update) {
 			}
 		}()
 	}
+	updateReceivedAt := time.Now()
 
 	var chatID int64
 	if u.Message != nil {
@@ -117,7 +118,6 @@ func updateRoutine(b *Bot, u *tg.Update) {
 		}
 
 	} else if context.InlineQuery != nil {
-		start := time.Now()
 		if service.TGInlineQueryHandler == nil {
 			context.Log().Warn("Received InlineQuery but TGInlineQueryHandler not set for service")
 			return
@@ -127,14 +127,14 @@ func updateRoutine(b *Bot, u *tg.Update) {
 		err := service.TGInlineQueryHandler(context)
 
 		if err != nil {
-			context.Log().WithError(err).WithField("secSpent", time.Now().Sub(queryHandlerStarted).Seconds()).Error("BotUpdateHandler InlineQuery error")
+			context.Log().WithError(err).WithField("secSpent", time.Now().Sub(queryHandlerStarted).Seconds()).WithField("secSpentSinceUpdate", time.Now().Sub(updateReceivedAt).Seconds()).Error("BotUpdateHandler InlineQuery error")
 		} else {
 			if context.inlineQueryAnsweredAt == nil {
 				context.Log().WithError(err).Error("BotUpdateHandler InlineQuery not answered")
 			} else {
-				secsSpent := context.inlineQueryAnsweredAt.Sub(start).Seconds()
-				if secsSpent > 30 {
-					context.Log().WithError(err).Errorf("BotUpdateHandler InlineQuery 30 sec exceeded: %.1f sec spent", secsSpent)
+				secsSpent := context.inlineQueryAnsweredAt.Sub(updateReceivedAt).Seconds()
+				if secsSpent > 10 {
+					context.Log().WithError(err).Errorf("BotUpdateHandler InlineQuery 10 sec exceeded: %.1f sec spent after update, %.1f sec after the handle", secsSpent, time.Now().Sub(queryHandlerStarted).Seconds())
 				}
 			}
 		}
