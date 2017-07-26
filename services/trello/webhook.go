@@ -296,6 +296,35 @@ func webhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 	}
 
 	switch wh.Action.Type {
+	case "copyCard":
+
+		if !bs.Filter.CardCreated {
+			return
+		}
+		api := api(c)
+
+		dbCard, err := getCard(c, api, card.Id)
+		if err != nil {
+			c.Log().WithError(err).Error("error getting trello card")
+		}
+		prefix := ""
+		if dbCard != nil && dbCard.Board != nil {
+			prefix = fmt.Sprintf("%s copied card from %s:\n\n", mention(c, byMember), m.Fixed(dbCard.Board.Name))
+		}
+
+		card.MemberCreator = byMember
+		card.Pos = float64(wh.Action.Date.Unix())
+
+		storeCard(c, card)
+
+		return msg.SetText(prefix+cardText(c, card)).
+			AddEventID("card_"+card.Id). // save initial card message to reply them in case of card-related actions
+			EnableHTML().
+			SetReplyAction(cardReplied, card.Id).
+			SetInlineKeyboard(cardInlineKeyboard(card, false)).
+			SetCallbackAction(inlineCardButtonPressed, card.Id).
+			Send()
+
 	case "createCard":
 
 		if !bs.Filter.CardCreated {
@@ -458,10 +487,10 @@ func webhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 			if cardMsgJustPosted {
 				return
 			}
+		}
 
-			if !bs.Filter.PersonAssigned {
-				return
-			}
+		if !bs.Filter.PersonAssigned {
+			return
 		}
 		msg.SetTextFmt("%s %s %s", mention(c, byMember), a, mention(c, wh.Action.Member))
 
@@ -521,12 +550,8 @@ func webhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 			// card renamed
 			err = c.UpdateServiceCache("card_"+card.Id, bson.M{"$set": bson.M{"val.name": card.Name}}, card)
 			updateCardMessages(c, wc, card)
-			if cardMsgJustPosted && err == nil {
-				return
-			}
-			msg.EnableHTML()
-			msg.SetSilent(true)
-			msg.Text = fmt.Sprintf("✏️ %s", mention(c, byMember))
+
+			return
 
 		} else if oldCard.Closed != card.Closed {
 			err = c.UpdateServiceCache("card_"+card.Id, bson.M{"$set": bson.M{"val.closed": card.Closed}}, card)
@@ -572,21 +597,7 @@ func webhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 			err = c.UpdateServiceCache("card_"+card.Id, bson.M{"$set": bson.M{"val.desc": card.Desc}}, card)
 			updateCardMessages(c, wc, card)
 
-			if cardMsgJustPosted && err == nil {
-				return
-			}
-
-			if cardMsg == nil {
-				//hide notification because desc is not presented in webpreview
-				//todo: handle this case
-				return
-			}
-
-			msg.SetSilent(true)
-
-			if card.Desc != "" {
-				msg.Text = fmt.Sprintf("✏️ %s", mention(c, byMember))
-			}
+			return
 		} else {
 			return
 		}
