@@ -222,13 +222,15 @@ type snippet struct {
 }
 
 type webhook struct {
-	ObjectKind       string  `json:"object_kind"`
-	SHA              string  `json:"sha"`
-	BuildID          int     `json:"build_id"`
-	BuildStatus      string  `json:"build_status"`
-	BuildName        string  `json:"build_name"`
-	BuildStage       string  `json:"build_stage"`
-	BuildDuration    float32 `json:"build_duration"`
+	ObjectKind        string  `json:"object_kind"`
+	SHA               string  `json:"sha"`
+	BuildID           int     `json:"build_id"`
+	BuildStatus       string  `json:"build_status"`
+	BuildName         string  `json:"build_name"`
+	BuildStage        string  `json:"build_stage"`
+	BuildDuration     float32 `json:"build_duration"`
+	BuildAllowFailure bool    `json:"build_allow_failure"`
+
 	Ref              string
 	Before           string
 	User             user
@@ -789,7 +791,14 @@ func webhookHandler(c *integram.Context, request *integram.WebhookContext) (err 
 		} else if wh.BuildStatus == "success" {
 			text = fmt.Sprintf("✅ CI: "+commit+build+" succeeded after %.1f sec", wh.BuildDuration)
 		} else if wh.BuildStatus == "failed" {
-			text = fmt.Sprintf("‼️ CI: "+commit+build+" failed after %.1f sec", wh.BuildDuration)
+			mark := "‼️"
+			suffix := ""
+			if wh.BuildAllowFailure {
+				suffix = " (allowed to fail)"
+				mark =  "❕"
+			}
+			text = fmt.Sprintf("%s CI: "+commit+build+" failed after %.1f sec%s", mark, wh.BuildDuration, suffix)
+
 		} else if wh.BuildStatus == "canceled" {
 			text = fmt.Sprintf("🔚 CI: "+commit+build+" canceled by %s after %.1f sec", mention(c, wh.User.Name, ""), wh.BuildDuration)
 		}
@@ -803,7 +812,7 @@ func webhookHandler(c *integram.Context, request *integram.WebhookContext) (err 
 		}
 
 		cs := chatSettings(c)
-		if cs.CI.Success && (wh.BuildStatus == "success") || cs.CI.Cancel && (wh.BuildStatus == "canceled") || cs.CI.Fail && (wh.BuildStatus == "failed") {
+		if cs.CI.Success && (wh.BuildStatus == "success") || cs.CI.Cancel && (wh.BuildStatus == "canceled") || cs.CI.Fail && (wh.BuildStatus == "failed") && !wh.BuildAllowFailure {
 			return msg.SetText(text).
 				EnableHTML().Send()
 		}
