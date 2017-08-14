@@ -17,6 +17,7 @@ type webhook struct {
 	Channel     string
 	Attachments []struct {
 		Pretext    string `json:"pretext"`
+		Fallback   string `json:"fallback"`
 		AuthorName string `json:"author_name"`
 		AuthorLink string `json:"author_link"`
 		Title      string `json:"title"`
@@ -73,13 +74,33 @@ func webhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 		}
 		wp := c.WebPreview(wh.Attachments[0].Title, wh.Attachments[0].AuthorName, wh.Attachments[0].Pretext, wh.Attachments[0].TitleLink, wh.Attachments[0].ThumbURL)
 		text := m.URL(" ", wp) + " " + wh.Text
+
+		haveAttachmentWithText:=false
 		for i, attachment := range wh.Attachments {
 			if i > 0 {
 				text += "\n"
 			}
-			text += m.URL(attachment.Title, attachment.TitleLink) + " " + attachment.Pretext
+
+			if attachment.Fallback != "" {
+				attachment.Pretext = attachment.Fallback
+			}
+
+			if attachment.TitleLink != "" {
+				text += m.URL(attachment.Title, attachment.TitleLink) + " "
+			} else if attachment.Title != "" {
+				text += m.Bold(attachment.Title) + " "
+			} else if attachment.Pretext == "" {
+				continue
+			}
+
+			haveAttachmentWithText = true
+
+			text += attachment.Pretext
 		}
-		return c.NewMessage().SetText(text).EnableAntiFlood().EnableHTML().Send()
+
+		if haveAttachmentWithText {
+			return c.NewMessage().SetText(text).EnableAntiFlood().EnableHTML().Send()
+		}
 	}
 
 	if wh.Text != "" {
