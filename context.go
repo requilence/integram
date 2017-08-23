@@ -59,6 +59,10 @@ type callback struct {
 	State      int // state is used for checkbox buttons or for other switches
 }
 
+func (c *Context) SetDb(database *mgo.Database) {
+	c.db = database
+}
+
 // SetServiceBaseURL set the baseURL for the current request. Useful when service can be self-hosted. The actual service URL can be found in the incoming webhook
 func (c *Context) SetServiceBaseURL(domainOrURL string) {
 	u, _ := getBaseURL(domainOrURL)
@@ -195,12 +199,21 @@ type WebhookContext struct {
 	gin        *gin.Context
 	body       []byte
 	firstParse bool
-	requestID  string
+
+	requestID string
 }
 
 // FirstParse indicates that the request body is not yet readed
 func (wc *WebhookContext) FirstParse() bool {
 	return wc.firstParse
+}
+
+func (wc *WebhookContext) Store(key string, b interface{}) {
+	wc.gin.Set(key, b)
+}
+
+func (wc *WebhookContext) Get(key string) (interface{}, bool) {
+	return wc.gin.Get(key)
 }
 
 // Headers returns the headers of request
@@ -211,6 +224,11 @@ func (wc *WebhookContext) Headers() map[string][]string {
 // Header returns the request header with the name
 func (wc *WebhookContext) Header(key string) string {
 	return wc.gin.Request.Header.Get(key)
+}
+
+// Header returns the request header with the name
+func (wc *WebhookContext) Response(code int, s string) {
+	wc.gin.String(code, s)
 }
 
 // KeyboardAnswer retrieve the data related to pressed button
@@ -353,7 +371,7 @@ func (c *Context) Log() *log.Entry {
 		fields["chat"] = c.Chat.ID
 	}
 	if c.Message != nil {
-		fields["msg"] = c.Message.Text
+		fields["msg"] = c.Message.GetTextHash()
 	}
 
 	if c.ChosenInlineResult != nil {
@@ -404,7 +422,7 @@ func (c *Context) Bot() *Bot {
 // EditPressedMessageText edit the text in the msg where user taped it in case this request is triggered by inlineButton callback
 func (c *Context) EditPressedMessageText(text string) error {
 	if c.Callback == nil {
-		return errors.New("Callback to answer is not presented")
+		return errors.New("EditPressedMessageText: Callback is not presented")
 	}
 
 	return c.EditMessageText(c.Callback.Message, text)
@@ -413,7 +431,7 @@ func (c *Context) EditPressedMessageText(text string) error {
 // EditPressedMessageTextAndInlineKeyboard edit the text and inline keyboard in the msg where user taped it in case this request is triggered by inlineButton callback
 func (c *Context) EditPressedMessageTextAndInlineKeyboard(text string, kb InlineKeyboard) error {
 	if c.Callback == nil {
-		return errors.New("Callback to answer is not presented")
+		return errors.New("EditPressedMessageTextAndInlineKeyboard: Callback is not presented")
 	}
 
 	return c.EditMessageTextAndInlineKeyboard(c.Callback.Message, c.Callback.Message.InlineKeyboardMarkup.State, text, kb)
@@ -422,7 +440,7 @@ func (c *Context) EditPressedMessageTextAndInlineKeyboard(text string, kb Inline
 // EditPressedInlineKeyboard edit the inline keyboard in the msg where user taped it in case this request is triggered by inlineButton callback
 func (c *Context) EditPressedInlineKeyboard(kb InlineKeyboard) error {
 	if c.Callback == nil {
-		return errors.New("Callback to answer is not presented")
+		return errors.New("EditPressedInlineKeyboard: Callback is not presented")
 	}
 
 	return c.EditInlineKeyboard(c.Callback.Message, c.Callback.Message.InlineKeyboardMarkup.State, kb)
@@ -432,7 +450,7 @@ func (c *Context) EditPressedInlineKeyboard(kb InlineKeyboard) error {
 func (c *Context) EditPressedInlineButton(newState int, newText string) error {
 	log.WithField("newText", newText).WithField("newState", newState).Info("EditPressedInlineButton")
 	if c.Callback == nil {
-		return errors.New("Callback to answer is not presented")
+		return errors.New("EditPressedInlineButton: Callback is not presented")
 	}
 
 	return c.EditInlineStateButton(c.Callback.Message, c.Callback.Message.InlineKeyboardMarkup.State, c.Callback.State, c.Callback.Data, newState, newText)
@@ -720,9 +738,18 @@ func (c *Context) EditInlineStateButton(om *OutgoingMessage, kbState string, old
 }
 
 // AnswerInlineQueryWithResults answer the inline query that triggered this request
-func (c *Context) AnswerInlineQueryWithResults(res []interface{}, cacheTime int, nextOffset string) error {
+func (c *Context) AnswerInlineQueryWithResults(res []interface{}, cacheTime int, isPersonal bool, nextOffset string) error {
 	bot := c.Bot()
-	_, err := bot.API.AnswerInlineQuery(tg.InlineConfig{IsPersonal: true, InlineQueryID: c.InlineQuery.ID, Results: res, NextOffset: nextOffset})
+	_, err := bot.API.AnswerInlineQuery(tg.InlineConfig{IsPersonal: isPersonal, CacheTime: cacheTime, InlineQueryID: c.InlineQuery.ID, Results: res, NextOffset: nextOffset})
+	n := time.Now()
+	c.inlineQueryAnsweredAt = &n
+	return err
+}
+
+// AnswerInlineQueryWithResults answer the inline query that triggered this request
+func (c *Context) AnswerInlineQueryWithResultsAndPM(res []interface{}, cacheTime int, isPersonal bool, nextOffset string, PMText string, PMParameter string) error {
+	bot := c.Bot()
+	_, err := bot.API.AnswerInlineQuery(tg.InlineConfig{IsPersonal: true, InlineQueryID: c.InlineQuery.ID, Results: res, NextOffset: nextOffset, SwitchPMText: PMText, SwitchPMParameter: PMParameter})
 	n := time.Now()
 	c.inlineQueryAnsweredAt = &n
 	return err
@@ -734,6 +761,12 @@ func (c *Context) AnswerInlineQueryWithPM(text string, parameter string) error {
 	_, err := bot.API.AnswerInlineQuery(tg.InlineConfig{IsPersonal: true, InlineQueryID: c.InlineQuery.ID, SwitchPMText: text, SwitchPMParameter: parameter})
 	n := time.Now()
 	c.inlineQueryAnsweredAt = &n
+	return err
+}
+
+func (c *Context) AnswerCallbackQueryWithURL(url string) error {
+	bot := c.Bot()
+	_, err := bot.API.AnswerCallbackQuery(tg.CallbackConfig{CallbackQueryID: c.Callback.ID, URL: url})
 	return err
 }
 
@@ -866,6 +899,16 @@ func (wc *WebhookContext) FormValue(key string) string {
 		log.Error(err)
 	}
 	return wc.gin.Request.PostForm.Get(key)
+}
+
+// FormValue return form data with specific key
+func (wc *WebhookContext) QueryValue(key string) string {
+	err := wc.gin.Request.ParseForm()
+	if err != nil {
+		log.Error(err)
+	}
+
+	return wc.gin.Request.Form.Get(key)
 }
 
 // HookID returns the HookID from the URL

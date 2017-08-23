@@ -116,24 +116,25 @@ type IncomingMessage struct {
 
 // OutgoingMessage specispecifiesfy data of performing or performed outgoing message
 type OutgoingMessage struct {
-	Message              `bson:",inline"`
-	TextHash             string         `bson:",omitempty"`
-	KeyboardHide         bool           `bson:",omitempty"`
-	ResizeKeyboard       bool           `bson:",omitempty"`
-	KeyboardMarkup       Keyboard       `bson:"-"`
-	InlineKeyboardMarkup InlineKeyboard `bson:",omitempty"`
-	Keyboard             bool           `bson:",omitempty"`
-	ParseMode            string         `bson:",omitempty"`
-	OneTimeKeyboard      bool           `bson:",omitempty"`
-	Selective            bool           `bson:",omitempty"`
-	ForceReply           bool           `bson:",omitempty"`
-	WebPreview           bool           `bson:",omitempty"`
-	Silent               bool           `bson:",omitempty"`
-	FilePath             string         `bson:",omitempty"`
-	FileName             string         `bson:",omitempty"`
-	FileType             string         `bson:",omitempty"`
-	FileRemoveAfter      bool           `bson:",omitempty"`
-	processed            bool
+	Message                 `bson:",inline"`
+	TextHash                string         `bson:",omitempty"`
+	KeyboardHide            bool           `bson:",omitempty"`
+	ResizeKeyboard          bool           `bson:",omitempty"`
+	KeyboardMarkup          Keyboard       `bson:"-"`
+	InlineKeyboardMarkup    InlineKeyboard `bson:",omitempty"`
+	Keyboard                bool           `bson:",omitempty"`
+	ParseMode               string         `bson:",omitempty"`
+	OneTimeKeyboard         bool           `bson:",omitempty"`
+	Selective               bool           `bson:",omitempty"`
+	ForceReply              bool           `bson:",omitempty"`
+	WebPreview              bool           `bson:",omitempty"`
+	Silent                  bool           `bson:",omitempty"`
+	FilePath                string         `bson:",omitempty"`
+	FileName                string         `bson:",omitempty"`
+	FileType                string         `bson:",omitempty"`
+	FileRemoveAfter         bool           `bson:",omitempty"`
+	DisablePMReplyIfTheLast bool           `bson:",omitempty"`
+	processed               bool
 }
 
 // Keyboard is a Shorthand for [][]Button
@@ -172,6 +173,14 @@ type InlineButton struct {
 	SwitchInlineQueryCurrentChat string `bson:",omitempty"`
 
 	OutOfPagination bool `bson:",omitempty" json:"-"` // Only for the single button in first or last row. Use together with InlineKeyboard.MaxRows – for buttons outside of pagination list
+}
+
+type ChatConfig struct {
+	tg.ChatConfig
+}
+
+type ChatConfigWithUser struct {
+	tg.ChatConfigWithUser
 }
 
 // InlineKeyboardMarkup allow to generate TG and DB data from different states - (InlineButtons, []InlineButtons and InlineKeyboard)
@@ -662,6 +671,12 @@ func (m *OutgoingMessage) SetSilent(b bool) *OutgoingMessage {
 	return m
 }
 
+// DisablePMAutoReplyIfTheLast turns off the default behavior when the incoming message try to trigger reply action for the last outgoing message
+func (m *OutgoingMessage) DisablePMAutoReplyIfTheLast() *OutgoingMessage {
+	m.DisablePMReplyIfTheLast = true
+	return m
+}
+
 // SetOneTimeKeyboard sets the Onetime mode for keyboard. Keyboard will be hided after 1st use
 func (m *OutgoingMessage) SetOneTimeKeyboard(b bool) *OutgoingMessage {
 	m.OneTimeKeyboard = b
@@ -841,11 +856,11 @@ func (t scheduleMessageSender) Send(m *OutgoingMessage) error {
 
 		total, err := db.C("messages").Find(bson.M{"chatid": m.ChatID, "botid": m.BotID, "date": bson.M{"$gt": time.Now().Add(time.Duration(-1 * int64(time.Second) * int64(antiFloodChatDuration)))}}).Count()
 		if err != nil {
-			log.WithField("message", m).WithError(err).Error("AntiFlood: find messages")
+			log.WithField("chat", m.ChatID).WithError(err).Error("AntiFlood: find messages")
 		}
 
 		if total > antiFloodChatLimit {
-			log.WithField("message", m).WithField("total", total).Error("antiFloodChatLimit exceed")
+			log.WithField("chat", m.ChatID).WithField("total", total).Error("antiFloodChatLimit exceed")
 			return ErrorFlood
 		}
 	}
@@ -856,7 +871,7 @@ func (t scheduleMessageSender) Send(m *OutgoingMessage) error {
 
 	if m.Selective && len(m.findUsernames()) == 0 && m.ReplyToMsgID == 0 {
 		err := errors.New("Inconsistence. Selective is true but there are no @mention or ReplyToMsgID specified")
-		log.WithField("message", m).Error(err)
+		log.WithField("chat", m.ChatID).Error(err)
 		return err
 	}
 
@@ -882,7 +897,7 @@ func (t scheduleMessageSender) Send(m *OutgoingMessage) error {
 
 	_, err := sendMessageJob.Schedule(0, time.Now(), &m)
 	if err != nil {
-		log.WithField("message", m).WithError(err).Error("Can't schedule sendMessageJob")
+		log.WithField("chat", m.ChatID).WithError(err).Error("Can't schedule sendMessageJob")
 	} else {
 		m.processed = true
 	}
@@ -1011,10 +1026,6 @@ func initBots() error {
 	pool.SetMiddleware(beforeJob)
 	pool.SetAfterFunc(afterJob)
 
-	err = pool.Start()
-	if err != nil {
-		return err
-	}
 	log.Infof("Job pool %v[%d] is ready", "_telegram", poolSize)
 
 	// 23 retries mean maximum of 8 hours deferment (fibonacci sequence)
@@ -1040,6 +1051,12 @@ func initBots() error {
 		log.Infof("@%v added for %v", bot.Username, service.Name)
 	}
 
+	err = pool.Start()
+	log.Info("Telegram main pool started")
+
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -1427,7 +1444,7 @@ func sendMessage(m *OutgoingMessage) error {
 			rescheduled = true
 			_, err := sendMessageJob.Schedule(0, time.Now(), &m)
 			if err != nil {
-				log.WithField("message", m).WithError(err).Error("Can't reschedule sendMessageJob")
+				log.WithField("chat", m.ChatID).WithError(err).Error("Can't reschedule sendMessageJob")
 			}
 			return nil
 		} else if chatID := tgErr.ChatMigratedToChatID(); chatID != 0 {
@@ -1439,10 +1456,11 @@ func sendMessage(m *OutgoingMessage) error {
 			migrateToSuperGroup(db, m.ChatID, chatID)
 
 			// todo: in rare case this can produce duplicate messages for incoming webhooks
-			m.ChatID = chatID
 			if err != nil {
-				log.WithField("message", m).WithError(err).Error("Can't reschedule sendMessageJob")
+				log.WithField("chat", m.ChatID).WithError(err).Error("Can't reschedule sendMessageJob")
 			}
+
+			m.ChatID = chatID
 
 			return nil
 		} else if tgErr.BotStoppedForUser() {
@@ -1530,10 +1548,6 @@ func sendMessage(m *OutgoingMessage) error {
 
 			delay := tgErr.ParseTooManyRequestsDelay()
 
-			if delay == -1 {
-				delay = 10
-			}
-			
 			rescheduled = true
 			_, err := sendMessageJob.Schedule(0, time.Now().Add(time.Duration(delay+rand.Intn(10))*time.Second), &m)
 			return err
@@ -1548,9 +1562,9 @@ func sendMessage(m *OutgoingMessage) error {
 			}
 		}
 
-		log.WithError(err).WithField("message", m).Error("TG error while sending a message")
+		log.WithError(err).WithField("chat", m.ChatID).Error("TG error while sending a message")
 		return nil
 	}
-	log.WithError(err).WithField("message", m).Error("Error while sending a message")
+	log.WithError(err).WithField("chat", m.ChatID).Error("Error while sending a message")
 	return err
 }

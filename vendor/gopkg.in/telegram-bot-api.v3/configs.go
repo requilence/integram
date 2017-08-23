@@ -682,6 +682,7 @@ type InlineConfig struct {
 type CallbackConfig struct {
 	CallbackQueryID string `json:"callback_query_id"`
 	Text            string `json:"text"`
+	URL             string `json:"url"`
 	ShowAlert       bool   `json:"show_alert"`
 }
 

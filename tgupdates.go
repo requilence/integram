@@ -16,7 +16,7 @@ import (
 	tg "gopkg.in/telegram-bot-api.v3"
 )
 
-var updateMapMutex = &sync.Mutex{}
+var updateMapMutex = &sync.RWMutex{}
 var updateMutexPerBotPerChat = make(map[string]*sync.Mutex)
 
 type msgInfo struct {
@@ -41,6 +41,7 @@ func updateRoutine(b *Bot, u *tg.Update) {
 			}
 		}()
 	}
+	updateReceivedAt := time.Now()
 
 	var chatID int64
 	if u.Message != nil {
@@ -67,26 +68,27 @@ func updateRoutine(b *Bot, u *tg.Update) {
 	if exists {
 		m.Lock()
 	} else {
-		m2 := sync.Mutex{}
-		m2.Lock()
+		m = &sync.Mutex{}
+		m.Lock()
 
 		updateMapMutex.Lock()
-		updateMutexPerBotPerChat[mutexID] = &m2
+		updateMutexPerBotPerChat[mutexID] = m
 		updateMapMutex.Unlock()
 
 	}
 
 	db := mongoSession.Clone().DB(mongo.Database)
-	defer db.Session.Close()
 
 	defer func() {
-		updateMapMutex.Lock()
-		m3, exists := updateMutexPerBotPerChat[mutexID]
-		updateMapMutex.Unlock()
+		m.Unlock()
 
-		if exists {
-			m3.Unlock()
-		}
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Println(r)
+			}
+		}()
+
+		db.Session.Close()
 	}()
 
 	service, context := tgUpdateHandler(u, b, db)
@@ -116,23 +118,23 @@ func updateRoutine(b *Bot, u *tg.Update) {
 		}
 
 	} else if context.InlineQuery != nil {
-		start := time.Now()
 		if service.TGInlineQueryHandler == nil {
 			context.Log().Warn("Received InlineQuery but TGInlineQueryHandler not set for service")
 			return
 		}
 
+		queryHandlerStarted := time.Now()
 		err := service.TGInlineQueryHandler(context)
 
 		if err != nil {
-			context.Log().WithError(err).Error("BotUpdateHandler InlineQuery error")
+			context.Log().WithError(err).WithField("secSpent", time.Now().Sub(queryHandlerStarted).Seconds()).WithField("secSpentSinceUpdate", time.Now().Sub(updateReceivedAt).Seconds()).Error("BotUpdateHandler InlineQuery error")
 		} else {
 			if context.inlineQueryAnsweredAt == nil {
 				context.Log().WithError(err).Error("BotUpdateHandler InlineQuery not answered")
 			} else {
-				secsSpent := context.inlineQueryAnsweredAt.Sub(start).Seconds()
-				if secsSpent > 30 {
-					context.Log().WithError(err).Errorf("BotUpdateHandler InlineQuery 30 sec exceeded: %.1f sec spent", secsSpent)
+				secsSpent := context.inlineQueryAnsweredAt.Sub(updateReceivedAt).Seconds()
+				if secsSpent > 10 {
+					context.Log().WithError(err).Errorf("BotUpdateHandler InlineQuery 10 sec exceeded: %.1f sec spent after update, %.1f sec after the handle", secsSpent, time.Now().Sub(queryHandlerStarted).Seconds())
 				}
 			}
 		}
@@ -219,6 +221,13 @@ func tgUserPointer(u *tg.User) *User {
 	return &User{ID: u.ID, FirstName: u.FirstName, LastName: u.LastName, UserName: u.UserName}
 }
 
+func tgChatPointer(c *tg.Chat) *Chat {
+	if c == nil {
+		return nil
+	}
+	return &Chat{ID: c.ID, FirstName: c.FirstName, LastName: c.LastName, UserName: c.UserName, Title: c.Title, Type: c.Type}
+}
+
 func tgUser(u *tg.User) User {
 	if u == nil {
 		return User{}
@@ -238,24 +247,32 @@ func incomingMessageFromTGMessage(m *tg.Message) IncomingMessage {
 
 	// Base message struct
 	im.MsgID = m.MessageID
-	if m.From!=nil {
+	if m.From != nil {
 		im.FromID = m.From.ID
 	}
 	im.ChatID = m.Chat.ID
 	im.Date = time.Unix(int64(m.Date), 0)
 	im.Text = m.Text
 
-	if m.From!=nil {
+	if m.From != nil {
 		im.From = tgUser(m.From)
 	}
 	im.Chat = Chat{ID: m.Chat.ID, Type: m.Chat.Type, FirstName: m.Chat.FirstName, LastName: m.Chat.LastName, UserName: m.Chat.UserName, Title: m.Chat.Title}
 
 	im.ForwardFrom = tgUserPointer(m.ForwardFrom)
+	im.ForwardFromChat = tgChatPointer(m.ForwardFromChat)
 	im.ForwardDate = time.Unix(int64(m.ForwardDate), 0)
 
 	if m.ReplyToMessage != nil {
 		rm := m.ReplyToMessage
-		im.ReplyToMessage = &Message{MsgID: rm.MessageID, FromID: rm.From.ID, ChatID: rm.Chat.ID, Date: time.Unix(int64(rm.Date), 0), Text: rm.Text}
+		im.ReplyToMessage = &Message{MsgID: rm.MessageID, Date: time.Unix(int64(rm.Date), 0), Text: rm.Text}
+		if rm.Chat != nil {
+			im.ReplyToMessage.ChatID = rm.Chat.ID
+		}
+
+		if rm.From != nil {
+			im.ReplyToMessage.FromID = rm.From.ID
+		}
 	}
 
 	im.Caption = m.Caption
@@ -283,13 +300,16 @@ func tgCallbackHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service, *Conte
 	var err error
 	if u.CallbackQuery.Message != nil {
 		rm, err = findMessage(db, u.CallbackQuery.Message.Chat.ID, b.ID, u.CallbackQuery.Message.MessageID)
+		if err != nil {
+			log.WithError(err).WithField("bot_id", b.ID).WithField("msg_id", u.CallbackQuery.Message.MessageID).Error("tgCallbackHandler can't find source message")
+		}
 	} else {
 		rm, err = findInlineMessage(db, b.ID, u.CallbackQuery.InlineMessageID)
+		if err != nil {
+			log.WithError(err).WithField("bot_id", b.ID).WithField("msg_id", u.CallbackQuery.InlineMessageID).Error("tgCallbackHandler can't find source message")
+		}
 	}
 
-	if err != nil {
-		log.WithError(err).WithField("bot_id", b.ID).WithField("msg_id", u.CallbackQuery.Message.MessageID).Error("tgCallbackHandler can't find source message")
-	}
 	if rm != nil {
 		service, err := detectServiceByBot(b.ID)
 
@@ -306,13 +326,27 @@ func tgCallbackHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service, *Conte
 				log.WithError(err).Errorf("INLINE_BUTTON_STATE_KEYWORD found but next symbol is %s", cbData[1:2])
 			}
 		}
+		ctx := &Context{
+			db:          db,
+			ServiceName: service.Name,
+			User:        tgUser(u.CallbackQuery.From),
+			Callback:    &callback{ID: u.CallbackQuery.ID, Data: cbData, Message: rm.om, State: cbState}}
 		var chat Chat
-		if u.CallbackQuery.Message != nil {
+		if u.CallbackQuery.InlineMessageID != "" && rm.ChatID != 0 {
+			chatData, err := ctx.FindChat(bson.M{"_id": rm.ChatID})
+			if err != nil {
+				ctx.Log().WithError(err).WithField("chatID", rm.ChatID).Error("find chat for inline msg' callback")
+				chat = Chat{ID: rm.ChatID}
+			} else {
+				chat = chatData.Chat
+			}
+
+		} else if u.CallbackQuery.Message != nil {
 			chat = tgChat(u.CallbackQuery.Message.Chat)
 		} else {
 			chat = tgChat(&tg.Chat{ID: u.CallbackQuery.From.ID, LastName: u.CallbackQuery.From.LastName, UserName: u.CallbackQuery.From.UserName, Type: "private", FirstName: u.CallbackQuery.From.FirstName})
 		}
-		ctx := &Context{ServiceName: service.Name, User: tgUser(u.CallbackQuery.From), Chat: chat, db: db, Callback: &callback{ID: u.CallbackQuery.ID, Data: cbData, Message: rm.om, State: cbState}}
+		ctx.Chat = chat
 		ctx.User.ctx = ctx
 		ctx.Chat.ctx = ctx
 
@@ -448,7 +482,7 @@ func tgEditedMessageHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service, *
 		log.WithError(err).WithField("bot", b.ID).Error("Can't detect service")
 	}
 	ctx := &Context{ServiceName: service.Name, Chat: im.Chat, db: db}
-	if im.From.ID!=0 {
+	if im.From.ID != 0 {
 		ctx.User = im.From
 		ctx.User.ctx = ctx
 	}
@@ -560,27 +594,24 @@ func tgIncomingMessageHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service,
 			// If there is active keyboard – received message is reply for the source message
 			kb, _ := ctx.keyboard()
 			if kb.MsgID > 0 {
-				fmt.Printf("Reply for kb: %d\n", kb.MsgID)
-
 				rm, err = findMessage(db, im.Chat.ID, b.ID, kb.MsgID)
 				if rm == nil {
 					ctx.Log().WithError(err).WithField("msgid", kb.MsgID).WithField("botid", b.ID).Error("Keyboard message source not found")
 				}
 			}
 
-			// removed due to bugs with false replies in the private chat
-
-			/*if rm == nil {
+			if rm == nil {
 				rm, err = findLastOutgoingMessageInChat(db, b.ID, im.ChatID)
-				if err != nil {
+
+				if err != nil && err.Error() != "not found" {
 					ctx.Log().WithError(err).Error("Error on findLastOutgoingMessageInChat")
+				} else if rm != nil {
+					if rm.om.DisablePMReplyIfTheLast || rm.om.OnReplyAction == "" {
+						rm = nil
+					}
 				}
-			}*/
-			if rm != nil {
-				fmt.Printf("rm: %v\n", rm.Text)
-			} else {
-				fmt.Printf("rm: nil %v, %v\n", b.ID, im.ChatID)
 			}
+
 			// Leave ReplyToMessage empty to avoid unnecessary db request in case we don't need prev message.
 			im.ReplyToMessage = rm
 			if rm != nil {

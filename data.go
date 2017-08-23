@@ -22,6 +22,10 @@ var (
 	mongo        *mgo.DialInfo // MongoDB Connection info
 )
 
+type MgoChange struct {
+	mgo.Change
+}
+
 func ObjectIdHex(s string) bson.ObjectId {
 	return bson.ObjectIdHex(s)
 }
@@ -33,16 +37,15 @@ func ensureIndexes() {
 	db.C("messages").EnsureIndex(mgo.Index{Key: []string{"botid", "eventid"}})
 	db.C("messages").EnsureIndex(mgo.Index{Key: []string{"chatid", "botid", "msgid", "inlinemsgid"}, Unique: true})
 	db.C("messages").EnsureIndex(mgo.Index{Key: []string{"chatid", "botid", "fromid"}})
-	db.C("messages").EnsureIndex(mgo.Index{Key: []string{"chatid", "botid", "-date"}})
 	db.C("messages").EnsureIndex(mgo.Index{Key: []string{"chatid", "botid", "eventid"}}) //todo: test eventID uniqueness
 
 	db.C("previews").EnsureIndex(mgo.Index{Key: []string{"hash"}, Unique: true, Sparse: true})
 
 	db.C("chats").EnsureIndex(mgo.Index{Key: []string{"hooks.token"}, Unique: true, Sparse: true})
 	db.C("chats").EnsureIndex(mgo.Index{Key: []string{"_id", "membersids"}, Unique: true})
-	db.C("chats").EnsureIndex(mgo.Index{Key: []string{"_id", "adminsids"}, Unique: true, Sparse: true})
 
 	db.C("users").EnsureIndex(mgo.Index{Key: []string{"hooks.token"}, Unique: true, Sparse: true})
+	db.C("users").EnsureIndex(mgo.Index{Key: []string{"protected"}})
 	db.C("users").EnsureIndex(mgo.Index{Key: []string{"username"}}) // should be unique but what if users swap usernames... hm
 	db.C("users").EnsureIndex(mgo.Index{Key: []string{"keyboardperchat.chatid", "_id"}, Unique: true, Sparse: true})
 
@@ -136,21 +139,39 @@ func findUsernameByID(db *mgo.Database, id int64) string {
 	db.C("chats").FindId(id).Select(bson.M{"username": 1}).One(&d)
 	return d.Username
 }
-func (c *Context) findChat(query bson.M) (chatData, error) {
+func (c *Context) FindChat(query interface{}) (chatData, error) {
 	chat := chatData{}
 	serviceID := c.getServiceID()
 
-	err := c.db.C("chats").Find(query).Select(bson.M{"type":1, "firstname": 1, "lastname": 1, "username": 1, "title": 1, "settings." + serviceID: 1, "keyboardperbot": 1, "tz": 1, "hooks": 1}).One(&chat)
+	err := c.db.C("chats").Find(query).Select(bson.M{"type": 1, "firstname": 1, "lastname": 1, "username": 1, "title": 1, "settings." + serviceID: 1, "keyboardperbot": 1, "tz": 1, "hooks": 1}).One(&chat)
 	if err != nil {
 		//c.Log().WithError(err).WithField("query", query).Error("Can't find chat")
 		return chat, err
 	}
 	chat.ctx = c
+	chat.Chat.data = &chat
 
 	return chat, nil
 }
 
-func (c *Context) findUser(query bson.M) (userData, error) {
+func (c *Context) FindChats(query interface{}) ([]chatData, error) {
+	chats := []chatData{}
+	serviceID := c.getServiceID()
+
+	err := c.db.C("chats").Find(query).Select(bson.M{"type": 1, "firstname": 1, "lastname": 1, "username": 1, "title": 1, "settings." + serviceID: 1, "keyboardperbot": 1, "tz": 1, "hooks": 1}).All(&chats)
+	if err != nil {
+		//c.Log().WithError(err).WithField("query", query).Error("Can't find chat")
+		return chats, err
+	}
+	for i, _ := range chats {
+		chats[i].ctx = c
+		chats[i].Chat.data = &chats[i]
+	}
+
+	return chats, nil
+}
+
+func (c *Context) FindUser(query interface{}) (userData, error) {
 	user := userData{}
 	serviceID := c.getServiceID()
 	var err error
@@ -168,7 +189,7 @@ func (c *Context) findUser(query bson.M) (userData, error) {
 	return user, nil
 }
 
-func (c *Context) findUsers(query bson.M) ([]userData, error) {
+func (c *Context) FindUsers(query interface{}) ([]userData, error) {
 	users := []userData{}
 	serviceID := c.getServiceID()
 	var err error
@@ -192,18 +213,26 @@ func (c *Context) findUsers(query bson.M) ([]userData, error) {
 func (c *Context) updateCacheVal(cacheType string, key string, update interface{}, res interface{}) (exists bool) {
 
 	KeyType := reflect.TypeOf("1")
-	ElemType := reflect.ValueOf(res).Elem().Type()
+	var ElemType reflect.Type
+	ElemKind := reflect.ValueOf(res).Kind()
+
+	if ElemKind == reflect.Interface || ElemKind == reflect.Ptr {
+		ElemType = reflect.ValueOf(res).Elem().Type()
+	} else {
+		ElemType = reflect.ValueOf(res).Type()
+	}
+
 	serviceID := c.getServiceID()
 
 	mi := reflect.MakeMap(reflect.MapOf(KeyType, ElemType)).Interface()
 	var err error
 	//var info *mgo.ChangeInfo
 	if cacheType == "user" {
-		_, err = c.db.C("users_cache").Find(bson.M{"userid": c.User.ID, "service": serviceID, "key": strings.ToLower(key)}).Select(bson.M{"_id": 0, "val": 1}).Limit(1).Apply(mgo.Change{Update: update, ReturnNew: true}, mi)
+		_, err = c.db.C("users_cache").Find(bson.M{"userid": c.User.ID, "service": serviceID, "key": strings.ToLower(key)}).Select(bson.M{"_id": 0, "val": 1}).Limit(1).Apply(mgo.Change{Update: update, ReturnNew: true, Upsert: true}, mi)
 	} else if cacheType == "chat" {
-		_, err = c.db.C("chats_cache").Find(bson.M{"chatid": c.Chat.ID, "service": serviceID, "key": strings.ToLower(key)}).Select(bson.M{"_id": 0, "val": 1}).Limit(1).Apply(mgo.Change{Update: update, ReturnNew: true}, mi)
+		_, err = c.db.C("chats_cache").Find(bson.M{"chatid": c.Chat.ID, "service": serviceID, "key": strings.ToLower(key)}).Select(bson.M{"_id": 0, "val": 1}).Limit(1).Apply(mgo.Change{Update: update, ReturnNew: true, Upsert: true}, mi)
 	} else if cacheType == "service" {
-		_, err = c.db.C("services_cache").Find(bson.M{"service": serviceID, "key": strings.ToLower(key)}).Select(bson.M{"_id": 0, "val": 1}).Limit(1).Apply(mgo.Change{Update: update, ReturnNew: true}, mi)
+		_, err = c.db.C("services_cache").Find(bson.M{"service": serviceID, "key": strings.ToLower(key)}).Select(bson.M{"_id": 0, "val": 1}).Limit(1).Apply(mgo.Change{Update: update, ReturnNew: true, Upsert: true}, mi)
 	} else {
 		panic("updateCacheVal, type " + cacheType + " not exists")
 	}
@@ -218,30 +247,40 @@ func (c *Context) updateCacheVal(cacheType string, key string, update interface{
 	}
 
 	// Wow. Such reflection. Much deep.
-	val := reflect.ValueOf(reflect.ValueOf(mi).MapIndex(reflect.ValueOf("val")).Interface())
+	if reflect.ValueOf(mi).MapIndex(reflect.ValueOf("val")).IsValid() {
 
-	if val.IsValid() {
-		resVal := reflect.ValueOf(res)
-		if resVal.Kind() != reflect.Ptr {
-			log.Panic("You need to pass pointer to result interface, not an interface")
-			return false
-		}
+		val := reflect.ValueOf(reflect.ValueOf(mi).MapIndex(reflect.ValueOf("val")).Interface())
 
-		if !resVal.Elem().IsValid() || !resVal.Elem().CanSet() {
-			log.WithField("key", key).Error(cacheType + " cache, can't set to res interface")
-			return false
+		if val.IsValid() {
+			resVal := reflect.ValueOf(res)
+			if resVal.Kind() != reflect.Ptr {
+				log.Panic("You need to pass pointer to result interface, not an interface")
+				return false
+			}
+
+			if !resVal.Elem().IsValid() || !resVal.Elem().CanSet() {
+				log.WithField("key", key).Error(cacheType + " cache, can't set to res interface")
+				return false
+			}
+			resVal.Elem().Set(val)
+			return true
 		}
-		resVal.Elem().Set(val)
-		return true
 	}
-
 	return false
 }
 
 func (c *Context) getCacheVal(cacheType string, key string, res interface{}) (exists bool) {
 
 	KeyType := reflect.TypeOf("1")
-	ElemType := reflect.ValueOf(res).Elem().Type()
+
+	var ElemType reflect.Type
+	ElemKind := reflect.ValueOf(res).Kind()
+
+	if ElemKind == reflect.Interface || ElemKind == reflect.Ptr {
+		ElemType = reflect.ValueOf(res).Elem().Type()
+	} else {
+		ElemType = reflect.ValueOf(res).Type()
+	}
 	serviceID := c.getServiceID()
 	if serviceID == "" {
 		c.Log().Errorf("getCacheVal type %s, service not set", cacheType)
@@ -306,6 +345,10 @@ func (chat *Chat) Cache(key string, res interface{}) (exists bool) {
 // ServiceCache returns if Services's cache for specific key exists and try to bind it to res
 func (c *Context) ServiceCache(key string, res interface{}) (exists bool) {
 	return c.getCacheVal("service", key, res)
+}
+
+func (user *User) Chat() Chat {
+	return Chat{ID: user.ID, Type: "private", UserName: user.UserName, FirstName: user.FirstName, LastName: user.LastName, ctx: user.ctx}
 }
 
 // IsPrivateStarted indicates if user started the private dialog with a bot (e.g. pressed the start button)
@@ -438,7 +481,7 @@ func (chat *Chat) getData() (*chatData, error) {
 		fmt.Println("chat.data already loaded")
 		return chat.data, nil
 	}
-	cdata, _ := chat.ctx.findChat(bson.M{"_id": chat.ID})
+	cdata, _ := chat.ctx.FindChat(bson.M{"_id": chat.ID})
 	chat.data = &cdata
 
 	var err error
@@ -462,7 +505,7 @@ func (user *User) getData() (*userData, error) {
 		panic("nil user context")
 	}
 
-	udata, err := user.ctx.findUser(bson.M{"_id": user.ID})
+	udata, err := user.ctx.FindUser(bson.M{"_id": user.ID})
 
 	user.data = &udata
 	user.Tz = user.data.Tz

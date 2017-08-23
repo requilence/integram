@@ -517,6 +517,9 @@ func (bot *BotAPI) AnswerInlineQuery(config InlineConfig) (APIResponse, error) {
 func (bot *BotAPI) AnswerCallbackQuery(config CallbackConfig) (APIResponse, error) {
 	v := url.Values{}
 
+	if config.URL != "" {
+		v.Add("url", config.URL)
+	}
 	v.Add("callback_query_id", config.CallbackQueryID)
 	v.Add("text", config.Text)
 	v.Add("show_alert", strconv.FormatBool(config.ShowAlert))

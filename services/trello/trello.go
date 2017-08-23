@@ -2268,7 +2268,7 @@ func inlineQueryHandler(c *integram.Context) error {
 		if (ci + 1) < len(cards) {
 			nextOffset = strconv.Itoa(ci)
 		}
-		return c.AnswerInlineQueryWithResults(res, 60, nextOffset)
+		return c.AnswerInlineQueryWithResults(res, 60, true, nextOffset)
 	}
 
 	for bi := 0; bi < len(boards) && bi < 10 && total < 20; bi++ {
@@ -2302,7 +2302,7 @@ func inlineQueryHandler(c *integram.Context) error {
 			}
 		}
 	}
-	return c.AnswerInlineQueryWithResults(res, 60, "")
+	return c.AnswerInlineQueryWithResults(res, 60, true,"")
 }
 func newMessageHandler(c *integram.Context) error {
 	u, _ := iurl.Parse("https://trello.com")
