@@ -606,7 +606,8 @@ func tgIncomingMessageHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service,
 				if err != nil && err.Error() != "not found" {
 					ctx.Log().WithError(err).Error("Error on findLastOutgoingMessageInChat")
 				} else if rm != nil {
-					if rm.om.DisablePMReplyIfTheLast || rm.om.OnReplyAction == "" {
+					// assume user's message as the reply for the last message sent by the bot if bot's message has Reply handler and ForceReply set
+ 					if !rm.om.ForceReply || rm.om.OnReplyAction == "" {
 						rm = nil
 					}
 				}

@@ -106,6 +106,7 @@ func hostedAppSecretEntered(c *integram.Context, baseURL string, appID string) e
 	}
 	c.NewMessage().SetText("Application ID or Secret is incorrect. Please try again. Enter *Application Id*").
 		EnableHTML().
+		EnableForceReply().
 		SetReplyAction(hostedAppIDEntered, baseURL).Send()
 
 	fmt.Printf("Exchange: token: %+v, err:%v\n", token, err)
@@ -121,11 +122,13 @@ func hostedAppIDEntered(c *integram.Context, baseURL string) error {
 	if len(appID) != 64 {
 		c.NewMessage().SetText("Looks like this *Application Id* is incorrect. Must be a 64 HEX symbols. Please try again").
 			EnableHTML().
+			EnableForceReply().
 			SetReplyAction(hostedAppIDEntered, baseURL).Send()
 		return errors.New("Application Id '" + appID + "' is incorrect")
 	}
 	return c.NewMessage().SetText("Great! Now write me the *Secret* for this application").
 		EnableHTML().
+		EnableForceReply().
 		SetReplyAction(hostedAppSecretEntered, baseURL, appID).Send()
 }
 
