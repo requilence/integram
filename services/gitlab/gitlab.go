@@ -305,7 +305,12 @@ func hostedAppSecretEntered(c *integram.Context, baseURL string, appID string) e
 
 	appSecret := strings.TrimSpace(c.Message.Text)
 	if len(appSecret) != 64 {
-		c.NewMessage().SetText("Looks like this *Application Secret* is incorrect. Must be a 64 HEX symbols. Please try again").EnableHTML().DisableWebPreview().SetReplyAction(hostedAppSecretEntered, baseURL).Send()
+		c.NewMessage().
+			SetText("Looks like this *Application Secret* is incorrect. Must be a 64 HEX symbols. Please try again").
+			EnableHTML().DisableWebPreview().
+			SetReplyAction(hostedAppSecretEntered, baseURL).
+			EnableForceReply().
+			Send()
 		return errors.New("Application Secret '" + appSecret + "' is incorrect")
 	}
 	conf := integram.OAuthProvider{BaseURL: c.ServiceBaseURL, ID: appID, Secret: appSecret}
@@ -320,7 +325,9 @@ func hostedAppSecretEntered(c *integram.Context, baseURL string, appID string) e
 	}
 	return c.NewMessage().SetText("Application ID or Secret is incorrect. Please try again. Enter *Application ID*").
 		EnableHTML().
-		SetReplyAction(hostedAppIDEntered, baseURL).Send()
+		SetReplyAction(hostedAppIDEntered, baseURL).
+		EnableForceReply().
+		Send()
 }
 
 func hostedAppIDEntered(c *integram.Context, baseURL string) error {
@@ -330,12 +337,16 @@ func hostedAppIDEntered(c *integram.Context, baseURL string) error {
 	if len(appID) != 64 {
 		c.NewMessage().SetText("Looks like this *Application ID* is incorrect. Must be a 64 HEX symbols. Please try again").
 			EnableHTML().
-			SetReplyAction(hostedAppIDEntered, baseURL).Send()
+			SetReplyAction(hostedAppIDEntered, baseURL).
+			EnableForceReply().
+			Send()
 		return errors.New("Application ID '" + appID + "' is incorrect")
 	}
 	return c.NewMessage().SetText("Great! Now write me the *Secret* for this application").
 		EnableHTML().
-		SetReplyAction(hostedAppSecretEntered, baseURL, appID).Send()
+		SetReplyAction(hostedAppSecretEntered, baseURL, appID).
+		EnableForceReply().
+		Send()
 }
 
 func mustBeAuthed(c *integram.Context) (bool, error) {
@@ -349,7 +360,8 @@ func mustBeAuthed(c *integram.Context) (bool, error) {
 			EnableHTML().
 			EnableForceReply().
 			DisableWebPreview().
-			SetReplyAction(hostedAppIDEntered, c.ServiceBaseURL.String()).Send()
+			SetReplyAction(hostedAppIDEntered, c.ServiceBaseURL.String()).
+			Send()
 
 	}
 	if !c.User.OAuthValid() {
