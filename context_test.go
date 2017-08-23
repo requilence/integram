@@ -1246,6 +1246,7 @@ func TestContext_AnswerInlineQueryWithResults(t *testing.T) {
 	type args struct {
 		res        []interface{}
 		cacheTime  int
+		isPersonal bool
 		nextOffset string
 	}
 	tests := []struct {
@@ -1254,7 +1255,7 @@ func TestContext_AnswerInlineQueryWithResults(t *testing.T) {
 		args    args
 		wantErr string
 	}{
-		{"test1", fields{ServiceName: "servicewithbottoken", db: db, User: User{ID: 9999999999}, Chat: Chat{ID: 9999999999}, InlineQuery: &tg.InlineQuery{ID: "fakeid"}}, args{[]interface{}{tg.NewInlineQueryResultArticle("id", "title", "text")}, 0, ""}, "TG returned 400: Bad Request: QUERY_ID_INVALID"},
+		{"test1", fields{ServiceName: "servicewithbottoken", db: db, User: User{ID: 9999999999}, Chat: Chat{ID: 9999999999}, InlineQuery: &tg.InlineQuery{ID: "fakeid"}}, args{[]interface{}{tg.NewInlineQueryResultArticle("id", "title", "text")}, 0, true, ""}, "TG returned 400: Bad Request: QUERY_ID_INVALID"},
 	}
 	for _, tt := range tests {
 		c := &Context{
@@ -1270,7 +1271,7 @@ func TestContext_AnswerInlineQueryWithResults(t *testing.T) {
 			Callback:              tt.fields.Callback,
 			inlineQueryAnsweredAt: tt.fields.inlineQueryAnsweredAt,
 		}
-		if err := c.AnswerInlineQueryWithResults(tt.args.res, tt.args.cacheTime, tt.args.nextOffset); err == nil || err.Error() != tt.wantErr {
+		if err := c.AnswerInlineQueryWithResults(tt.args.res, tt.args.cacheTime, tt.args.isPersonal, tt.args.nextOffset); err == nil || err.Error() != tt.wantErr {
 			t.Errorf("%q. Context.AnswerInlineQueryWithResults() error = %v, wantErr %v", tt.name, err, tt.wantErr)
 		}
 	}
