@@ -820,7 +820,14 @@ func (user *User) saveProtectedSetting(key string, value interface{}) error {
 func (chat *Chat) SaveSetting(key string, value interface{}) error {
 	serviceID := chat.ctx.getServiceID()
 
-	_, err := chat.ctx.db.C("chats").UpsertId(chat.ID, bson.M{"$set": bson.M{"settings." + serviceID + "." + strings.ToLower(key): value}})
+	change := mgo.Change{
+		Update:    bson.M{"$set": bson.M{"settings." + serviceID + "." + strings.ToLower(key): value}},
+		Upsert:    true,
+		ReturnNew: true,
+	}
+
+	_, err := chat.ctx.db.C("chats").FindId(chat.ID).Apply(change, chat.data)
+
 	return err
 }
 
@@ -833,7 +840,14 @@ func (user *User) SaveSetting(key string, value interface{}) error {
 
 	serviceID := user.ctx.getServiceID()
 
-	_, err := user.ctx.db.C("users").UpsertId(user.ID, bson.M{"$set": bson.M{"settings." + serviceID + "." + strings.ToLower(key): value}})
+	change := mgo.Change{
+		Update:    bson.M{"$set": bson.M{"settings." + serviceID + "." + strings.ToLower(key): value}},
+		Upsert:    true,
+		ReturnNew: true,
+	}
+
+	_, err := user.ctx.db.C("users").FindId(user.ID).Apply(change, user.data)
+
 	return err
 }
 
