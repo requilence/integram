@@ -18,6 +18,7 @@ import (
 
 // BaseURL of the Integram instance to handle the webhooks and resolve webpreviews properly
 var BaseURL = "https://integram.org"
+var WorkerSuffix = ""
 
 // Map of Services configs per name. See Register func
 var services = make(map[string]*Service)
