@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -58,6 +59,12 @@ const apiSuffixURL = "/api/v3/"
 
 // Service returns integram.Service from gitlab.Config
 func (c Config) Service() *integram.Service {
+	uri := os.Getenv("INTEGRAM_GITLAB_BASE_URL")
+
+	if uri == "" {
+		uri = "https://gitlab.com"
+	}
+
 	return &integram.Service{
 		Name:                "gitlab",
 		NameToPrint:         "GitLab",
@@ -88,8 +95,8 @@ func (c Config) Service() *integram.Service {
 				ClientID:     c.ID,
 				ClientSecret: c.Secret,
 				Endpoint: oauth2.Endpoint{
-					AuthURL:  "https://gitlab.com/oauth/authorize",
-					TokenURL: "https://gitlab.com/oauth/token",
+					AuthURL:  fmt.Sprintf("%s/oauth/authorize", uri),
+					TokenURL: fmt.Sprintf("%s/oauth/token", uri),
 				},
 			},
 		},
