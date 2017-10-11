@@ -18,6 +18,7 @@ Just use this links to add integrations you are interested in
 * [GitHub](https://telegram.me/githubbot) – GitHub bot was developed by [Igor Zhukov](https://github.com/zhukov) and it is not the part of Integram
 
 Not found you favorite service? [🤘 Vote for it](https://telegram.me/integram_bot?start=vote)
+
 Running Integram on your side
 ------------------
 You can run Integram on your own server. 
