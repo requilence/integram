@@ -791,7 +791,7 @@ func getBoardFilterKeyboard(c *integram.Context, boardID string) *integram.Keybo
 	keyboard := integram.Keyboard{}
 
 	keyboard.AddRows(
-		integram.Buttons{{"switch", "🚫 Turn off all"}, {"finish", "🏁 Finish tunning"}},
+		integram.Buttons{{"switch", "🚫 Turn off all"}, {"finish", "🏁 Finish tuning"}},
 		integram.Buttons{{"CardCreated", "Card Created"}, {"CardCommented", "Commented"}, {"CardMoved", "Moved"}},
 		integram.Buttons{{"PersonAssigned", "Someone Assigned"}, {"Labeled", "Label attached"}, {"Voted", "Upvoted"}},
 		integram.Buttons{{"Due", "Due date set"}, {"Checklisted", "Checklisted"}, {"Archived", "Archived"}},
@@ -934,7 +934,7 @@ func boardToIntegrateSelected(c *integram.Context) error {
 	but.Append("private", "Private messages")
 
 	c.NewMessage().
-		SetText("Please choose where you would like to receive Trello notifications for board "+boardName).
+		SetText(fmt.Sprintf("Please choose where you would like to receive Trello notifications for board \"%s\"", boardName)).
 		SetKeyboard(but.Markup(1), true).
 		SetReplyToMsgID(c.Message.MsgID).
 		SetReplyAction(targetChatSelected, boardID).
@@ -2010,9 +2010,9 @@ func sendBoardsToIntegrate(c *integram.Context) error {
 	}
 	text := ""
 	if c.Chat.IsGroup() {
-		text = fmt.Sprintf("%s select the board to integrate here. To use the different Trello account – you can /reauthorize me", c.User.Mention())
+		text = fmt.Sprintf("%s, select the board to integrate here. To use a different Trello account – you can /reauthorize me", c.User.Mention())
 	} else {
-		text = fmt.Sprintf("%s select the board. After that you'll be able to choose the chat to integrate it. To use the different Trello account – you can /reauthorize me", c.User.Mention())
+		text = fmt.Sprintf("%s, select the board. After that, you'll be able to choose the chat to integrate it. To use a different Trello account – you can /reauthorize me", c.User.Mention())
 	}
 	msg := c.NewMessage()
 	if c.Message != nil {
