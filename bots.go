@@ -1497,8 +1497,7 @@ func sendMessage(m *OutgoingMessage) error {
 		} else if tgErr.ChatNotFound() {
 			// usually this means that user not initialized the private chat with the bot
 			log.WithField("chat", m.ChatID).WithField("bot", m.BotID).Warn("sendMessage error: Chat not found")
-			if m.BackupChatID != 0 {
-				if m.BackupChatID != m.ChatID {
+			if m.BackupChatID != 0 && m.BackupChatID != m.ChatID {
 					// if this fall from private messages - add the mention and selective to grace notifications and protect the keyboard
 					if m.ChatID > 0 && m.BackupChatID < 0 {
 						db := mongoSession.Clone().DB(mongo.Database)
@@ -1513,9 +1512,26 @@ func sendMessage(m *OutgoingMessage) error {
 					m.ChatID = m.BackupChatID
 					_, err := sendMessageJob.Schedule(0, time.Now(), &m)
 					return err
-				}
 
-				return errors.New("BackupChatID failed")
+			} else if m.ChatID < 0 {
+				// this is not a private chat. Looks like it was removed
+				db := mongoSession.Clone().DB(mongo.Database)
+				defer db.Session.Close()
+				bot := botByID(m.BotID)
+
+				if len(bot.services) == 1 {
+					service := bot.services[0]
+
+					if service.BotWasKickedCallback != nil {
+						ctx := service.EmptyContext()
+						ctx.Chat.ID = m.ChatID
+						ctx.Chat.ctx = ctx
+						bot.services[0].BotWasKickedCallback(ctx)
+					}
+
+					removeHooksForChat(db, service.Name, m.ChatID)
+
+				}
 			}
 			return nil
 		} else if tgErr.BotKicked() {
@@ -1530,6 +1546,7 @@ func sendMessage(m *OutgoingMessage) error {
 				if service.BotWasKickedCallback != nil {
 					ctx := service.EmptyContext()
 					ctx.Chat.ID = m.ChatID
+					ctx.Chat.ctx = ctx
 
 					bot.services[0].BotWasKickedCallback(ctx)
 				}
