@@ -25,6 +25,9 @@ var (
 type MgoChange struct {
 	mgo.Change
 }
+type MgoIndex struct {
+	mgo.Index
+}
 
 func ObjectIdHex(s string) bson.ObjectId {
 	return bson.ObjectIdHex(s)
@@ -466,7 +469,7 @@ func (user *User) updateData() error {
 }
 
 func (chat *Chat) updateData() error {
-	_, err := chat.ctx.db.C("chats").UpsertId(chat.ID, bson.M{"$set": chat, "$setOnInsert": bson.M{"createdat": time.Now()}})
+	_, err := chat.ctx.db.C("chats").UpsertId(chat.ID, bson.M{"$set": chat, "$setOnInsert": bson.M{"createdat": time.Now(), "type": chat.Type}})
 	chat.data.Chat = *chat
 	return err
 }
@@ -636,7 +639,7 @@ func (chat *Chat) SaveSettings(allSettings interface{}) error {
 
 	serviceID := chat.ctx.getServiceID()
 
-	_, err := chat.ctx.db.C("chats").UpsertId(chat.ID, bson.M{"$set": bson.M{"settings." + serviceID: allSettings}, "$setOnInsert": bson.M{"createdat": time.Now()}})
+	_, err := chat.ctx.db.C("chats").UpsertId(chat.ID, bson.M{"$set": bson.M{"settings." + serviceID: allSettings}, "$setOnInsert": bson.M{"createdat": time.Now(), "type": chat.Type}})
 
 	if chat.data == nil {
 		chat.data = &chatData{}
@@ -820,7 +823,7 @@ func (user *User) saveProtectedSetting(key string, value interface{}) error {
 func (chat *Chat) SaveSetting(key string, value interface{}) error {
 	serviceID := chat.ctx.getServiceID()
 
-	_, err := chat.ctx.db.C("chats").UpsertId(chat.ID, bson.M{"$set": bson.M{"settings." + serviceID + "." + strings.ToLower(key): value}})
+	_, err := chat.ctx.db.C("chats").UpsertId(chat.ID, bson.M{"$set": bson.M{"settings." + serviceID + "." + strings.ToLower(key): value}, "$setOnInsert": bson.M{"createdat": time.Now(), "type": chat.Type}})
 	return err
 }
 
@@ -833,7 +836,7 @@ func (user *User) SaveSetting(key string, value interface{}) error {
 
 	serviceID := user.ctx.getServiceID()
 
-	_, err := user.ctx.db.C("users").UpsertId(user.ID, bson.M{"$set": bson.M{"settings." + serviceID + "." + strings.ToLower(key): value}})
+	_, err := user.ctx.db.C("users").UpsertId(user.ID, bson.M{"$set": bson.M{"settings." + serviceID + "." + strings.ToLower(key): value}, "$setOnInsert": bson.M{"createdat": time.Now()}})
 	return err
 }
 
