@@ -1525,8 +1525,19 @@ func sendMessage(m *OutgoingMessage) error {
 			bot := botByID(m.BotID)
 
 			if len(bot.services) == 1 {
-				removeHooksForChat(db, bot.services[0].Name, m.ChatID)
+				service := bot.services[0]
+
+				if service.BotWasKickedCallback != nil {
+					ctx := service.EmptyContext()
+					ctx.Chat.ID = m.ChatID
+
+					bot.services[0].BotWasKickedCallback(ctx)
+				}
+
+				removeHooksForChat(db, service.Name, m.ChatID)
+
 			}
+
 
 			log.WithField("chat", m.ChatID).WithField("bot", m.BotID).Warn("sendMessage error: Bot kicked")
 

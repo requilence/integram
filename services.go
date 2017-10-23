@@ -77,6 +77,9 @@ type Service struct {
 	// Handler to receive chosen inline results from Telegram
 	TGChosenInlineResultHandler func(ctx *Context) error
 
+	// Called when bot was kicked from chat or channel
+	BotWasKickedCallback func(ctx *Context) error
+
 	OAuthSuccessful func(ctx *Context) error
 	// Can be used for services with tiny load
 	UseWebhookInsteadOfLongPolling bool
