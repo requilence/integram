@@ -44,7 +44,7 @@ func (e Error) ChatNotFound() bool {
 }
 
 func (e Error) BotKicked() bool {
-	if strings.Contains(e.Description, "Forbidden: bot was kicked") {
+	if strings.Contains(e.Description, "Forbidden: bot was kicked") || strings.Contains(e.Description, "Forbidden: bot is not a member of the channel chat") {
 		return true
 	}
 	return false
