@@ -22,6 +22,8 @@ import (
 	mgo "gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 	tg "gopkg.in/telegram-bot-api.v3"
+	"net"
+	"net/http"
 )
 
 const inlineButtonStateKeyword = '`'
@@ -231,6 +233,20 @@ func (service *Service) registerBot(fullTokenWithID string) error {
 
 		token := bot.tgToken()
 		bot.API, err = tg.NewBotAPI(token)
+
+		bot.API.Client.Transport = &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 10 * time.Second,
+				DualStack: true,
+			}).DialContext,
+			MaxIdleConns:          100,
+			MaxIdleConnsPerHost:   1,
+			IdleConnTimeout:       10 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+		}
 
 		if err != nil {
 			log.WithError(err).WithField("token", token).Error("NewBotAPI returned error")
