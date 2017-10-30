@@ -24,6 +24,7 @@ import (
 	tg "gopkg.in/telegram-bot-api.v3"
 	"os"
 	"path/filepath"
+	"context"
 )
 
 // MaxMsgsToUpdateWithEventID set the maximum number of last messages to update with EditMessagesTextWithEventID
@@ -40,6 +41,8 @@ type Context struct {
 	Message            *IncomingMessage    // Telegram incoming message if it triggired current request
 	MessageEdited      bool                // True if Message is edited message instead of the new one
 	InlineQuery        *tg.InlineQuery     // Telegram inline query if it triggired current request
+	CancelContext	   context.Context    // Used to cancel the previous unfinished inline query when the new received for the same user and bot
+
 	ChosenInlineResult *chosenInlineResult // Telegram chosen inline result if it triggired current request
 
 	Callback              *callback  // Telegram inline buttons callback if it it triggired current request

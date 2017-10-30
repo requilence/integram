@@ -14,10 +14,14 @@ import (
 	mgo "gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 	tg "gopkg.in/telegram-bot-api.v3"
+	gocontext "context"
 )
 
 var updateMapMutex = &sync.RWMutex{}
 var updateMutexPerBotPerChat = make(map[string]*sync.Mutex)
+
+var inlineQueriesPerBotPerChatMutex = &sync.Mutex{}
+var inlineQueriesPerBotPerChat = make(map[string]gocontext.CancelFunc)
 
 type msgInfo struct {
 	TS       time.Time
@@ -61,35 +65,26 @@ func updateRoutine(b *Bot, u *tg.Update) {
 	}
 	mutexID := fmt.Sprintf("%d_%d", b.ID, chatID)
 
-	updateMapMutex.Lock()
-	m, exists := updateMutexPerBotPerChat[mutexID]
-	updateMapMutex.Unlock()
-
-	if exists {
-		m.Lock()
-	} else {
-		m = &sync.Mutex{}
-		m.Lock()
-
+	if u.InlineQuery == nil {
 		updateMapMutex.Lock()
-		updateMutexPerBotPerChat[mutexID] = m
+		m, exists := updateMutexPerBotPerChat[mutexID]
 		updateMapMutex.Unlock()
+		if exists {
+			m.Lock()
+		} else {
+			m = &sync.Mutex{}
+			m.Lock()
 
+			updateMapMutex.Lock()
+			updateMutexPerBotPerChat[mutexID] = m
+			updateMapMutex.Unlock()
+		}
+		defer m.Unlock()
 	}
 
 	db := mongoSession.Clone().DB(mongo.Database)
 
-	defer func() {
-		m.Unlock()
-
-		defer func() {
-			if r := recover(); r != nil {
-				fmt.Println(r)
-			}
-		}()
-
-		db.Session.Close()
-	}()
+	defer db.Session.Close()
 
 	service, context := tgUpdateHandler(u, b, db)
 
@@ -124,7 +119,23 @@ func updateRoutine(b *Bot, u *tg.Update) {
 		}
 
 		queryHandlerStarted := time.Now()
+		inlineQueriesPerBotPerChatMutex.Lock()
+		if cancelFunc, exists :=  inlineQueriesPerBotPerChat[mutexID]; exists{
+			context.Log().Debug("Another inline request in process. Cancel the previous CancelContext")
+			cancelFunc()
+			delete(inlineQueriesPerBotPerChat, mutexID)
+		}
+
+		context.CancelContext, inlineQueriesPerBotPerChat[mutexID] = gocontext.WithCancel(gocontext.Background())
+
+		inlineQueriesPerBotPerChatMutex.Unlock()
+
 		err := service.TGInlineQueryHandler(context)
+		inlineQueriesPerBotPerChatMutex.Lock()
+		if _, exists :=  inlineQueriesPerBotPerChat[mutexID]; exists{
+			delete(inlineQueriesPerBotPerChat, mutexID)
+		}
+		inlineQueriesPerBotPerChatMutex.Unlock()
 
 		if err != nil {
 			context.Log().WithError(err).WithField("secSpent", time.Now().Sub(queryHandlerStarted).Seconds()).WithField("secSpentSinceUpdate", time.Now().Sub(updateReceivedAt).Seconds()).Error("BotUpdateHandler InlineQuery error")
