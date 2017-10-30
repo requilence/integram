@@ -232,21 +232,24 @@ func (service *Service) registerBot(fullTokenWithID string) error {
 		botPerID[id] = &bot
 
 		token := bot.tgToken()
-		bot.API, err = tg.NewBotAPI(token)
 
-		bot.API.Client.Transport = &http.Transport{
-			Proxy: http.ProxyFromEnvironment,
-			DialContext: (&net.Dialer{
-				Timeout:   30 * time.Second,
-				KeepAlive: 10 * time.Second,
-				DualStack: true,
-			}).DialContext,
-			MaxIdleConns:          100,
-			MaxIdleConnsPerHost:   1,
-			IdleConnTimeout:       10 * time.Second,
-			TLSHandshakeTimeout:   10 * time.Second,
-			ExpectContinueTimeout: 1 * time.Second,
+		client := http.Client{
+			Transport: &http.Transport{
+				Proxy: http.ProxyFromEnvironment,
+				DialContext: (&net.Dialer{
+					Timeout:   30 * time.Second,
+					KeepAlive: 20 * time.Second,
+					DualStack: true,
+				}).DialContext,
+				MaxIdleConns:          100,
+				MaxIdleConnsPerHost:   1,
+				IdleConnTimeout:       30 * time.Second,
+				TLSHandshakeTimeout:   10 * time.Second,
+				ExpectContinueTimeout: 1 * time.Second,
+			},
 		}
+
+		bot.API, err = tg.NewBotAPIWithClient(token, &client)
 
 		if err != nil {
 			log.WithError(err).WithField("token", token).Error("NewBotAPI returned error")
@@ -1030,7 +1033,7 @@ func initBots() error {
 	}
 
 	pool, err := jobs.NewPool(&jobs.PoolConfig{
-		Key:        "_telegram",
+		Key:        "_telegram_youtube",
 		NumWorkers: poolSize,
 		BatchSize:  10,
 	})
