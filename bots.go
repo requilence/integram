@@ -1033,7 +1033,7 @@ func initBots() error {
 	}
 
 	pool, err := jobs.NewPool(&jobs.PoolConfig{
-		Key:        "_telegram_youtube",
+		Key:        "_telegram",
 		NumWorkers: poolSize,
 		BatchSize:  10,
 	})
