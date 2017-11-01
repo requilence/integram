@@ -229,7 +229,7 @@ func tgUserPointer(u *tg.User) *User {
 	if u == nil {
 		return nil
 	}
-	return &User{ID: u.ID, FirstName: u.FirstName, LastName: u.LastName, UserName: u.UserName}
+	return &User{ID: u.ID, FirstName: u.FirstName, LastName: u.LastName, UserName: u.UserName, Lang: u.LanguageCode}
 }
 
 func tgChatPointer(c *tg.Chat) *Chat {
@@ -243,7 +243,7 @@ func tgUser(u *tg.User) User {
 	if u == nil {
 		return User{}
 	}
-	return User{ID: u.ID, FirstName: u.FirstName, LastName: u.LastName, UserName: u.UserName}
+	return User{ID: u.ID, FirstName: u.FirstName, LastName: u.LastName, UserName: u.UserName, Lang: u.LanguageCode}
 }
 
 func tgChat(chat *tg.Chat) Chat {

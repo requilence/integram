@@ -16,6 +16,7 @@ type User struct {
 	LastName  string `bson:",omitempty"`
 	UserName  string `bson:",omitempty"`
 	Tz        string
+	Lang      string
 
 	ctx  *Context // provide pointer to Context for convenient nesting and DB quering
 	data *userData
