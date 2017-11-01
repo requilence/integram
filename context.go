@@ -752,7 +752,7 @@ func (c *Context) AnswerInlineQueryWithResults(res []interface{}, cacheTime int,
 // AnswerInlineQueryWithResults answer the inline query that triggered this request
 func (c *Context) AnswerInlineQueryWithResultsAndPM(res []interface{}, cacheTime int, isPersonal bool, nextOffset string, PMText string, PMParameter string) error {
 	bot := c.Bot()
-	_, err := bot.API.AnswerInlineQuery(tg.InlineConfig{IsPersonal: true, InlineQueryID: c.InlineQuery.ID, Results: res, NextOffset: nextOffset, SwitchPMText: PMText, SwitchPMParameter: PMParameter})
+	_, err := bot.API.AnswerInlineQuery(tg.InlineConfig{IsPersonal: true, CacheTime: cacheTime, InlineQueryID: c.InlineQuery.ID, Results: res, NextOffset: nextOffset, SwitchPMText: PMText, SwitchPMParameter: PMParameter})
 	n := time.Now()
 	c.inlineQueryAnsweredAt = &n
 	return err
