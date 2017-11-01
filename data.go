@@ -929,7 +929,7 @@ func (user *User) OAuthHTTPClient() *http.Client {
 		if ps.OAuthExpireDate != nil && ps.OAuthExpireDate.Before(time.Now().Add(time.Second*5)) {
 			token, err := ts.Token()
 			if err != nil || token == nil {
-				if strings.Contains(err.Error(), "revoked") {
+				if strings.Contains(err.Error(), "revoked") || strings.Contains(err.Error(), "been deleted"){
 					ps.OAuthToken = ""
 					ps.OAuthExpireDate = nil
 					user.saveProtectedSettings()
