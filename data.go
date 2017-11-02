@@ -48,7 +48,7 @@ func ensureIndexes() {
 	db.C("chats").EnsureIndex(mgo.Index{Key: []string{"_id", "membersids"}, Unique: true})
 
 	db.C("users").EnsureIndex(mgo.Index{Key: []string{"hooks.token"}, Unique: true, Sparse: true})
-	db.C("users").EnsureIndex(mgo.Index{Key: []string{"protected"}})
+	db.C("users").DropIndex("protected")
 	db.C("users").EnsureIndex(mgo.Index{Key: []string{"username"}}) // should be unique but what if users swap usernames... hm
 	db.C("users").EnsureIndex(mgo.Index{Key: []string{"keyboardperchat.chatid", "_id"}, Unique: true, Sparse: true})
 
