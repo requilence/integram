@@ -387,6 +387,7 @@ func (c *Context) Log() *log.Entry {
 
 	if c.Callback != nil {
 		fields["callback"] = c.Callback.Data
+		fields["callback_id"] = c.Callback.ID
 
 		if c.Callback.Message.MsgID > 0 {
 			fields["callback_msgid"] = c.Callback.Message.MsgID
@@ -848,6 +849,34 @@ func (c *Context) DownloadURL(url string) (filePath string, err error) {
 	}
 
 	return out.Name(), nil
+}
+
+func (c *Context) GetBotStat(name string, date string) int {
+	name = c.Service().Name+"_"+name
+
+	m := map[string]int{}
+	c.Db().C("bot_stat").FindId(name).Select(bson.M{date:1}).One(&m)
+
+	if v, exists := m[date]; exists{
+		return v
+	}
+
+	return 0
+}
+
+
+func (c *Context) IncBotStatForDay(name string) (error) {
+	name = c.Service().Name+"_"+name
+	t:=time.Now()
+	_, err := c.Db().C("bot_stat").UpsertId(name, bson.M{"$inc": bson.M{t.Format("2006-01-02"):1}, "$setOnInsert": bson.M{"service":c.ServiceName}})
+	return err
+}
+
+func (c *Context) IncBotStat(name string) (error) {
+	name = c.Service().Name+"_"+name
+
+	_, err := c.Db().C("bot_stat").UpsertId(name, bson.M{"$inc": bson.M{"total":1}, "$setOnInsert": bson.M{"service":c.ServiceName}})
+	return err
 }
 
 // RAW returns request's body

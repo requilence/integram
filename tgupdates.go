@@ -138,11 +138,21 @@ func updateRoutine(b *Bot, u *tg.Update) {
 		inlineQueriesPerBotPerChatMutex.Unlock()
 
 		if err != nil {
+			if strings.Contains(err.Error(), "QUERY_ID_INVALID") {
+				context.IncBotStatForDay("iq_timeouted")
+			} else if !strings.Contains(err.Error(), "context canceled"){
+				context.IncBotStatForDay("iq_failed")
+			}
 			context.Log().WithError(err).WithField("secSpent", time.Now().Sub(queryHandlerStarted).Seconds()).WithField("secSpentSinceUpdate", time.Now().Sub(updateReceivedAt).Seconds()).Error("BotUpdateHandler InlineQuery error")
 		} else {
+
 			if context.inlineQueryAnsweredAt == nil {
+				context.IncBotStatForDay("iq_not_answered")
+
 				context.Log().WithError(err).Error("BotUpdateHandler InlineQuery not answered")
 			} else {
+				context.IncBotStatForDay("iq_answered")
+
 				secsSpent := context.inlineQueryAnsweredAt.Sub(updateReceivedAt).Seconds()
 				if secsSpent > 10 {
 					context.Log().WithError(err).Errorf("BotUpdateHandler InlineQuery 10 sec exceeded: %.1f sec spent after update, %.1f sec after the handle", secsSpent, time.Now().Sub(queryHandlerStarted).Seconds())
@@ -159,6 +169,7 @@ func updateRoutine(b *Bot, u *tg.Update) {
 		}
 
 		err := service.TGChosenInlineResultHandler(context)
+		context.IncBotStatForDay("iq_choosen")
 
 		if err != nil {
 			context.Log().WithError(err).Error("BotUpdateHandler error")
