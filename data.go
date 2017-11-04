@@ -28,6 +28,9 @@ type MgoChange struct {
 type MgoIndex struct {
 	mgo.Index
 }
+type MgoIter struct {
+	*mgo.Iter
+}
 
 func ObjectIdHex(s string) bson.ObjectId {
 	return bson.ObjectIdHex(s)
