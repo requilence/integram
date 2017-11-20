@@ -555,6 +555,80 @@ func (c *Context) EditMessagesWithEventID(eventID string, fromState string, text
 	return edited, err
 }
 
+
+// DeleteMessagesWithEventID deletes the last MaxMsgsToUpdateWithEventID messages' text and inline keyboard with the corresponding eventID in ALL chats
+func (c *Context) DeleteMessagesWithEventID(eventID string) (deleted int, err error) {
+	var messages []OutgoingMessage
+	f := bson.M{"botid": c.Bot().ID, "eventid": eventID}
+
+	//update MAX_MSGS_TO_UPDATE_WITH_EVENTID last bot messages
+	c.db.C("messages").Find(f).Sort("-_id").Limit(MaxMsgsToUpdateWithEventID).All(&messages)
+	for _, message := range messages {
+		err = c.DeleteMessage(&message)
+		if err != nil {
+			c.Log().WithError(err).WithField("eventid", eventID).Error("DeleteMessagesWithEventID")
+		} else {
+			deleted++
+		}
+	}
+	return deleted, err
+}
+
+
+// DeleteMessage deletes the outgoing message's text and inline keyboard
+func (c *Context) DeleteMessage(om *OutgoingMessage) error {
+	bot := c.Bot()
+	if om.MsgID != 0 {
+		log.WithField("msgID", om.MsgID).Debug("DeleteMessage")
+	} else {
+		om.ChatID = 0
+		log.WithField("inlineMsgID", om.InlineMsgID).Debug("DeleteMessage")
+	}
+
+	var msg OutgoingMessage
+	var ci *mgo.ChangeInfo
+	var err error
+
+	ci, err = c.db.C("messages").Find(bson.M{"_id": om.ID}).Apply(mgo.Change{Remove: true}, &msg)
+
+
+	if err != nil {
+		c.Log().WithError(err).Error("DeleteMessage messages remove error")
+	}
+
+	if msg.BotID == 0 {
+		c.Log().Warn(fmt.Sprintf("DeleteMessage – message (_id=%s botid=%v id=%v) not found", om.ID, bot.ID, om.MsgID))
+		return nil
+
+	}
+	if ci.Removed == 0 {
+		c.Log().Warn(fmt.Sprintf("DeleteMessage – message (_id=%s botid=%v id=%v) not removed ", om.ID, bot.ID, om.MsgID))
+
+		return nil
+	}
+
+
+	_, err = bot.API.Send(tg.DeleteMessageConfig{
+		ChatID:          om.ChatID,
+		MessageID:       om.MsgID,
+
+	})
+
+	if err != nil {
+		if err.(tg.Error).IsCantAccessChat(){
+			if c.Callback != nil {
+				c.AnswerCallbackQuery("Message can be outdated. Bot can't edit messages created before converting to the Super Group", false)
+			}
+		} else if err.(tg.Error).IsAntiFlood() {
+			c.Log().WithError(err).Warn("TG Anti flood activated")
+		}
+		// Oops. error is occurred – revert the original message
+		c.db.C("messages").Insert(om)
+		return err
+	}
+
+	return nil
+}
 // EditMessageTextAndInlineKeyboard edit the outgoing message's text and inline keyboard
 func (c *Context) EditMessageTextAndInlineKeyboard(om *OutgoingMessage, fromState string, text string, kb InlineKeyboard) error {
 	bot := c.Bot()
