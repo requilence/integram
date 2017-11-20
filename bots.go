@@ -118,24 +118,24 @@ type IncomingMessage struct {
 
 // OutgoingMessage specispecifiesfy data of performing or performed outgoing message
 type OutgoingMessage struct {
-	Message                 `bson:",inline"`
-	TextHash                string         `bson:",omitempty"`
-	KeyboardHide            bool           `bson:",omitempty"`
-	ResizeKeyboard          bool           `bson:",omitempty"`
-	KeyboardMarkup          Keyboard       `bson:"-"`
-	InlineKeyboardMarkup    InlineKeyboard `bson:",omitempty"`
-	Keyboard                bool           `bson:",omitempty"`
-	ParseMode               string         `bson:",omitempty"`
-	OneTimeKeyboard         bool           `bson:",omitempty"`
-	Selective               bool           `bson:",omitempty"`
-	ForceReply              bool           `bson:",omitempty"`  // in the private dialog assume user's message as the reply for the last message sent by the bot if bot's message has Reply handler and ForceReply set
-	WebPreview              bool           `bson:",omitempty"`
-	Silent                  bool           `bson:",omitempty"`
-	FilePath                string         `bson:",omitempty"`
-	FileName                string         `bson:",omitempty"`
-	FileType                string         `bson:",omitempty"`
-	FileRemoveAfter         bool           `bson:",omitempty"`
-	processed               bool
+	Message              `bson:",inline"`
+	TextHash             string         `bson:",omitempty"`
+	KeyboardHide         bool           `bson:",omitempty"`
+	ResizeKeyboard       bool           `bson:",omitempty"`
+	KeyboardMarkup       Keyboard       `bson:"-"`
+	InlineKeyboardMarkup InlineKeyboard `bson:",omitempty"`
+	Keyboard             bool           `bson:",omitempty"`
+	ParseMode            string         `bson:",omitempty"`
+	OneTimeKeyboard      bool           `bson:",omitempty"`
+	Selective            bool           `bson:",omitempty"`
+	ForceReply           bool           `bson:",omitempty"` // in the private dialog assume user's message as the reply for the last message sent by the bot if bot's message has Reply handler and ForceReply set
+	WebPreview           bool           `bson:",omitempty"`
+	Silent               bool           `bson:",omitempty"`
+	FilePath             string         `bson:",omitempty"`
+	FileName             string         `bson:",omitempty"`
+	FileType             string         `bson:",omitempty"`
+	FileRemoveAfter      bool           `bson:",omitempty"`
+	processed            bool
 }
 
 // Keyboard is a Shorthand for [][]Button
@@ -1085,10 +1085,29 @@ func (m *Message) findUsernames() []string {
 
 }
 
-func getFilePath(c *Context, fileID string) (string, error) {
+func GetRemoteFilePath(c *Context, fileID string) (string, error) {
+
+	var fileRemotePath string
+	c.ServiceCache("file_remote_"+fileID, &fileRemotePath)
+
+	if fileRemotePath != "" {
+		return fileRemotePath, nil
+	}
+
+	url, err := c.Bot().API.GetFileDirectURL(fileID)
+	if err != nil {
+		return "", err
+	}
+
+	c.SetServiceCache("file_remote_"+fileID, fileRemotePath, time.Hour*1)
+
+	return url, nil
+}
+
+func GetLocalFilePath(c *Context, fileID string) (string, error) {
 
 	var fileLocalPath string
-	c.User.Cache("file_"+fileID, &fileLocalPath)
+	c.ServiceCache("file_"+fileID, &fileLocalPath)
 
 	if fileLocalPath != "" {
 		if _, err := os.Stat(fileLocalPath); os.IsNotExist(err) {
@@ -1097,7 +1116,7 @@ func getFilePath(c *Context, fileID string) (string, error) {
 	}
 
 	if fileLocalPath == "" {
-		url, err := c.Bot().API.GetFileDirectURL(fileID)
+		url, err := GetRemoteFilePath(c, fileID)
 		if err != nil {
 			return "", err
 		}
@@ -1105,7 +1124,7 @@ func getFilePath(c *Context, fileID string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		c.User.SetCache("file_"+fileID, fileLocalPath, time.Hour*24)
+		c.SetServiceCache("file_"+fileID, fileLocalPath, time.Hour*24)
 	}
 
 	return fileLocalPath, nil
@@ -1137,163 +1156,182 @@ func fileTypeAllowed(allowedTypes []FileType, fileType FileType) bool {
 	return false
 }
 
-func (m *IncomingMessage) GetFile(c *Context, allowedTypes []FileType, maxSize int) (localPath string, fileName string, fileType FileType, err error) {
+type FileInfo struct {
+	ID   string
+	Name string
+	Type FileType
+	Mime string
+	Size int64
+}
+
+func (info *FileInfo) Emoji() string {
+	switch info.Type {
+	case FileTypePhoto, FileTypeSticker:
+		return "🖼"
+	case FileTypeAudio:
+		return "🎵"
+	case FileTypeVideo:
+		return "🎬"
+	case FileTypeVoice:
+		return "🗣"
+	default:
+		return "📎"
+	}
+}
+
+func (m *IncomingMessage) GetFileInfo(c *Context, allowedTypes []FileType) (info FileInfo, err error) {
 	if m.Sticker != nil && fileTypeAllowed(allowedTypes, FileTypeSticker) {
-		fileType = FileTypeSticker
-		if maxSize > 0 && m.Sticker.FileSize > maxSize {
-			err = GetFileMaxSizeExceedError
-			return
-		}
-		localPath, err = getFilePath(c, m.Sticker.FileID)
+		info.Type = FileTypeSticker
+		var remotePath string
+		remotePath, err = GetRemoteFilePath(c, m.Audio.FileID)
 		if err != nil {
 			return
 		}
 
-		fileName = "sticker"
-		fileName += filepath.Ext(localPath)
+		info.Name = filepath.Base(remotePath)
+		info.Size = int64(m.Sticker.FileSize)
+		info.ID = m.Sticker.FileID
 
 		return
 	}
 
 	if m.Audio != nil && fileTypeAllowed(allowedTypes, FileTypeAudio) {
-		fileType = FileTypeAudio
-
-		if maxSize > 0 && m.Audio.FileSize > maxSize {
-			err = GetFileMaxSizeExceedError
-			return
-		}
-
-		localPath, err = getFilePath(c, m.Audio.FileID)
-		if err != nil {
-			return
-		}
+		info.Type = FileTypeAudio
 
 		if m.Audio.Performer == "" && m.Audio.Title == "" {
 			if c.User.UserName != "" {
-				fileName += c.User.UserName
+				info.Name += c.User.UserName
 			} else if c.User.FirstName != "" {
-				fileName += filepath.Clean(c.User.FirstName)
+				info.Name += filepath.Clean(c.User.FirstName)
 			}
 			if m.Caption != "" {
-				fileName += "_" + filepath.Clean(m.Caption)
+				info.Name += "_" + filepath.Clean(m.Caption)
 			} else {
-				fileName += fmt.Sprintf("_%d", m.MsgID)
+				info.Name += fmt.Sprintf("_%d", m.MsgID)
 			}
 		} else {
-			fileName = filepath.Clean(m.Audio.Performer + "-" + m.Audio.Title)
+			info.Name = filepath.Clean(m.Audio.Performer + "-" + m.Audio.Title)
 		}
-		fileName += filepath.Ext(localPath)
+		var remotePath string
+		remotePath, err = GetRemoteFilePath(c, m.Audio.FileID)
+		if err != nil {
+			return
+		}
+		info.Name += filepath.Ext(remotePath)
+		info.ID = m.Audio.FileID
+		info.Size = int64(m.Audio.FileSize)
 
 		return
 	}
 
 	if m.Document != nil && fileTypeAllowed(allowedTypes, FileTypeDocument) {
-		fileType = FileTypeDocument
-
-		if maxSize > 0 && m.Document.FileSize > maxSize {
-			err = GetFileMaxSizeExceedError
-			return
+		info = FileInfo{
+			Type: FileTypeDocument,
+			Size: int64(m.Document.FileSize),
+			Name: m.Document.FileName,
+			ID:   m.Document.FileID,
+			Mime: m.Document.MimeType,
 		}
-
-		localPath, err = getFilePath(c, m.Document.FileID)
-		if err != nil {
-			return
-		}
-		fileName = m.Document.FileName
 
 		return
 	}
 
 	if m.Video != nil && fileTypeAllowed(allowedTypes, FileTypeVideo) {
-		fileType = FileTypeVideo
+		info.Type = FileTypeVideo
 
-		if maxSize > 0 && m.Video.FileSize > maxSize {
-			err = GetFileMaxSizeExceedError
-			return
+		if c.User.UserName != "" {
+			info.Name += c.User.UserName
+		} else if c.User.FirstName != "" {
+			info.Name += filepath.Clean(c.User.FirstName)
+		}
+		if m.Caption != "" {
+			info.Name += "_" + filepath.Clean(m.Caption)
+		} else {
+			info.Name += fmt.Sprintf("_%d", m.MsgID)
 		}
 
-		localPath, err = getFilePath(c, m.Video.FileID)
+		var remotePath string
+
+		remotePath, err = GetRemoteFilePath(c, m.Video.FileID)
 		if err != nil {
 			return
 		}
-
-		if c.User.UserName != "" {
-			fileName += c.User.UserName
-		} else if c.User.FirstName != "" {
-			fileName += filepath.Clean(c.User.FirstName)
-		}
-		if m.Caption != "" {
-			fileName += "_" + filepath.Clean(m.Caption)
-		} else {
-			fileName += fmt.Sprintf("_%d", m.MsgID)
-		}
-
-		fileName += filepath.Ext(localPath)
+		info.Name += filepath.Ext(remotePath)
+		info.ID = m.Video.FileID
+		info.Size = int64(m.Video.FileSize)
 
 		return
 	}
 
 	if m.Voice != nil && fileTypeAllowed(allowedTypes, FileTypeVoice) {
-		fileType = FileTypeVoice
+		info.Type = FileTypeVoice
 
-		if maxSize > 0 && m.Voice.FileSize > maxSize {
-			err = GetFileMaxSizeExceedError
-			return
+		if c.User.UserName != "" {
+			info.Name += c.User.UserName
+		} else if c.User.FirstName != "" {
+			info.Name += filepath.Clean(c.User.FirstName)
+		}
+		if m.Caption != "" {
+			info.Name += "_" + filepath.Clean(m.Caption)
+		} else {
+			info.Name += fmt.Sprintf("_%d", m.MsgID)
 		}
 
-		localPath, err = getFilePath(c, m.Voice.FileID)
+		var remotePath string
+		remotePath, err = GetRemoteFilePath(c, m.Voice.FileID)
 		if err != nil {
 			return
 		}
+		info.Name += filepath.Ext(remotePath)
+		info.ID = m.Voice.FileID
+		info.Size = int64(m.Voice.FileSize)
 
-		if c.User.UserName != "" {
-			fileName += c.User.UserName
-		} else if c.User.FirstName != "" {
-			fileName += filepath.Clean(c.User.FirstName)
-		}
-		if m.Caption != "" {
-			fileName += "_" + filepath.Clean(m.Caption)
-		} else {
-			fileName += fmt.Sprintf("_%d", m.MsgID)
-		}
-
-		fileName += filepath.Ext(localPath)
 		return
 	}
 
 	if m.Photo != nil && len(*m.Photo) > 0 && fileTypeAllowed(allowedTypes, FileTypePhoto) {
-		fileType = FileTypePhoto
+		info.Type = FileTypePhoto
 
 		if c.User.UserName != "" {
-			fileName += c.User.UserName
+			info.Name += c.User.UserName
 		} else if c.User.FirstName != "" {
-			fileName += filepath.Clean(c.User.FirstName)
+			info.Name += filepath.Clean(c.User.FirstName)
 		}
 		if m.Caption != "" {
-			fileName += "_" + filepath.Clean(m.Caption)
+			info.Name += "_" + filepath.Clean(m.Caption)
 		} else {
-			fileName += fmt.Sprintf("_%d", m.MsgID)
+			info.Name += fmt.Sprintf("_%d", m.MsgID)
 		}
-		fileName += ".jpg"
+		info.Name += ".jpg"
 
-		for i := len((*m.Photo)) - 1; i >= 0; i-- {
-			if maxSize > 0 && (*m.Photo)[i].FileSize <= maxSize {
-				localPath, err = getFilePath(c, (*m.Photo)[i].FileID)
-				break
-			}
-		}
+		largestPhoto := (*m.Photo)[len(*m.Photo)-1]
+		info.ID = largestPhoto.FileID
+		info.Size = int64(largestPhoto.FileSize)
+		info.Mime = "image/jpeg"
 
 		if err != nil {
 			return
 		}
 
-		if localPath == "" {
-			err = GetFileMaxSizeExceedError
-			return
-		}
-
 		return
 	}
+	return
+}
+
+func (m *IncomingMessage) GetFile(c *Context, allowedTypes []FileType, maxSize int) (localPath string, fileInfo FileInfo, err error) {
+
+	fileInfo, err = m.GetFileInfo(c, allowedTypes)
+	if err != nil {
+		return
+	}
+
+	if maxSize > 0 && fileInfo.Size > int64(maxSize) {
+		err = GetFileMaxSizeExceedError
+		return
+	}
+
+	localPath, err = GetLocalFilePath(c, fileInfo.ID)
+
 	return
 }
 
@@ -1510,20 +1548,20 @@ func sendMessage(m *OutgoingMessage) error {
 			// usually this means that user not initialized the private chat with the bot
 			log.WithField("chat", m.ChatID).WithField("bot", m.BotID).Warn("sendMessage error: Chat not found")
 			if m.BackupChatID != 0 && m.BackupChatID != m.ChatID {
-					// if this fall from private messages - add the mention and selective to grace notifications and protect the keyboard
-					if m.ChatID > 0 && m.BackupChatID < 0 {
-						db := mongoSession.Clone().DB(mongo.Database)
-						defer db.Session.Close()
-						username := findUsernameByID(db, m.ChatID)
-						if username != "" {
-							m.Text = "@" + username + " " + m.Text
-							m.Selective = true
-						}
+				// if this fall from private messages - add the mention and selective to grace notifications and protect the keyboard
+				if m.ChatID > 0 && m.BackupChatID < 0 {
+					db := mongoSession.Clone().DB(mongo.Database)
+					defer db.Session.Close()
+					username := findUsernameByID(db, m.ChatID)
+					if username != "" {
+						m.Text = "@" + username + " " + m.Text
+						m.Selective = true
 					}
-					rescheduled = true
-					m.ChatID = m.BackupChatID
-					_, err := sendMessageJob.Schedule(0, time.Now(), &m)
-					return err
+				}
+				rescheduled = true
+				m.ChatID = m.BackupChatID
+				_, err := sendMessageJob.Schedule(0, time.Now(), &m)
+				return err
 
 			} else if m.ChatID < 0 {
 				// this is not a private chat. Looks like it was removed
@@ -1566,7 +1604,6 @@ func sendMessage(m *OutgoingMessage) error {
 				removeHooksForChat(db, service.Name, m.ChatID)
 
 			}
-
 
 			log.WithField("chat", m.ChatID).WithField("bot", m.BotID).Warn("sendMessage error: Bot kicked")
 
