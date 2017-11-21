@@ -1028,7 +1028,7 @@ func initBots() error {
 	pool, err := jobs.NewPool(&jobs.PoolConfig{
 		Key:        "_telegram" + WorkerSuffix,
 		NumWorkers: poolSize,
-		BatchSize:  10,
+		BatchSize:  1000,
 	})
 
 	if err != nil {
@@ -1041,7 +1041,7 @@ func initBots() error {
 	log.Infof("Job pool %v[%d] is ready", "_telegram"+WorkerSuffix, poolSize)
 
 	// 23 retries mean maximum of 8 hours deferment (fibonacci sequence)
-	sendMessageJob, err = jobs.RegisterTypeWithPoolKey("sendMessage", "_telegram"+WorkerSuffix, 23, sendMessage)
+	sendMessageJob, err = jobs.RegisterTypeWithPoolKey("sendMessage", "_telegram"+WorkerSuffix, 1, sendMessage)
 
 	if err != nil {
 		log.WithError(err).Panic("RegisterTypeWithPoolKey sendMessage failed")
