@@ -1020,7 +1020,7 @@ func initBots() error {
 	}
 	gob.Register(&OutgoingMessage{})
 
-	poolSize := 10 // Maximum simultaneously message sending
+	poolSize := 20 // Maximum simultaneously message sending
 	if p, err := strconv.Atoi(os.Getenv("INTEGRAM_TG_POOL")); err != nil && p > 0 {
 		poolSize = p
 	}
@@ -1028,7 +1028,7 @@ func initBots() error {
 	pool, err := jobs.NewPool(&jobs.PoolConfig{
 		Key:        "_telegram" + WorkerSuffix,
 		NumWorkers: poolSize,
-		BatchSize:  1000,
+		BatchSize:  10000,
 	})
 
 	if err != nil {
