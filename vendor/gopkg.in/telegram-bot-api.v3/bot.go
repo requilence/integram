@@ -83,9 +83,16 @@ func (bot *BotAPI) MakeRequest(endpoint string, params url.Values) (APIResponse,
 	}
 
 	var apiResp APIResponse
-	json.Unmarshal(bytes, &apiResp)
+	err = json.Unmarshal(bytes, &apiResp)
+
+	if err != nil {
+		return APIResponse{}, Error{Code: resp.StatusCode, Err: err}
+	}
 
 	if !apiResp.Ok {
+		if apiResp.ErrorCode == 0 {
+			apiResp.ErrorCode = resp.StatusCode
+		}
 		return APIResponse{}, Error{Code: apiResp.ErrorCode, Err: errors.New(apiResp.Description), Description: apiResp.Description, Parameters: apiResp.Parameters}
 	}
 
