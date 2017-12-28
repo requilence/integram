@@ -1,0 +1,5 @@
+language: go
+sudo: enabled
+
+#before_install:
+#install: 
