@@ -137,7 +137,7 @@
   branch = "master"
   name = "github.com/requilence/jobs"
   packages = ["."]
-  revision = "12839b1f3de0090a5abb90f8a4617154710b6579"
+  revision = "47cfcd0e9cf8e5834b2c1185123609d3d54d4d2f"
 
 [[projects]]
   branch = "master"

@@ -203,24 +203,22 @@ func init() {
 		}()
 	}
 }
+
 func afterJob(job *jobs.Job) {
-	log.Debugf("afterJob %v, poolID:%v, finished:%v\n", job.Id(), job.PoolId(), job.Finished().Unix())
 	// remove successed tasks from Redis
 	err := job.Error()
 	if err != nil {
-		log.WithFields(log.Fields{"jobID": job.Id(), "poolId": job.PoolId()}).WithError(err).Error("Job failed")
+		log.WithFields(log.Fields{"jobID": job.Id(), "jobType": job.TypeName(), "poolId": job.PoolId()}).WithError(err).Error("Job failed")
 	}
 
 	if err == nil || job.Retries() == 0 {
-		log.Debugf("destroying the job %v finished(%v), status=%v, retriesLeft=%v, nextTime=%v", job.Id(), job.Finished(), job.Status(), job.Retries(), job.NextTime())
 		job.Destroy()
 	} else {
-		log.Debugf("the job stays %v finished(%v), status=%v, retriesLeft=%v, nextTime=%v", job.Id(), job.Finished(), job.Status(), job.Retries(), job.NextTime())
+		log.WithFields(log.Fields{"jobID": job.Id(), "jobType": job.TypeName(), "poolId": job.PoolId()}).WithError(err).Errorf("Job failed, %d retries left", job.Retries())
 	}
 }
 
 func beforeJob(ch chan bool, job *jobs.Job, args *[]reflect.Value) {
-	log.Debugf("beforeJob %v, poolID:%v, finished:%v\n", job.Id(), job.PoolId(), job.Finished().Unix())
 	s := mongoSession.Clone()
 
 	for i := 0; i < len(*args); i++ {
