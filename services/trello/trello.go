@@ -19,7 +19,7 @@ import (
 
 	"regexp"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 
 	"bytes"
 	"io"
@@ -27,12 +27,12 @@ import (
 	"os"
 	"path/filepath"
 
-	t "github.com/hackerlist/trello"
+	t "github.com/requilence/integram/services/trello/api"
 	"github.com/jinzhu/now"
 	"github.com/mrjones/oauth"
 	"github.com/requilence/integram"
 	"github.com/requilence/integram/decent"
-	tg "gopkg.in/telegram-bot-api.v3"
+	tg "github.com/requilence/telegram-bot-api"
 )
 
 var m = integram.HTMLRichText{}
@@ -40,6 +40,7 @@ var m = integram.HTMLRichText{}
 // Config contains OAuthProvider
 type Config struct {
 	integram.OAuthProvider
+	integram.BotConfig
 }
 
 var defaultBoardFilter = ChatBoardFilterSettings{CardCreated: true, CardCommented: true, CardMoved: true, PersonAssigned: true, Archived: true, Due: true}
@@ -2129,6 +2130,11 @@ func cacheAllCards(c *integram.Context, boards []*t.Board) error {
 	}
 	return c.User.SetCache("cards", cards, time.Hour)
 }
+
+func strPtr(s string) *string {
+	return &s
+}
+
 func inlineQueryHandler(c *integram.Context) error {
 	if !c.User.OAuthValid() {
 		return c.AnswerInlineQueryWithPM("You need to auth me to use Trello bot here", "inline")
@@ -2253,7 +2259,7 @@ func inlineQueryHandler(c *integram.Context) error {
 				ReplyMarkup: &tg.InlineKeyboardMarkup{
 					InlineKeyboard: [][]tg.InlineKeyboardButton{
 						{
-							{Text: "Getting the card...", CallbackData: "wait"},
+							{Text: "Getting the card...", CallbackData: strPtr("wait")},
 						},
 					},
 				},
@@ -2294,7 +2300,7 @@ func inlineQueryHandler(c *integram.Context) error {
 						ReplyMarkup: &tg.InlineKeyboardMarkup{
 							InlineKeyboard: [][]tg.InlineKeyboardButton{
 								{
-									{Text: "Creating card...", CallbackData: "wait"},
+									{Text: "Creating card...", CallbackData: strPtr("wait")},
 								},
 							},
 						},

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	api "github.com/ktrysmt/go-bitbucket"
+	api "github.com/requilence/integram/services/bitbucket/api"
 	"github.com/requilence/integram"
 	"golang.org/x/oauth2"
 )
@@ -16,6 +16,7 @@ var m = integram.HTMLRichText{}
 // Config contains OAuth data only
 type Config struct {
 	integram.OAuthProvider
+	integram.BotConfig
 }
 
 // Service returns integram.Service from config

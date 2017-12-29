@@ -194,12 +194,6 @@
   revision = "83720e22971a8301c5b2738c9364accd3d9eb13a"
 
 [[projects]]
-  name = "github.com/xanzy/go-gitlab"
-  packages = ["."]
-  revision = "c35b3f712f72376e21b645514ec3635e63fe0cd2"
-  version = "v0.6.2"
-
-[[projects]]
   branch = "master"
   name = "golang.org/x/crypto"
   packages = ["ssh/terminal"]
@@ -250,6 +244,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "a67374a66e5985aff14b76d9009f7420e8213eaf6cf7cec82053b18ccac8dc39"
+  inputs-digest = "14e44f55f41a1ccf630f6f338c564239338cbb296ef9f2cf48030b8c37391577"
   solver-name = "gps-cdcl"
   solver-version = 1

@@ -11,13 +11,13 @@ import (
 	"strings"
 	"time"
 
-	log "github.com/Sirupsen/logrus"
-	t "github.com/hackerlist/trello"
 	"github.com/requilence/integram"
 	"github.com/requilence/integram/decent"
+	t "github.com/requilence/integram/services/trello/api"
 	iurl "github.com/requilence/integram/url"
+	tg "github.com/requilence/telegram-bot-api"
+	log "github.com/sirupsen/logrus"
 	"gopkg.in/mgo.v2/bson"
-	tg "gopkg.in/telegram-bot-api.v3"
 )
 
 // TimeToJustUpdateMessage used when received to fade the message and just update the message with just posted card
@@ -802,7 +802,7 @@ func downloadAttachment(c *integram.Context, cardID string, replyToMsgID int, te
 		c.User.SetCache("attachment_"+attachment.ID, fileLocalPath, time.Hour*24)
 	}
 	if attachment.PreviewURL != "" {
-		return c.NewMessage().SetReplyAction(cardReplied, cardID).SetText(text).SetReplyToMsgID(replyToMsgID).SetImage(fileLocalPath, attachment.Name).Send()
+		return c.NewMessage().SetReplyAction(cardReplied, cardID).SetText(text).SetReplyToMsgID(replyToMsgID).SetImage(fileLocalPath, attachment.Name).EnableFileRemoveAfter().Send()
 	}
 
 	return c.NewMessage().SetReplyAction(cardReplied, cardID).SetText(text).SetReplyToMsgID(replyToMsgID).SetDocument(fileLocalPath, attachment.Name).EnableFileRemoveAfter().Send()
