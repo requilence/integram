@@ -92,3 +92,7 @@
 [[constraint]]
   branch = "master"
   name = "github.com/nfnt/resize"
+
+[[constraint]]
+  branch = "master"
+  name = "golang.org/x/crypto"

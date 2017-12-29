@@ -30,21 +30,20 @@ services:
       - mongo
       - redis
     ports:
-      - 7000:7000
+      - ${INTEGRAM_PORT}:${INTEGRAM_PORT}
     environment:
       - TZ=UTC
-      - INTEGRAM_PORT=7000
       - INTEGRAM_MONGO_URL=mongodb://mongo:27017/integram
       - INTEGRAM_REDIS_URL=redis:6379
       - INTEGRAM_INSTANCE_MODE=main
-
       ## required env vars
+      - INTEGRAM_PORT
       - INTEGRAM_BASE_URL
   trello:
       build:
         context: .
         args:
-          gobuildpackage: github.com/requilence/integram/service/trello/cmd
+          gobuildpackage: github.com/requilence/integram/services/trello/cmd
       restart: always
       links:
         - mongo

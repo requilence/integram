@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/autotls"
+	"golang.org/x/crypto/acme/autocert"
 	"github.com/requilence/integram/url"
 	log "github.com/sirupsen/logrus"
 	stdlog "log"
@@ -24,9 +26,12 @@ import (
 
 	"bytes"
 	"sync"
+	"os"
 )
 
 var pwd string
+var cacheDir string
+
 var startedAt time.Time
 
 func getCurrentDir() string {
@@ -47,6 +52,9 @@ func init() {
 	log.Infof("Integram mode: %s", Config.InstanceMode)
 
 	pwd = getCurrentDir()
+	cacheDir = strings.TrimSuffix(os.Getenv("GOPATH"), string(os.PathSeparator)) + string(os.PathSeparator) + ".cache"
+
+	os.Mkdir(cacheDir, 0655)
 	startedAt = time.Now()
 
 	dbConnect()
@@ -201,14 +209,36 @@ func Run() {
 	// Start listening
 
 	var err error
+
 	if Config.Port == "443" || Config.Port == "1443" {
-		err = router.RunTLS(":"+Config.Port, "integram.crt", "integram.key")
+		if _, err := os.Stat("integram.crt"); !os.IsNotExist(err) {
+				log.Infof("SSL: Using integram.key/integram.crt found in the root dir")
+				err = router.RunTLS(":"+Config.Port, "integram.crt", "integram.key")
+		} else {
+			p := strings.Split(Config.ParseBaseURL().Host, ":")
+			domain:=p[0]
+			log.Infof("SSL: using LetsEncrypt to get cert for the '%s' domain", domain)
+
+			m := autocert.Manager{
+				Prompt:     autocert.AcceptTOS,
+				HostPolicy: autocert.HostWhitelist(domain),
+				Cache:      autocert.DirCache(cacheDir),
+			}
+
+			err = autotls.RunWithManager(router, m)
+		}
 
 	} else {
+		if Config.IsMainInstance() || Config.IsSingleProcessInstance() {
+			log.Warnf("WARNING! It is recommended to use Integram with a SSL.\n"+
+				"Just set the INTEGRAM_PORT to 443 and INTEGRAM_BASE_URL contained the correct domain that points to this server IP.\n"+
+				"SSL cert will be obtained automatically using LetsEncrypt")
+		}
 		err = router.Run(":" + Config.Port)
 	}
+
 	if err != nil {
-		log.WithError(err).Error("Can't start router")
+		log.WithError(err).Fatal("Can't start the router")
 	}
 }
 

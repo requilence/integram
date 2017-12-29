@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"github.com/requilence/integram/url"
 )
 
 type Mode string
@@ -48,6 +49,17 @@ func (c *config) IsMainInstance() bool {
 	return false
 }
 
+func (c *config) ParseBaseURL() *url.URL {
+	u, err := url.Parse(c.BaseURL)
+	if err != nil {
+		panic("PANIC: can't parse INTEGRAM_BASE_URL: '"+c.BaseURL+"'")
+	}
+	if u.Scheme == "" {
+		u.Scheme = "https"
+	}
+	return u
+}
+
 func (c *config) IsStandAloneServiceInstance() bool {
 	if c.InstanceMode == InstanceModeStandAloneService {
 		return true
@@ -61,6 +73,8 @@ func (c *config) IsSingleProcessInstance() bool {
 	}
 	return false
 }
+
+
 
 func init() {
 	c := make(chan os.Signal, 1)
@@ -78,4 +92,6 @@ func init() {
 	}()
 
 	envconfig.MustProcess("", &Config)
+
+	Config.ParseBaseURL()
 }

@@ -18,6 +18,7 @@ import (
 	"runtime"
 	"sync"
 	"time"
+	"os"
 )
 
 // Map of Services configs per name. See Register func
@@ -280,7 +281,7 @@ func ensureStandAloneService(serviceName string, machineURL string, botToken str
 }
 
 func loadStandAloneServicesFromFile() error {
-	b, err := ioutil.ReadFile("standAloneServices.json")
+	b, err := ioutil.ReadFile(cacheDir + string(os.PathSeparator) + "standAloneServices.json")
 	if err != nil {
 		return err
 	}
@@ -328,7 +329,7 @@ func saveStandAloneServicesToFile() error {
 		return err
 	}
 
-	return ioutil.WriteFile("standAloneServices.json", jsonData, 0655)
+	return ioutil.WriteFile(cacheDir + string(os.PathSeparator) + "standAloneServices.json", jsonData, 0655)
 }
 
 // Register the service's config and corresponding botToken
