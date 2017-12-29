@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"time"
 
-	api "github.com/ktrysmt/go-bitbucket"
+	api "github.com/requilence/integram/services/bitbucket/api"
 	"github.com/requilence/integram"
 )
 
@@ -43,6 +43,7 @@ type oldWebhook struct {
 	} `json:"repository"`
 	User string `json:"user"`
 }
+
 
 // map of webhook events to the payload type
 var eventTypeMap = map[string]interface{}{

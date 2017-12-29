@@ -10,13 +10,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	"github.com/gin-gonic/gin"
 	"github.com/mrjones/oauth"
 	"github.com/requilence/integram/url"
 	"golang.org/x/oauth2"
 	"gopkg.in/mgo.v2"
-	tg "gopkg.in/telegram-bot-api.v3"
+	tg "github.com/requilence/telegram-bot-api"
 	"io"
 	"net/http"
 	"os"
@@ -416,7 +416,7 @@ func TestContext_Log(t *testing.T) {
 		fields fields
 		want   *log.Entry
 	}{
-		{"test1", fields{ServiceName: "servicewithbottoken", ServiceBaseURL: *URLMustParse("https://sub.example.com"), User: User{ID: 123}, Chat: Chat{ID: -456}, Message: &IncomingMessage{Message: Message{Text: "text"}}}, &log.Entry{Logger: log.StandardLogger(), Data: log.Fields{"user": int64(123), "chat": int64(-456), "msg": "text", "domain": "sub.example.com", "service": "servicewithbottoken"}}},
+		{"test1", fields{ServiceName: "servicewithbottoken", ServiceBaseURL: *URLMustParse("https://sub.example.com"), User: User{ID: 123}, Chat: Chat{ID: -456}, Message: &IncomingMessage{Message: Message{Text: "text"}}}, &log.Entry{Logger: log.StandardLogger(), Data: log.Fields{"user": int64(123), "chat": int64(-456), "msg": "1cb251ec0d568de6a929b520c4aed8d1", "domain": "sub.example.com", "service": "servicewithbottoken"}}},
 	}
 	for _, tt := range tests {
 		c := &Context{

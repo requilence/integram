@@ -4,14 +4,14 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
+
 	"reflect"
 	"runtime"
 	"strings"
 	"time"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/requilence/integram/url"
+	log "github.com/sirupsen/logrus"
 	"golang.org/x/oauth2"
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
@@ -45,7 +45,7 @@ func ensureIndexes() {
 	db.C("chats").EnsureIndex(mgo.Index{Key: []string{"_id", "membersids"}, Unique: true})
 
 	db.C("users").EnsureIndex(mgo.Index{Key: []string{"hooks.token"}, Unique: true, Sparse: true})
-	db.C("users").EnsureIndex(mgo.Index{Key: []string{"protected"}})
+	db.C("users").DropIndex("protected")
 	db.C("users").EnsureIndex(mgo.Index{Key: []string{"username"}}) // should be unique but what if users swap usernames... hm
 	db.C("users").EnsureIndex(mgo.Index{Key: []string{"keyboardperchat.chatid", "_id"}, Unique: true, Sparse: true})
 
@@ -61,25 +61,20 @@ func ensureIndexes() {
 }
 
 func dbConnect() {
-	uri := os.Getenv("INTEGRAM_MONGO_URL")
-
-	if uri == "" {
-		uri = "mongodb://localhost:27017/integram"
-	}
 
 	var err error
-	mongo, err = mgo.ParseURL(uri)
+	mongo, err = mgo.ParseURL(Config.MongoURL)
 	if err != nil {
-		log.WithError(err).WithField("url", uri).Panic("Can't parse MongoDB URL")
+		log.WithError(err).WithField("url", Config.MongoURL).Panic("Can't parse MongoDB URL")
 		panic(err.Error())
 	}
-	mongoSession, err = mgo.Dial(uri)
+	mongoSession, err = mgo.Dial(Config.MongoURL)
 	if err != nil {
-		log.WithError(err).WithField("url", uri).Panic("Can't connect to MongoDB")
+		log.WithError(err).WithField("url", Config.MongoURL).Panic("Can't connect to MongoDB")
 		panic(err.Error())
 	}
 	mongoSession.SetSafe(&mgo.Safe{})
-	log.Infof("MongoDB connected: %s", uri)
+	log.Infof("MongoDB connected: %s", Config.MongoURL)
 
 	ensureIndexes()
 }
@@ -478,7 +473,6 @@ func (chat *Chat) getData() (*chatData, error) {
 	}
 
 	if chat.data != nil {
-		fmt.Println("chat.data already loaded")
 		return chat.data, nil
 	}
 	cdata, _ := chat.ctx.FindChat(bson.M{"_id": chat.ID})
@@ -706,7 +700,6 @@ func (user *User) ServiceHookToken() string {
 func (chat *Chat) ServiceHookToken() string {
 	data, _ := chat.getData()
 	//TODO: test backward compatibility cases
-	fmt.Printf("chatData: %+v\n", data.Hooks)
 	for _, hook := range data.Hooks {
 		for _, service := range hook.Services {
 			if service == chat.ctx.ServiceName {
@@ -725,13 +718,13 @@ func (chat *Chat) ServiceHookToken() string {
 // ServiceHookURL returns User's webhook URL for service to use in webhook handling
 // Used in case when incoming webhooks despatching on the user behalf to chats
 func (user *User) ServiceHookURL() string {
-	return BaseURL + "/" + user.ServiceHookToken()
+	return Config.BaseURL + "/" + user.ctx.ServiceName + "/" + user.ServiceHookToken()
 }
 
 // ServiceHookURL returns Chats's webhook URL for service to use in webhook handling
 // Used in case when user need to put webhook URL to receive notifications to chat
 func (chat *Chat) ServiceHookURL() string {
-	return BaseURL + "/" + chat.ServiceHookToken()
+	return Config.BaseURL + "/" + chat.ctx.ServiceName + "/" + chat.ServiceHookToken()
 }
 
 // AddChatToHook adds the target chat to user's existing hook
@@ -820,14 +813,7 @@ func (user *User) saveProtectedSetting(key string, value interface{}) error {
 func (chat *Chat) SaveSetting(key string, value interface{}) error {
 	serviceID := chat.ctx.getServiceID()
 
-	change := mgo.Change{
-		Update:    bson.M{"$set": bson.M{"settings." + serviceID + "." + strings.ToLower(key): value}},
-		Upsert:    true,
-		ReturnNew: true,
-	}
-
-	_, err := chat.ctx.db.C("chats").FindId(chat.ID).Apply(change, chat.data)
-
+	_, err := chat.ctx.db.C("chats").UpsertId(chat.ID, bson.M{"$set": bson.M{"settings." + serviceID + "." + strings.ToLower(key): value}})
 	return err
 }
 
@@ -840,14 +826,7 @@ func (user *User) SaveSetting(key string, value interface{}) error {
 
 	serviceID := user.ctx.getServiceID()
 
-	change := mgo.Change{
-		Update:    bson.M{"$set": bson.M{"settings." + serviceID + "." + strings.ToLower(key): value}},
-		Upsert:    true,
-		ReturnNew: true,
-	}
-
-	_, err := user.ctx.db.C("users").FindId(user.ID).Apply(change, user.data)
-
+	_, err := user.ctx.db.C("users").UpsertId(user.ID, bson.M{"$set": bson.M{"settings." + serviceID + "." + strings.ToLower(key): value}})
 	return err
 }
 
@@ -895,7 +874,7 @@ func (user *User) AuthTempToken() string {
 // OauthRedirectURL used in OAuth process as returning URL
 func (user *User) OauthRedirectURL() string {
 	providerID := user.ctx.OAuthProvider().internalID()
-	return BaseURL + "/auth/" + providerID
+	return fmt.Sprintf("%s/auth/%s/%s", Config.BaseURL, user.ctx.ServiceName, providerID)
 }
 
 // OauthInitURL used in OAuth process as returning URL
@@ -912,8 +891,7 @@ func (user *User) OauthInitURL() string {
 		return provider.OAuth2Client(user.ctx).AuthCodeURL(authTempToken, oauth2.AccessTypeOffline)
 	}
 	if s.DefaultOAuth1 != nil {
-		return BaseURL + "/oauth1/" + authTempToken
-
+		return fmt.Sprintf("%s/oauth1/%s/%s", Config.BaseURL, s.Name, authTempToken)
 	}
 	return ""
 }
@@ -1114,6 +1092,6 @@ func (c *Context) WebPreview(title string, headline string, text string, service
 		}
 	}
 
-	return BaseURL + "/a/" + wp.Token
+	return Config.BaseURL + "/a/" + wp.Token
 
 }

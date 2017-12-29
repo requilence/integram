@@ -9,7 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	mgo "gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
-	tg "gopkg.in/telegram-bot-api.v3"
+	tg "github.com/requilence/telegram-bot-api"
 	"image"
 	"image/color"
 	"image/draw"
@@ -1284,7 +1284,7 @@ func TestIncomingMessage_SetCallbackAction(t *testing.T) {
 			Contact:               tt.fields.Contact,
 			Location:              tt.fields.Location,
 			Venue:                 tt.fields.Venue,
-			NewChatMember:         tt.fields.NewChatMember,
+			NewChatMembers:        tt.fields.NewChatMember,
 			LeftChatMember:        tt.fields.LeftChatMember,
 			NewChatTitle:          tt.fields.NewChatTitle,
 			NewChatPhoto:          tt.fields.NewChatPhoto,

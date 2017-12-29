@@ -1,0 +1,135 @@
+version: '3'
+volumes:
+  data-redis: {}
+services:
+  mongo:
+      restart: always
+      image: mongo:3.4
+      expose:
+         - "27017"
+##    ports:
+##       - 27017:27017
+      volumes:
+          - /data/db:/data/db
+  redis:
+      restart: always
+      command: redis-server --appendonly yes
+      image: redis:3.2
+      expose:
+        - "6379"
+##    ports:
+##      - 6379:6379
+      volumes:
+          - data-redis:/data
+  integram:
+    build:
+      context: .
+      args:
+        gobuildpackage: github.com/requilence/integram/cmd
+    restart: always
+    links:
+      - mongo
+      - redis
+    depends_on:
+      - mongo
+      - redis
+    ports:
+      - ${INTEGRAM_PORT}:${INTEGRAM_PORT}
+    environment:
+      - TZ=UTC
+      - INTEGRAM_MONGO_URL=mongodb://mongo:27017/integram
+      - INTEGRAM_REDIS_URL=redis:6379
+      - INTEGRAM_INSTANCE_MODE=main
+      ## required env vars
+      - INTEGRAM_PORT
+      - INTEGRAM_BASE_URL
+  trello:
+      build:
+        context: .
+        args:
+          gobuildpackage: github.com/requilence/integram/services/trello/cmd
+      restart: always
+      links:
+        - mongo
+        - redis
+      depends_on:
+        - integram
+      environment:
+        - TZ=UTC
+        - INTEGRAM_PORT=7000
+        - INTEGRAM_MONGO_URL=mongodb://mongo:27017/integram
+        - INTEGRAM_REDIS_URL=redis:6379
+        - INTEGRAM_INSTANCE_MODE=service
+
+        ## required env vars
+        - INTEGRAM_BASE_URL
+        - TRELLO_BOT_TOKEN
+        - TRELLO_OAUTH_ID
+        - TRELLO_OAUTH_SECRET
+  gitlab:
+      build:
+        context: .
+        args:
+          gobuildpackage: github.com/requilence/integram/services/gitlab/cmd
+      restart: always
+      links:
+        - mongo
+        - redis
+      depends_on:
+        - integram
+      environment:
+        - TZ=UTC
+        - INTEGRAM_PORT=7000
+        - INTEGRAM_MONGO_URL=mongodb://mongo:27017/integram
+        - INTEGRAM_REDIS_URL=redis:6379
+        - INTEGRAM_INSTANCE_MODE=service
+
+        ## required env vars
+        - INTEGRAM_BASE_URL
+        - GITLAB_BOT_TOKEN
+        - GITLAB_OAUTH_ID
+        - GITLAB_OAUTH_SECRET
+  bitbucket:
+      build:
+        context: .
+        args:
+          gobuildpackage: github.com/requilence/integram/services/bitbucket/cmd
+      restart: always
+      links:
+        - mongo
+        - redis
+      depends_on:
+        - integram
+      environment:
+        - TZ=UTC
+        - INTEGRAM_PORT=7000
+        - INTEGRAM_MONGO_URL=mongodb://mongo:27017/integram
+        - INTEGRAM_REDIS_URL=redis:6379
+        - INTEGRAM_INSTANCE_MODE=service
+
+        ## required env vars
+        - INTEGRAM_BASE_URL
+        - BITBUCKET_BOT_TOKEN
+        - BITBUCKET_OAUTH_ID
+        - BITBUCKET_OAUTH_SECRET
+  webhook:
+      build:
+        context: .
+        args:
+          gobuildpackage: github.com/requilence/integram/services/webhook/cmd
+      restart: always
+      links:
+        - mongo
+        - redis
+      depends_on:
+        - integram
+      environment:
+        - TZ=UTC
+        - INTEGRAM_PORT=7000
+        - INTEGRAM_MONGO_URL=mongodb://mongo:27017/integram
+        - INTEGRAM_REDIS_URL=redis:6379
+
+        ## required env vars
+        - INTEGRAM_INSTANCE_MODE=service
+        - INTEGRAM_BASE_URL
+        - WEBHOOK_BOT_TOKEN

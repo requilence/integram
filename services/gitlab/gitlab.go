@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/requilence/integram"
-	api "github.com/xanzy/go-gitlab"
+	api "github.com/requilence/integram/services/gitlab/api"
 	"golang.org/x/oauth2"
 )
 
@@ -18,6 +18,7 @@ var m = integram.HTMLRichText{}
 //Config contains OAuth data only
 type Config struct {
 	integram.OAuthProvider
+	integram.BotConfig
 }
 
 // ChatSettings contains notification settings
@@ -536,6 +537,7 @@ func webhookHandler(c *integram.Context, request *integram.WebhookContext) (err 
 
 	err = request.JSON(wh)
 
+
 	if err != nil {
 		return
 	}
@@ -546,9 +548,13 @@ func webhookHandler(c *integram.Context, request *integram.WebhookContext) (err 
 		c.SetServiceBaseURL(wh.Repository.Homepage)
 	} else if wh.ObjectAttributes != nil {
 		if wh.ObjectAttributes.URL == "" {
-			c.Log().WithField("wh", wh).Error("gitlab webhook empty url")
+			c.SetServiceBaseURL(wh.ObjectAttributes.URL)
+		}else if wh.Commit != nil {
+			c.SetServiceBaseURL(wh.Commit.URL)
+		} else {
+			raw,_:=request.RAW()
+			c.Log().WithField("wh", string(*raw)).Error("gitlab webhook empty url")
 		}
-		c.SetServiceBaseURL(wh.ObjectAttributes.URL)
 	}
 
 	switch wh.ObjectKind {

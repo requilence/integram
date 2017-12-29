@@ -2,8 +2,8 @@ package integram
 
 import (
 	"fmt"
-	log "github.com/Sirupsen/logrus"
 	"github.com/requilence/integram/url"
+	log "github.com/sirupsen/logrus"
 	"net"
 	"os"
 	"strconv"
@@ -19,9 +19,8 @@ func init() {
 	PThost := os.Getenv("PAPERTRAIL_HOST")
 	if PThost != "" {
 		PTport, _ := strconv.Atoi(os.Getenv("PAPERTRAIL_PORT"))
-		baseURL := os.Getenv("INTEGRAM_BASE_URL")
 		host := "integram.org"
-		u, _ := url.Parse(baseURL)
+		u, _ := url.Parse(Config.Port)
 		if u != nil {
 			host = u.Host
 		}
