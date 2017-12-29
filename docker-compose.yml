@@ -5,16 +5,20 @@ services:
   mongo:
       restart: always
       image: mongo:3.4
-      ports:
-          - 27017:27017
+      expose:
+         - "27017"
+##    ports:
+##       - 27017:27017
       volumes:
           - /data/db:/data/db
   redis:
       restart: always
       command: redis-server --appendonly yes
       image: redis:3.2
-      ports:
-          - 6379:6379
+      expose:
+        - "6379"
+##    ports:
+##      - 6379:6379
       volumes:
           - data-redis:/data
   integram:
