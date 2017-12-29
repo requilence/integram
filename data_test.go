@@ -11,7 +11,7 @@ import (
 	"github.com/requilence/integram/url"
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
-	tg "gopkg.in/telegram-bot-api.v3"
+	tg "github.com/requilence/telegram-bot-api"
 	"strings"
 )
 

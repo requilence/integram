@@ -16,12 +16,12 @@ import (
 	"time"
 
 	"crypto/md5"
-	log "github.com/Sirupsen/logrus"
 	"github.com/kennygrant/sanitize"
 	"github.com/requilence/jobs"
+	tg "github.com/requilence/telegram-bot-api"
+	log "github.com/sirupsen/logrus"
 	mgo "gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
-	tg "gopkg.in/telegram-bot-api.v3"
 )
 
 const inlineButtonStateKeyword = '`'
@@ -53,6 +53,11 @@ type Bot struct {
 	API         *tg.BotAPI
 }
 
+type Location struct {
+	Latitude  float64
+	Longitude float64
+}
+
 // Message represent both outgoing and incoming message data
 type Message struct {
 	ID               bson.ObjectId `bson:"_id,omitempty"` // Internal unique BSON ID
@@ -66,6 +71,7 @@ type Message struct {
 	ReplyToMsgID     int           `bson:",omitempty"`         // If this message is reply, contains Telegram's Message ID of original message
 	Date             time.Time
 	Text             string           `bson:",omitempty"`
+	Location         *Location        `bson:",omitempty"`
 	AntiFlood        bool             `bson:",omitempty"`
 	Deleted          bool             `bson:",omitempty"` // f.e. admin can delete the message in supergroup and we can't longer edit or reply on it
 	OnCallbackAction string           `bson:",omitempty"` // Func to call on inline button press
@@ -79,11 +85,13 @@ type Message struct {
 
 // IncomingMessage specifies data that available for incoming message
 type IncomingMessage struct {
-	Message               `bson:",inline"`
-	From                  User
-	Chat                  Chat
-	ForwardFrom           *User
-	ForwardDate           time.Time
+	Message              `bson:",inline"`
+	From                 User
+	Chat                 Chat
+	ForwardFrom          *User
+	ForwardDate          time.Time
+	ForwardFromMessageID int64
+
 	ReplyToMessage        *Message            `bson:"-"`
 	ForwardFromChat       *Chat               `json:"forward_from_chat"`       // optional
 	EditDate              int                 `json:"edit_date"`               // optional
@@ -98,7 +106,7 @@ type IncomingMessage struct {
 	Contact               *tg.Contact         `json:"contact"`                 // optional
 	Location              *tg.Location        `json:"location"`                // optional
 	Venue                 *tg.Venue           `json:"venue"`                   // optional
-	NewChatMember         *User               `json:"new_chat_member"`         // optional
+	NewChatMembers        []*User             `json:"new_chat_members"`        // optional
 	LeftChatMember        *User               `json:"left_chat_member"`        // optional
 	NewChatTitle          string              `json:"new_chat_title"`          // optional
 	NewChatPhoto          *[]tg.PhotoSize     `json:"new_chat_photo"`          // optional
@@ -116,24 +124,25 @@ type IncomingMessage struct {
 
 // OutgoingMessage specispecifiesfy data of performing or performed outgoing message
 type OutgoingMessage struct {
-	Message                 `bson:",inline"`
-	TextHash                string         `bson:",omitempty"`
-	KeyboardHide            bool           `bson:",omitempty"`
-	ResizeKeyboard          bool           `bson:",omitempty"`
-	KeyboardMarkup          Keyboard       `bson:"-"`
-	InlineKeyboardMarkup    InlineKeyboard `bson:",omitempty"`
-	Keyboard                bool           `bson:",omitempty"`
-	ParseMode               string         `bson:",omitempty"`
-	OneTimeKeyboard         bool           `bson:",omitempty"`
-	Selective               bool           `bson:",omitempty"`
-	ForceReply              bool           `bson:",omitempty"`  // in the private dialog assume user's message as the reply for the last message sent by the bot if bot's message has Reply handler and ForceReply set
-	WebPreview              bool           `bson:",omitempty"`
-	Silent                  bool           `bson:",omitempty"`
-	FilePath                string         `bson:",omitempty"`
-	FileName                string         `bson:",omitempty"`
-	FileType                string         `bson:",omitempty"`
-	FileRemoveAfter         bool           `bson:",omitempty"`
-	processed               bool
+	Message              `bson:",inline"`
+	TextHash             string         `bson:",omitempty"`
+	KeyboardHide         bool           `bson:",omitempty"`
+	ResizeKeyboard       bool           `bson:",omitempty"`
+	KeyboardMarkup       Keyboard       `bson:"-"`
+	InlineKeyboardMarkup InlineKeyboard `bson:",omitempty"`
+	Keyboard             bool           `bson:",omitempty"`
+	ParseMode            string         `bson:",omitempty"`
+	OneTimeKeyboard      bool           `bson:",omitempty"`
+	Selective            bool           `bson:",omitempty"`
+	ForceReply           bool           `bson:",omitempty"`
+	WebPreview           bool           `bson:",omitempty"`
+	Silent               bool           `bson:",omitempty"`
+	FilePath             string         `bson:",omitempty"`
+	FileName             string         `bson:",omitempty"`
+	FileType             string         `bson:",omitempty"`
+	FileRemoveAfter      bool           `bson:",omitempty"`
+	SendAfter            *time.Time     `bson:",omitempty"`
+	processed            bool
 }
 
 // Keyboard is a Shorthand for [][]Button
@@ -209,7 +218,7 @@ func (c *Bot) PMURL(param string) string {
 }
 
 func (c *Bot) webhookURL() *url.URL {
-	url, _ := url.Parse(fmt.Sprintf("%s/tg/%d/%s", BaseURL, c.ID, compactHash(c.token)))
+	url, _ := url.Parse(fmt.Sprintf("%s/tg/%d/%s", Config.BaseURL, c.ID, compactHash(c.token)))
 	return url
 }
 
@@ -224,30 +233,34 @@ func (service *Service) registerBot(fullTokenWithID string) error {
 	if err != nil {
 		return err
 	}
-	if _, exists := botPerID[id]; !exists {
+
+	if b, exists := botPerID[id]; !exists || b.token != s[2] {
+		// bot with this ID not exists or the bot's token changed
 		bot := Bot{ID: id, token: s[2], services: []*Service{service}}
 		botPerID[id] = &bot
 
 		token := bot.tgToken()
 		bot.API, err = tg.NewBotAPI(token)
-
 		if err != nil {
 			log.WithError(err).WithField("token", token).Error("NewBotAPI returned error")
 			return err
 		}
 
-		me, err := bot.API.GetMe()
-
-		if err != nil {
-			log.WithError(err).WithField("token", token).Error("GetMe returned error")
-			return err
-		}
-
-		bot.Username = me.UserName
+		bot.Username = bot.API.Self.UserName
 
 	} else {
 		b := botPerID[id]
-		b.services = append(b.services, service)
+
+		serviceAlreadyExists := false
+		for _, s := range b.services {
+			if s.Name == service.Name {
+				serviceAlreadyExists = true
+				break
+			}
+		}
+		if !serviceAlreadyExists {
+			b.services = append(b.services, service)
+		}
 		botPerID[id] = b
 	}
 	botPerService[service.Name] = botPerID[id]
@@ -388,8 +401,7 @@ func (buttons InlineButtons) tg() [][]tg.InlineKeyboardButton {
 }
 
 func stringPointer(s string) *string {
-	b := s
-	return &b
+	return &s
 }
 
 func (keyboard InlineKeyboard) tg() [][]tg.InlineKeyboardButton {
@@ -419,9 +431,9 @@ func (keyboard InlineKeyboard) tg() [][]tg.InlineKeyboardButton {
 			}
 
 			if button.URL != "" {
-				res[r][c] = tg.InlineKeyboardButton{Text: button.Text, URL: button.URL}
+				res[r][c] = tg.InlineKeyboardButton{Text: button.Text, URL: stringPointer(button.URL)}
 			} else if button.Data != "" {
-				res[r][c] = tg.InlineKeyboardButton{Text: button.Text, CallbackData: button.Data}
+				res[r][c] = tg.InlineKeyboardButton{Text: button.Text, CallbackData: stringPointer(button.Data)}
 			} else if button.SwitchInlineQueryCurrentChat != "" {
 				res[r][c] = tg.InlineKeyboardButton{Text: button.Text, SwitchInlineQueryCurrentChat: stringPointer(button.SwitchInlineQueryCurrentChat)}
 			} else {
@@ -599,7 +611,6 @@ func findInlineMessage(db *mgo.Database, botID int64, inlineMsgID string) (*Mess
 
 func findLastOutgoingMessageInChat(db *mgo.Database, botID int64, chatID int64) (*Message, error) {
 
-	fmt.Printf("findLastOutgoingMessageInChat: botID %d, chatID %d\n", botID, chatID)
 	msg := OutgoingMessage{}
 	err := db.C("messages").Find(bson.M{"chatid": chatID, "botid": botID, "fromid": botID}).Sort("-msgid").One(&msg)
 	if err != nil {
@@ -887,8 +898,14 @@ func (t scheduleMessageSender) Send(m *OutgoingMessage) error {
 			m.Text = text
 		}
 	}
+	var sendAfter time.Time
+	if m.SendAfter != nil {
+		sendAfter = *m.SendAfter
+	} else {
+		sendAfter = time.Now()
+	}
 
-	_, err := sendMessageJob.Schedule(0, time.Now(), &m)
+	_, err := sendMessageJob.Schedule(0, sendAfter, &m)
 	if err != nil {
 		log.WithField("chat", m.ChatID).WithError(err).Error("Can't schedule sendMessageJob")
 	} else {
@@ -907,11 +924,17 @@ func (m *OutgoingMessage) Send() error {
 		return errors.New("BotID is empty")
 	}
 
-	if m.Text == "" && m.FilePath == "" {
-		return errors.New("Text and FilePath are empty")
+	if m.Text == "" && m.FilePath == "" && m.Location == nil {
+		return errors.New("Text, FilePath and Location are empty")
 	}
 
 	return activeMessageSender.Send(m)
+}
+
+// SetSendAfter set the time to send the message
+func (m *OutgoingMessage) SetSendAfter(after time.Time) *OutgoingMessage {
+	m.SendAfter = &after
+	return m
 }
 
 // AddEventID attach one or more event ID. You can use eventid to edit the message in case of additional webhook received or to ignore in case of duplicate
@@ -937,6 +960,12 @@ func (m *OutgoingMessage) SetTextFmt(text string, a ...interface{}) *OutgoingMes
 // In case of documents and photo messages this text will be used in the caption
 func (m *OutgoingMessage) SetText(text string) *OutgoingMessage {
 	m.Text = text
+	return m
+}
+
+// SetLocation set the location
+func (m *OutgoingMessage) SetLocation(latitude, longitude float64) *OutgoingMessage {
+	m.Location = &Location{Latitude: latitude, Longitude: longitude}
 	return m
 }
 
@@ -981,7 +1010,14 @@ func (m *Message) GetTextHash() string {
 // UpdateEventsID sets the event id and update it in DB
 func (m *Message) UpdateEventsID(db *mgo.Database, eventID ...string) error {
 	m.EventID = append(m.EventID, eventID...)
-	return db.C("messages").Update(bson.M{"chatid": m.ChatID, "botid": m.BotID, "msgid": m.MsgID}, bson.M{"$addToSet": bson.M{"eventid": bson.M{"$each": eventID}}})
+	f := bson.M{"botid": m.BotID}
+	if m.InlineMsgID != "" {
+		f["inlinemsgid"] = m.InlineMsgID
+	} else {
+		f["chatid"] = m.ChatID
+		f["msgid"] = m.MsgID
+	}
+	return db.C("messages").Update(f, bson.M{"$addToSet": bson.M{"eventid": bson.M{"$each": eventID}}})
 }
 
 // Update will update existing message in DB
@@ -999,61 +1035,70 @@ func initBots() error {
 	if err != nil {
 		return err
 	}
+
 	gob.Register(&OutgoingMessage{})
 
-	poolSize := 10 // Maximum simultaneously message sending
-	if p, err := strconv.Atoi(os.Getenv("INTEGRAM_TG_POOL")); err != nil && p > 0 {
-		poolSize = p
+	var tgPool *jobs.Pool
+	if Config.IsMainInstance() || Config.IsSingleProcessInstance() {
+
+		tgPool, err = jobs.NewPool(&jobs.PoolConfig{
+			Key:        "_telegram",
+			NumWorkers: Config.TGPool,
+			BatchSize:  10,
+		})
+
+		if err != nil {
+			return err
+		}
+
+		tgPool.SetMiddleware(beforeJob)
+		tgPool.SetAfterFunc(afterJob)
+
+		log.Infof("Job pool %v[%d] is ready", "_telegram", Config.TGPool)
 	}
-
-	pool, err := jobs.NewPool(&jobs.PoolConfig{
-		Key:        "_telegram" + WorkerSuffix,
-		NumWorkers: poolSize,
-		BatchSize:  10,
-	})
-
-	if err != nil {
-		return err
-	}
-
-	pool.SetMiddleware(beforeJob)
-	pool.SetAfterFunc(afterJob)
-
-	log.Infof("Job pool %v[%d] is ready", "_telegram"+WorkerSuffix, poolSize)
-
 	// 23 retries mean maximum of 8 hours deferment (fibonacci sequence)
-	sendMessageJob, err = jobs.RegisterTypeWithPoolKey("sendMessage", "_telegram"+WorkerSuffix, 23, sendMessage)
-
+	sendMessageJob, err = jobs.RegisterTypeWithPoolKey("sendMessage", "_telegram", 23, sendMessage)
 	if err != nil {
 		log.WithError(err).Panic("RegisterTypeWithPoolKey sendMessage failed")
 	}
-	for _, service := range services {
 
-		bot := service.Bot()
-		if bot == nil {
-			continue
-		}
-		if !service.UseWebhookInsteadOfLongPolling {
-			bot.listen()
-		} else {
-			_, err := bot.API.SetWebhook(tg.WebhookConfig{URL: bot.webhookURL()})
-			if err != nil {
-				log.WithError(err).WithField("botID", bot.ID).Error("Error on initial SetWebhook")
-			}
-		}
-		log.Infof("@%v added for %v", bot.Username, service.Name)
-	}
-
-	err = pool.Start()
-	log.Info("Telegram main pool started")
+	ensureStandAloneServiceJob, err = jobs.RegisterTypeWithPoolKey("ensureStandAloneService", "_telegram", 1, ensureStandAloneService)
 
 	if err != nil {
-		return err
+		log.WithError(err).Panic("RegisterTypeWithPoolKey ensureService failed")
+	}
+
+	if Config.IsStandAloneServiceInstance() || Config.IsSingleProcessInstance() {
+		for _, service := range services {
+
+			bot := service.Bot()
+			if bot == nil {
+				continue
+			}
+			if !service.UseWebhookInsteadOfLongPolling {
+				bot.listen()
+			} else {
+				_, err := bot.API.SetWebhook(tg.WebhookConfig{URL: bot.webhookURL()})
+				if err != nil {
+					log.WithError(err).WithField("botID", bot.ID).Error("Error on initial SetWebhook")
+				}
+			}
+			log.Infof("%v is performing on behalf of @%v", service.Name, bot.Username)
+		}
+	}
+
+	if tgPool != nil {
+		err = tgPool.Start()
+		log.Info("Telegram main pool started")
+
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
-var sendMessageJob *jobs.Type
+var sendMessageJob, ensureStandAloneServiceJob *jobs.Type
 
 func (m *Message) findUsernames() []string {
 	r, _ := regexp.Compile("@([a-zA-Z0-9_]{5,})") // according to TG docs minimum username length is 5
@@ -1066,10 +1111,29 @@ func (m *Message) findUsernames() []string {
 
 }
 
-func getFilePath(c *Context, fileID string) (string, error) {
+func GetRemoteFilePath(c *Context, fileID string) (string, error) {
+
+	var fileRemotePath string
+	c.ServiceCache("file_remote_"+fileID, &fileRemotePath)
+
+	if fileRemotePath != "" {
+		return fileRemotePath, nil
+	}
+
+	url, err := c.Bot().API.GetFileDirectURL(fileID)
+	if err != nil {
+		return "", err
+	}
+
+	c.SetServiceCache("file_remote_"+fileID, fileRemotePath, time.Hour*1)
+
+	return url, nil
+}
+
+func GetLocalFilePath(c *Context, fileID string) (string, error) {
 
 	var fileLocalPath string
-	c.User.Cache("file_"+fileID, &fileLocalPath)
+	c.ServiceCache("file_"+fileID, &fileLocalPath)
 
 	if fileLocalPath != "" {
 		if _, err := os.Stat(fileLocalPath); os.IsNotExist(err) {
@@ -1078,7 +1142,7 @@ func getFilePath(c *Context, fileID string) (string, error) {
 	}
 
 	if fileLocalPath == "" {
-		url, err := c.Bot().API.GetFileDirectURL(fileID)
+		url, err := GetRemoteFilePath(c, fileID)
 		if err != nil {
 			return "", err
 		}
@@ -1086,7 +1150,7 @@ func getFilePath(c *Context, fileID string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		c.User.SetCache("file_"+fileID, fileLocalPath, time.Hour*24)
+		c.SetServiceCache("file_"+fileID, fileLocalPath, time.Hour*24)
 	}
 
 	return fileLocalPath, nil
@@ -1118,163 +1182,182 @@ func fileTypeAllowed(allowedTypes []FileType, fileType FileType) bool {
 	return false
 }
 
-func (m *IncomingMessage) GetFile(c *Context, allowedTypes []FileType, maxSize int) (localPath string, fileName string, fileType FileType, err error) {
+type FileInfo struct {
+	ID   string
+	Name string
+	Type FileType
+	Mime string
+	Size int64
+}
+
+func (info *FileInfo) Emoji() string {
+	switch info.Type {
+	case FileTypePhoto, FileTypeSticker:
+		return "🖼"
+	case FileTypeAudio:
+		return "🎵"
+	case FileTypeVideo:
+		return "🎬"
+	case FileTypeVoice:
+		return "🗣"
+	default:
+		return "📎"
+	}
+}
+
+func (m *IncomingMessage) GetFileInfo(c *Context, allowedTypes []FileType) (info FileInfo, err error) {
 	if m.Sticker != nil && fileTypeAllowed(allowedTypes, FileTypeSticker) {
-		fileType = FileTypeSticker
-		if maxSize > 0 && m.Sticker.FileSize > maxSize {
-			err = GetFileMaxSizeExceedError
-			return
-		}
-		localPath, err = getFilePath(c, m.Sticker.FileID)
+		info.Type = FileTypeSticker
+		var remotePath string
+		remotePath, err = GetRemoteFilePath(c, m.Audio.FileID)
 		if err != nil {
 			return
 		}
 
-		fileName = "sticker"
-		fileName += filepath.Ext(localPath)
+		info.Name = filepath.Base(remotePath)
+		info.Size = int64(m.Sticker.FileSize)
+		info.ID = m.Sticker.FileID
 
 		return
 	}
 
 	if m.Audio != nil && fileTypeAllowed(allowedTypes, FileTypeAudio) {
-		fileType = FileTypeAudio
-
-		if maxSize > 0 && m.Audio.FileSize > maxSize {
-			err = GetFileMaxSizeExceedError
-			return
-		}
-
-		localPath, err = getFilePath(c, m.Audio.FileID)
-		if err != nil {
-			return
-		}
+		info.Type = FileTypeAudio
 
 		if m.Audio.Performer == "" && m.Audio.Title == "" {
 			if c.User.UserName != "" {
-				fileName += c.User.UserName
+				info.Name += c.User.UserName
 			} else if c.User.FirstName != "" {
-				fileName += filepath.Clean(c.User.FirstName)
+				info.Name += filepath.Clean(c.User.FirstName)
 			}
 			if m.Caption != "" {
-				fileName += "_" + filepath.Clean(m.Caption)
+				info.Name += "_" + filepath.Clean(m.Caption)
 			} else {
-				fileName += fmt.Sprintf("_%d", m.MsgID)
+				info.Name += fmt.Sprintf("_%d", m.MsgID)
 			}
 		} else {
-			fileName = filepath.Clean(m.Audio.Performer + "-" + m.Audio.Title)
+			info.Name = filepath.Clean(m.Audio.Performer + "-" + m.Audio.Title)
 		}
-		fileName += filepath.Ext(localPath)
+		var remotePath string
+		remotePath, err = GetRemoteFilePath(c, m.Audio.FileID)
+		if err != nil {
+			return
+		}
+		info.Name += filepath.Ext(remotePath)
+		info.ID = m.Audio.FileID
+		info.Size = int64(m.Audio.FileSize)
 
 		return
 	}
 
 	if m.Document != nil && fileTypeAllowed(allowedTypes, FileTypeDocument) {
-		fileType = FileTypeDocument
-
-		if maxSize > 0 && m.Document.FileSize > maxSize {
-			err = GetFileMaxSizeExceedError
-			return
+		info = FileInfo{
+			Type: FileTypeDocument,
+			Size: int64(m.Document.FileSize),
+			Name: m.Document.FileName,
+			ID:   m.Document.FileID,
+			Mime: m.Document.MimeType,
 		}
-
-		localPath, err = getFilePath(c, m.Document.FileID)
-		if err != nil {
-			return
-		}
-		fileName = m.Document.FileName
 
 		return
 	}
 
 	if m.Video != nil && fileTypeAllowed(allowedTypes, FileTypeVideo) {
-		fileType = FileTypeVideo
+		info.Type = FileTypeVideo
 
-		if maxSize > 0 && m.Video.FileSize > maxSize {
-			err = GetFileMaxSizeExceedError
-			return
+		if c.User.UserName != "" {
+			info.Name += c.User.UserName
+		} else if c.User.FirstName != "" {
+			info.Name += filepath.Clean(c.User.FirstName)
+		}
+		if m.Caption != "" {
+			info.Name += "_" + filepath.Clean(m.Caption)
+		} else {
+			info.Name += fmt.Sprintf("_%d", m.MsgID)
 		}
 
-		localPath, err = getFilePath(c, m.Video.FileID)
+		var remotePath string
+
+		remotePath, err = GetRemoteFilePath(c, m.Video.FileID)
 		if err != nil {
 			return
 		}
-
-		if c.User.UserName != "" {
-			fileName += c.User.UserName
-		} else if c.User.FirstName != "" {
-			fileName += filepath.Clean(c.User.FirstName)
-		}
-		if m.Caption != "" {
-			fileName += "_" + filepath.Clean(m.Caption)
-		} else {
-			fileName += fmt.Sprintf("_%d", m.MsgID)
-		}
-
-		fileName += filepath.Ext(localPath)
+		info.Name += filepath.Ext(remotePath)
+		info.ID = m.Video.FileID
+		info.Size = int64(m.Video.FileSize)
 
 		return
 	}
 
 	if m.Voice != nil && fileTypeAllowed(allowedTypes, FileTypeVoice) {
-		fileType = FileTypeVoice
+		info.Type = FileTypeVoice
 
-		if maxSize > 0 && m.Voice.FileSize > maxSize {
-			err = GetFileMaxSizeExceedError
-			return
+		if c.User.UserName != "" {
+			info.Name += c.User.UserName
+		} else if c.User.FirstName != "" {
+			info.Name += filepath.Clean(c.User.FirstName)
+		}
+		if m.Caption != "" {
+			info.Name += "_" + filepath.Clean(m.Caption)
+		} else {
+			info.Name += fmt.Sprintf("_%d", m.MsgID)
 		}
 
-		localPath, err = getFilePath(c, m.Voice.FileID)
+		var remotePath string
+		remotePath, err = GetRemoteFilePath(c, m.Voice.FileID)
 		if err != nil {
 			return
 		}
+		info.Name += filepath.Ext(remotePath)
+		info.ID = m.Voice.FileID
+		info.Size = int64(m.Voice.FileSize)
 
-		if c.User.UserName != "" {
-			fileName += c.User.UserName
-		} else if c.User.FirstName != "" {
-			fileName += filepath.Clean(c.User.FirstName)
-		}
-		if m.Caption != "" {
-			fileName += "_" + filepath.Clean(m.Caption)
-		} else {
-			fileName += fmt.Sprintf("_%d", m.MsgID)
-		}
-
-		fileName += filepath.Ext(localPath)
 		return
 	}
 
 	if m.Photo != nil && len(*m.Photo) > 0 && fileTypeAllowed(allowedTypes, FileTypePhoto) {
-		fileType = FileTypePhoto
+		info.Type = FileTypePhoto
 
 		if c.User.UserName != "" {
-			fileName += c.User.UserName
+			info.Name += c.User.UserName
 		} else if c.User.FirstName != "" {
-			fileName += filepath.Clean(c.User.FirstName)
+			info.Name += filepath.Clean(c.User.FirstName)
 		}
 		if m.Caption != "" {
-			fileName += "_" + filepath.Clean(m.Caption)
+			info.Name += "_" + filepath.Clean(m.Caption)
 		} else {
-			fileName += fmt.Sprintf("_%d", m.MsgID)
+			info.Name += fmt.Sprintf("_%d", m.MsgID)
 		}
-		fileName += ".jpg"
+		info.Name += ".jpg"
 
-		for i := len((*m.Photo)) - 1; i >= 0; i-- {
-			if maxSize > 0 && (*m.Photo)[i].FileSize <= maxSize {
-				localPath, err = getFilePath(c, (*m.Photo)[i].FileID)
-				break
-			}
-		}
+		largestPhoto := (*m.Photo)[len(*m.Photo)-1]
+		info.ID = largestPhoto.FileID
+		info.Size = int64(largestPhoto.FileSize)
+		info.Mime = "image/jpeg"
 
 		if err != nil {
 			return
 		}
 
-		if localPath == "" {
-			err = GetFileMaxSizeExceedError
-			return
-		}
-
 		return
 	}
+	return
+}
+
+func (m *IncomingMessage) GetFile(c *Context, allowedTypes []FileType, maxSize int) (localPath string, fileInfo FileInfo, err error) {
+
+	fileInfo, err = m.GetFileInfo(c, allowedTypes)
+	if err != nil {
+		return
+	}
+
+	if maxSize > 0 && fileInfo.Size > int64(maxSize) {
+		err = GetFileMaxSizeExceedError
+		return
+	}
+
+	localPath, err = GetLocalFilePath(c, fileInfo.ID)
+
 	return
 }
 
@@ -1318,6 +1401,7 @@ func botByID(ID int64) *Bot {
 }
 
 func sendMessage(m *OutgoingMessage) error {
+	//log.Infof("sendMessage chat=%d ts=%d text=%s",m.ChatID, m.ID.Time().UnixNano(), m.Text)
 	msg := tg.MessageConfig{Text: m.Text, BaseChat: tg.BaseChat{ChatID: m.ChatID}}
 
 	if m.ChatID == 0 {
@@ -1359,10 +1443,12 @@ func sendMessage(m *OutgoingMessage) error {
 			}()
 		}
 
+	} else if m.Location != nil {
+		tgMsg, err = botByID(m.BotID).API.Send(tg.LocationConfig{BaseChat: msg.BaseChat, Latitude: m.Location.Latitude, Longitude: m.Location.Longitude})
 	} else {
 
 		if m.KeyboardHide {
-			msg.ReplyMarkup = tg.ReplyKeyboardHide{HideKeyboard: true, Selective: m.Selective}
+			msg.ReplyMarkup = tg.ReplyKeyboardRemove{RemoveKeyboard: true, Selective: m.Selective}
 		}
 
 		if m.ForceReply {
@@ -1440,20 +1526,20 @@ func sendMessage(m *OutgoingMessage) error {
 				log.WithField("chat", m.ChatID).WithError(err).Error("Can't reschedule sendMessageJob")
 			}
 			return nil
-		} else if chatID := tgErr.ChatMigratedToChatID(); chatID != 0 {
+		} else if tgErr.ChatMigrated() {
 			// looks like the the chat we trying to send the message is migrated to supergroup
-			log.Warnf("sendMessage error: Migrated to %v", chatID)
+			log.Warnf("sendMessage error: Migrated to %v", tgErr.Parameters.MigrateToChatID)
 
 			db := mongoSession.Clone().DB(mongo.Database)
 			defer db.Session.Close()
-			migrateToSuperGroup(db, m.ChatID, chatID)
+			migrateToSuperGroup(db, m.ChatID, tgErr.Parameters.MigrateToChatID)
 
 			// todo: in rare case this can produce duplicate messages for incoming webhooks
 			if err != nil {
 				log.WithField("chat", m.ChatID).WithError(err).Error("Can't reschedule sendMessageJob")
 			}
 
-			m.ChatID = chatID
+			m.ChatID = tgErr.Parameters.MigrateToChatID
 
 			return nil
 		} else if tgErr.BotStoppedForUser() {
@@ -1539,7 +1625,11 @@ func sendMessage(m *OutgoingMessage) error {
 		} else if tgErr.TooManyRequests() {
 			log.WithField("chat", m.ChatID).WithField("bot", m.BotID).Warn("sendMessage error: TooManyRequests")
 
-			delay := tgErr.ParseTooManyRequestsDelay()
+			delay := 60
+
+			if tgErr.Parameters != nil && tgErr.Parameters.RetryAfter > 0 {
+				delay = tgErr.Parameters.RetryAfter
+			}
 
 			rescheduled = true
 			_, err := sendMessageJob.Schedule(0, time.Now().Add(time.Duration(delay+rand.Intn(10))*time.Second), &m)

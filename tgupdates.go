@@ -10,10 +10,10 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/Sirupsen/logrus"
+	tg "github.com/requilence/telegram-bot-api"
+	log "github.com/sirupsen/logrus"
 	mgo "gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
-	tg "gopkg.in/telegram-bot-api.v3"
 )
 
 var updateMapMutex = &sync.RWMutex{}
@@ -27,12 +27,9 @@ type msgInfo struct {
 	ChatID   int64
 }
 
-var lastMsgIDByUser = make(map[int64]msgInfo)
-var lastMsgIDByUserMutex = sync.Mutex{}
-
 func updateRoutine(b *Bot, u *tg.Update) {
 
-	if !Debug {
+	if !Config.Debug {
 		defer func() {
 			if r := recover(); r != nil {
 				stack := stack(3)
@@ -185,7 +182,6 @@ func updateRoutine(b *Bot, u *tg.Update) {
 func (bot *Bot) listen() {
 	api := bot.API
 	if bot.updatesChan == nil {
-		log.Debug("Open UpdatesChan for bot " + bot.Username)
 		var err error
 		bot.updatesChan, err = api.GetUpdatesChan(tg.UpdateConfig{Timeout: randomInRange(10, 20), Limit: 100})
 		if err != nil {
@@ -194,7 +190,6 @@ func (bot *Bot) listen() {
 	}
 	go func(c <-chan tg.Update, b *Bot) {
 		var context Context
-		log.Info("Start listening for updates bot " + bot.Username)
 
 		defer func() {
 			fmt.Println("Stop listening for updates on bot " + b.Username)
@@ -209,8 +204,8 @@ func (bot *Bot) listen() {
 		for {
 			u := <-c
 			go updateRoutine(b, &u)
-
 		}
+
 	}(bot.updatesChan, bot)
 }
 
@@ -262,7 +257,7 @@ func incomingMessageFromTGMessage(m *tg.Message) IncomingMessage {
 	im.ForwardFrom = tgUserPointer(m.ForwardFrom)
 	im.ForwardFromChat = tgChatPointer(m.ForwardFromChat)
 	im.ForwardDate = time.Unix(int64(m.ForwardDate), 0)
-
+	im.ForwardFromMessageID = int64(m.ForwardFromMessageID)
 	if m.ReplyToMessage != nil {
 		rm := m.ReplyToMessage
 		im.ReplyToMessage = &Message{MsgID: rm.MessageID, Date: time.Unix(int64(rm.Date), 0), Text: rm.Text}
@@ -277,7 +272,12 @@ func incomingMessageFromTGMessage(m *tg.Message) IncomingMessage {
 
 	im.Caption = m.Caption
 
-	im.NewChatMember = tgUserPointer(m.NewChatMember)
+	if m.NewChatMembers != nil {
+		for _, newMember := range *m.NewChatMembers {
+			n := newMember
+			im.NewChatMembers = append(im.NewChatMembers, tgUserPointer(&n))
+		}
+	}
 	im.LeftChatMember = tgUserPointer(m.LeftChatMember)
 
 	im.Audio = m.Audio
@@ -439,30 +439,7 @@ func tgChosenInlineResultHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Servi
 			Date:        time.Now(),
 		}}
 
-	// workaround to match between inline_msg_id and msg_id
-	dupFound := false
-	var l int64
-	lastMsgIDByUserMutex.Lock()
-	if lm, exists := lastMsgIDByUser[u.ChosenInlineResult.From.ID]; exists {
-		if lm.BotID == b.ID && lm.ID != 0 {
-			l = time.Now().Sub(lm.TS).Nanoseconds()
-			if l < 1000000000 {
-				log.Debugf("chosen: dup found (msg %v) for %v (user %v), after %d", lm.ID, u.ChosenInlineResult.InlineMessageID, u.ChosenInlineResult.From.ID, l)
-
-				dupFound = true
-				msg.MsgID = lm.ID
-				msg.ChatID = lm.ChatID
-			}
-		}
-	}
-	if !dupFound {
-		log.Debugf("chosen: dup not found for %v (user %v), after %d", u.ChosenInlineResult.InlineMessageID, u.ChosenInlineResult.From.ID, l)
-		lastMsgIDByUser[u.ChosenInlineResult.From.ID] = msgInfo{InlineID: u.ChosenInlineResult.InlineMessageID, TS: time.Now(), BotID: b.ID}
-	}
-	lastMsgIDByUserMutex.Unlock()
-
 	// we need to save this message!
-
 	err = db.C("messages").Insert(&msg)
 
 	if err != nil {
@@ -540,31 +517,6 @@ func tgIncomingMessageHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service,
 	im := incomingMessageFromTGMessage(u.Message)
 	im.BotID = b.ID
 
-	// workaround to match between inline_msg_id and msg_id
-	dupFound := false
-	var l int64
-	if u.Message.From != nil {
-		lastMsgIDByUserMutex.Lock()
-
-		if lm, exists := lastMsgIDByUser[u.Message.From.ID]; exists {
-			if lm.BotID == b.ID && lm.InlineID != "" {
-				l = time.Now().Sub(lm.TS).Nanoseconds()
-
-				if l < 1000000000 {
-					dupFound = true
-					log.Debugf("message: dup found (inlinemsgid %v) for %v (user %v), after %d", lm.InlineID, u.Message.MessageID, u.Message.From.ID, l)
-					db.C("messages").Update(bson.M{"botid": b.ID, "inlinemsgid": lm.InlineID}, bson.M{"$set": bson.M{"chatid": im.ChatID, "msgid": im.MsgID}})
-					lastMsgIDByUserMutex.Unlock()
-					//log.Error(bson.M{"botid": b.ID, "inlinemsgid": lm.InlineID}, bson.M{"$set": bson.M{"chatid": im.ChatID, "msgid": im.MsgID}}, err)
-					return nil, nil
-				}
-			}
-		}
-		if !dupFound {
-			lastMsgIDByUser[u.Message.From.ID] = msgInfo{ID: u.Message.MessageID, TS: time.Now(), BotID: b.ID, ChatID: u.Message.Chat.ID}
-		}
-		lastMsgIDByUserMutex.Unlock()
-	}
 	service, err := detectServiceByBot(b.ID)
 	//fmt.Printf("detectService: %+v\n", service)
 
@@ -607,7 +559,7 @@ func tgIncomingMessageHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service,
 					ctx.Log().WithError(err).Error("Error on findLastOutgoingMessageInChat")
 				} else if rm != nil {
 					// assume user's message as the reply for the last message sent by the bot if bot's message has Reply handler and ForceReply set
- 					if !rm.om.ForceReply || rm.om.OnReplyAction == "" {
+					if !rm.om.ForceReply || rm.om.OnReplyAction == "" {
 						rm = nil
 					}
 				}
@@ -780,7 +732,7 @@ func (m *Message) saveToDB(db *mgo.Database) error {
 
 // IsEventBotAddedToGroup returns true if user created a new group with bot as member or add the bot to existing group
 func (m *IncomingMessage) IsEventBotAddedToGroup() bool {
-	if (m.NewChatMember != nil && m.NewChatMember.ID == m.BotID) || m.GroupChatCreated || m.SuperGroupChatCreated {
+	if (len(m.NewChatMembers) > 0 && m.NewChatMembers[0].ID == m.BotID) || m.GroupChatCreated || m.SuperGroupChatCreated {
 		return true
 	}
 	return false

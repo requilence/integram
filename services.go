@@ -4,23 +4,24 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
 	"github.com/mrjones/oauth"
 	"github.com/requilence/integram/url"
 	"github.com/requilence/jobs"
+	log "github.com/sirupsen/logrus"
 	"golang.org/x/oauth2"
 	"net/http"
-	"os"
+
+	"encoding/json"
+	"gopkg.in/mgo.v2"
+	"io/ioutil"
 	"reflect"
 	"runtime"
+	"sync"
 	"time"
 )
 
-// BaseURL of the Integram instance to handle the webhooks and resolve webpreviews properly
-var BaseURL = "https://integram.org"
-var WorkerSuffix = ""
-
 // Map of Services configs per name. See Register func
+var serviceMapMutex = sync.RWMutex{}
 var services = make(map[string]*Service)
 
 // Mapping job.Type by job alias names specified in service's config
@@ -33,6 +34,11 @@ var actionFuncs = make(map[string]interface{})
 
 // Channel that use to recover tgUpadates reader after panic inside it
 var tgUpdatesRevoltChan = make(chan *Bot)
+
+type Module struct {
+	Jobs    []Job
+	Actions []interface{}
+}
 
 // Service configuration
 type Service struct {
@@ -48,6 +54,8 @@ type Service struct {
 	JobsPool int // Worker pool to be created for service. Default to 1 worker. Workers will be inited only if jobs types are available
 
 	Jobs []Job // Job types that can be scheduled
+
+	Modules []Module // you can inject modules and use it across different services
 
 	// Functions that can be triggered after message reply, inline button press or Auth success f.e. API query to comment the card on replying.
 	// Please note that first argument must be an *integram.Context. Because all actions is triggered in some context.
@@ -81,6 +89,8 @@ type Service struct {
 	OAuthSuccessful func(ctx *Context) error
 	// Can be used for services with tiny load
 	UseWebhookInsteadOfLongPolling bool
+
+	machineURL string // in case of multi-instance mode URL is used to talk with the service
 }
 
 const (
@@ -115,31 +125,83 @@ type DefaultOAuth2 struct {
 	AccessTokenReceiver func(serviceContext *Context, r *http.Request) (token string, expiresAt *time.Time, refreshToken string, err error)
 }
 
-func init() {
-	baseURL := os.Getenv("INTEGRAM_BASE_URL")
+func servicesHealthChecker() {
 
-	if baseURL != "" {
-		BaseURL = baseURL
-	}
-
-	redisURL := os.Getenv("INTEGRAM_REDIS_URL")
-
-	if redisURL == "" {
-		redisURL = "127.0.0.1:6379"
-	}
-
-	jobs.Config.Db.Address = redisURL
-
-	go func() {
-		var b *Bot
-		for {
-			log.Debug("wait for tgUpdatesRevoltChan")
-			b = <-tgUpdatesRevoltChan
-			log.Debugf("tgUpdatesRevoltChan received, bot %+v\n", b)
-
-			b.listen()
+	defer func() {
+		if r := recover(); r != nil {
+			log.Errorf("HealthChecker panic recovered %v", r)
+			servicesHealthChecker()
 		}
 	}()
+
+	for true {
+		for serviceName, _ := range services {
+
+			resp, err := http.Get(fmt.Sprintf("%s/%s/healthcheck", Config.BaseURL, serviceName))
+
+			if err != nil {
+				log.Errorf("HealthChecker %s, network error: %s", serviceName, err.Error())
+				continue
+			}
+
+			if resp.StatusCode != 200 {
+				b, err := ioutil.ReadAll(resp.Body)
+
+				if err != nil {
+					log.Errorf("HealthChecker %s, status %d, read error: %s", serviceName, resp.StatusCode, err.Error())
+				}
+
+				log.Errorf("HealthChecker %s, status %d, error: %s", serviceName, resp.StatusCode, string(b))
+			}
+
+		}
+		time.Sleep(time.Second * time.Duration(Config.HealthcheckIntervalInSecond))
+	}
+}
+
+func healthCheck(db *mgo.Database) error {
+
+	err := db.Session.Ping()
+	if err != nil {
+		return fmt.Errorf("DB fault: %s", err)
+
+	}
+
+	_, err = jobs.FindById("fake")
+	if err != nil {
+		if _, isThisNotFoundError := err.(jobs.ErrorJobNotFound); !isThisNotFoundError {
+			return fmt.Errorf("Redis fault: %s", err)
+		}
+	}
+
+	if int(time.Now().Sub(startedAt).Seconds()) < Config.HealthcheckIntervalInSecond {
+		return fmt.Errorf("Instance was restarted")
+	}
+
+	return nil
+}
+
+func init() {
+
+	jobs.Config.Db.Address = Config.RedisURL
+	if Config.IsMainInstance() {
+		err := loadStandAloneServicesFromFile()
+		if err != nil {
+			log.WithError(err).Error("loadStandAloneServicesFromFile error")
+		}
+		go servicesHealthChecker()
+
+	} else {
+		go func() {
+			var b *Bot
+			for {
+				b = <-tgUpdatesRevoltChan
+				log.Debugf("tgUpdatesRevoltChan received, bot %+v\n", b)
+
+				b.listen()
+			}
+		}()
+	}
 }
 func afterJob(job *jobs.Job) {
 	log.Debugf("afterJob %v, poolID:%v, finished:%v\n", job.Id(), job.PoolId(), job.Finished().Unix())
@@ -184,6 +246,93 @@ type Servicer interface {
 	Service() *Service
 }
 
+func ensureStandAloneService(serviceName string, machineURL string, botToken string) error {
+
+	log.Infof("Service '%s' discovered: %s", serviceName, machineURL)
+	s, _ := serviceByName(serviceName)
+
+	serviceMapMutex.Lock()
+	defer serviceMapMutex.Unlock()
+
+	if s == nil {
+		s = &Service{Name: serviceName}
+		services[serviceName] = s
+	}
+
+	s.machineURL = machineURL
+	reverseProxiesMapMutex.Lock()
+	_, ok := reverseProxiesMap[serviceName]
+	if ok {
+		delete(reverseProxiesMap, serviceName)
+	}
+	reverseProxiesMapMutex.Unlock()
+
+	err := s.registerBot(botToken)
+
+	if err != nil {
+		log.WithError(err).Error("Service Ensure: registerBot error")
+	}
+
+	err = saveStandAloneServicesToFile()
+
+	//if err != nil{
+	//	log.WithError(err).Error("Service Ensure: saveServicesBotsTokensToCache error")
+	//}
+	return err
+}
+
+func loadStandAloneServicesFromFile() error {
+	b, err := ioutil.ReadFile("standAloneServices.json")
+	if err != nil {
+		return err
+	}
+	var m map[string]externalService
+
+	err = json.Unmarshal(b, &m)
+
+	if err != nil {
+		return err
+	}
+
+	for serviceName, es := range m {
+		s, _ := serviceByName(serviceName)
+		if s == nil {
+			s = &Service{Name: serviceName, machineURL: es.URL}
+			serviceMapMutex.Lock()
+			services[serviceName] = s
+			serviceMapMutex.Unlock()
+		}
+
+		err := s.registerBot(es.BotToken)
+
+		if err != nil {
+			log.WithError(err).Error("loadStandAloneServicesFromFile: registerBot error")
+		}
+	}
+	return nil
+
+}
+
+type externalService struct {
+	BotToken string
+	URL      string
+}
+
+func saveStandAloneServicesToFile() error {
+	m := map[string]externalService{}
+	for _, s := range services {
+		m[s.Name] = externalService{BotToken: s.Bot().tgToken(), URL: s.machineURL}
+	}
+
+	jsonData, err := json.Marshal(m)
+
+	if err != nil {
+		return err
+	}
+
+	return ioutil.WriteFile("standAloneServices.json", jsonData, 0655)
+}
+
 // Register the service's config and corresponding botToken
 func Register(servicer Servicer, botToken string) {
 	//jobs.Config.Db.Address="192.168.1.101:6379"
@@ -222,7 +371,7 @@ func Register(servicer Servicer, botToken string) {
 			pool.SetAfterFunc(afterJob)
 		}
 
-		log.Infof("Jobs pool %v[%d] is ready", "_"+service.Name, service.JobsPool)
+		//log.Infof("%s: workers pool [%d] is ready", service.Name, service.JobsPool)
 
 		jobsPerService[service.Name] = make(map[string]*jobs.Type)
 
@@ -259,20 +408,27 @@ func Register(servicer Servicer, botToken string) {
 				jobsPerService[service.Name][jobName] = jobType
 			}
 		}
-		go func(pool *jobs.Pool) {
-
-			time.Sleep(time.Second * 30)
+		go func(pool *jobs.Pool, service *Service) {
+			time.Sleep(time.Second * 5)
 
 			err = pool.Start()
 
 			if err != nil {
 				log.Panicf("Can't start jobs pool: %v\n", err)
 			}
-			log.Info("Service's pool started")
+			log.Infof("%s service: workers pool [%d] started", service.Name, service.JobsPool)
 
-		}(pool)
+		}(pool, service)
 
 	}
+
+	if len(service.Modules) > 0 {
+		for _, module := range service.Modules {
+			service.Actions = append(service.Actions, module.Actions...)
+			service.Jobs = append(service.Jobs, module.Jobs...)
+		}
+	}
+
 	if len(service.Actions) > 0 {
 		for _, actionFunc := range service.Actions {
 			actionFuncType := reflect.TypeOf(actionFunc)
@@ -283,7 +439,6 @@ func Register(servicer Servicer, botToken string) {
 				if argType.Kind() == reflect.Ptr {
 					//argType = argType.Elem()
 				}
-				//log.Debugf("ReplyHandlers Gob.Register %v\n", argType.String())
 
 				gob.Register(reflect.Zero(argType).Interface())
 			}
@@ -294,6 +449,7 @@ func Register(servicer Servicer, botToken string) {
 	if botToken == "" {
 		return
 	}
+
 	err := service.registerBot(botToken)
 	if err != nil {
 		log.WithError(err).WithField("token", botToken).Panic("Can't register the bot")
@@ -378,6 +534,8 @@ func (s *Service) EmptyContext() *Context {
 }
 
 func serviceByName(name string) (*Service, error) {
+	serviceMapMutex.RLock()
+	defer serviceMapMutex.RUnlock()
 	if val, ok := services[name]; ok {
 		return val, nil
 	}

@@ -8,8 +8,9 @@ import (
 
 var m = integram.HTMLRichText{}
 
-// Config is empty because no need in it here
-type Config struct{}
+type Config struct{
+	integram.BotConfig
+}
 
 type webhook struct {
 	Text        string
@@ -72,8 +73,12 @@ func webhookHandler(c *integram.Context, wc *integram.WebhookContext) (err error
 		if wh.Text != "" {
 			wh.Text += "\n"
 		}
-		wp := c.WebPreview(wh.Attachments[0].Title, wh.Attachments[0].AuthorName, wh.Attachments[0].Pretext, wh.Attachments[0].TitleLink, wh.Attachments[0].ThumbURL)
-		text := m.URL(" ", wp) + " " + wh.Text
+		text := ""
+
+		if wh.Attachments[0].TitleLink != "" {
+			wp := c.WebPreview(wh.Attachments[0].Title, wh.Attachments[0].AuthorName, wh.Attachments[0].Pretext, wh.Attachments[0].TitleLink, wh.Attachments[0].ThumbURL)
+			text += m.URL(" ", wp) + " " + wh.Text
+		}
 
 		haveAttachmentWithText:=false
 		for i, attachment := range wh.Attachments {

@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	tg "gopkg.in/telegram-bot-api.v3"
+	tg "github.com/requilence/telegram-bot-api"
 )
 
 func TestIncomingMessage_IsEventBotAddedToGroup(t *testing.T) {
