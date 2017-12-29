@@ -186,9 +186,9 @@ func Run() {
 		/a/token
 	*/
 
-	router.HEAD("/:param1/:param2/param3", serviceHookHandler)
-	router.GET("/:param1/:param2/param3", serviceHookHandler)
-	router.POST("/:param1/:param2/param3", serviceHookHandler)
+	router.HEAD("/:param1/:param2/:param3", serviceHookHandler)
+	router.GET("/:param1/:param2/:param3", serviceHookHandler)
+	router.POST("/:param1/:param2/:param3", serviceHookHandler)
 
 	router.HEAD("/:param1/:param2", serviceHookHandler)
 	router.GET("/:param1/:param2", serviceHookHandler)
