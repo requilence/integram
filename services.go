@@ -134,8 +134,22 @@ func servicesHealthChecker() {
 			servicesHealthChecker()
 		}
 	}()
+	s := mongoSession.Clone()
+	defer s.Close()
 
 	for true {
+
+		err := healthCheck(s.DB(mongo.Database))
+
+		if err != nil {
+			log.Errorf("HealthChecker main, error: %s", err.Error())
+			continue
+		}
+
+		if !Config.IsMainInstance() {
+			continue
+		}
+
 		for serviceName, _ := range services {
 
 			resp, err := http.Get(fmt.Sprintf("%s/%s/healthcheck", Config.BaseURL, serviceName))
