@@ -143,33 +143,32 @@ func servicesHealthChecker() {
 
 		if err != nil {
 			log.Errorf("HealthChecker main, error: %s", err.Error())
-			continue
 		}
 
-		if !Config.IsMainInstance() {
-			continue
-		}
+		if Config.IsMainInstance() {
 
-		for serviceName, _ := range services {
+			for serviceName, _ := range services {
 
-			resp, err := http.Get(fmt.Sprintf("%s/%s/healthcheck", Config.BaseURL, serviceName))
-
-			if err != nil {
-				log.Errorf("HealthChecker %s, network error: %s", serviceName, err.Error())
-				continue
-			}
-
-			if resp.StatusCode != 200 {
-				b, err := ioutil.ReadAll(resp.Body)
+				resp, err := http.Get(fmt.Sprintf("%s/%s/healthcheck", Config.BaseURL, serviceName))
 
 				if err != nil {
-					log.Errorf("HealthChecker %s, status %d, read error: %s", serviceName, resp.StatusCode, err.Error())
+					log.Errorf("HealthChecker %s, network error: %s", serviceName, err.Error())
+					continue
 				}
 
-				log.Errorf("HealthChecker %s, status %d, error: %s", serviceName, resp.StatusCode, string(b))
-			}
+				if resp.StatusCode != 200 {
+					b, err := ioutil.ReadAll(resp.Body)
 
+					if err != nil {
+						log.Errorf("HealthChecker %s, status %d, read error: %s", serviceName, resp.StatusCode, err.Error())
+					}
+
+					log.Errorf("HealthChecker %s, status %d, error: %s", serviceName, resp.StatusCode, string(b))
+				}
+
+			}
 		}
+
 		time.Sleep(time.Second * time.Duration(Config.HealthcheckIntervalInSecond))
 	}
 }
