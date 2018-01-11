@@ -22,20 +22,8 @@
 
 
 [[constraint]]
-  name = "github.com/andygrunwald/go-jira"
-  version = "1.0.0"
-
-[[constraint]]
-  name = "github.com/davecgh/go-spew"
-  version = "1.1.0"
-
-[[constraint]]
   name = "github.com/gin-gonic/gin"
   version = "1.2.0"
-
-[[constraint]]
-  branch = "master"
-  name = "github.com/jinzhu/now"
 
 [[constraint]]
   name = "github.com/kelseyhightower/envconfig"
@@ -44,10 +32,6 @@
 [[constraint]]
   name = "github.com/kennygrant/sanitize"
   version = "1.2.3"
-
-[[constraint]]
-  name = "github.com/ktrysmt/go-bitbucket"
-  branch = "master"
 
 [[constraint]]
   branch = "master"
@@ -70,10 +54,6 @@
   name = "github.com/weekface/mgorus"
 
 [[constraint]]
-  name = "github.com/xanzy/go-gitlab"
-  version = "0.6.2"
-
-[[constraint]]
   branch = "master"
   name = "golang.org/x/oauth2"
 
@@ -84,14 +64,6 @@
 [[constraint]]
   branch = "master"
   name = "github.com/requilence/telegram-bot-api"
-
-[[constraint]]
-  branch = "master"
-  name = "github.com/toby3d/go-telegraph"
-
-[[constraint]]
-  branch = "master"
-  name = "github.com/nfnt/resize"
 
 [[constraint]]
   branch = "master"

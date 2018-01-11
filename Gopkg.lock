@@ -2,34 +2,10 @@
 
 
 [[projects]]
-  name = "github.com/andygrunwald/go-jira"
-  packages = ["."]
-  revision = "acbc88d59582a4885dbd82fd775caa7c15245171"
-  version = "v1.0.0"
-
-[[projects]]
-  name = "github.com/davecgh/go-spew"
-  packages = ["spew"]
-  revision = "346938d642f2ec3594ed81d874461961cd0faa76"
-  version = "v1.1.0"
-
-[[projects]]
   branch = "master"
   name = "github.com/dchest/uniuri"
   packages = ["."]
   revision = "8902c56451e9b58ff940bbe5fec35d5f9c04584a"
-
-[[projects]]
-  branch = "master"
-  name = "github.com/dustin/go-humanize"
-  packages = ["."]
-  revision = "77ed807830b4df581417e7f89eb81d4872832b72"
-
-[[projects]]
-  name = "github.com/fatih/structs"
-  packages = ["."]
-  revision = "a720dfa8df582c51dee1b36feabb906bde1588bd"
-  version = "v1.0.0"
 
 [[projects]]
   name = "github.com/garyburd/redigo"
@@ -62,24 +38,6 @@
   revision = "130e6b02ab059e7b717a096f397c5b60111cae74"
 
 [[projects]]
-  branch = "master"
-  name = "github.com/google/go-querystring"
-  packages = ["query"]
-  revision = "53e6ce116135b80d037921a7fdd5138cf32d7a8a"
-
-[[projects]]
-  branch = "master"
-  name = "github.com/jinzhu/now"
-  packages = ["."]
-  revision = "d939ba741945c047cac69c329c5fb0d6b4a06520"
-
-[[projects]]
-  name = "github.com/k0kubun/pp"
-  packages = ["."]
-  revision = "027a6d1765d673d337e687394dbe780dd64e2a1e"
-  version = "v2.3.0"
-
-[[projects]]
   name = "github.com/kelseyhightower/envconfig"
   packages = ["."]
   revision = "f611eb38b3875cc3bd991ca91c51d06446afa14c"
@@ -92,30 +50,6 @@
   version = "v1.2.3"
 
 [[projects]]
-  name = "github.com/klauspost/compress"
-  packages = ["flate","gzip","zlib"]
-  revision = "6c8db69c4b49dd4df1fff66996cf556176d0b9bf"
-  version = "v1.2.1"
-
-[[projects]]
-  name = "github.com/klauspost/cpuid"
-  packages = ["."]
-  revision = "ae7887de9fa5d2db4eaa8174a7eff2c1ac00f2da"
-  version = "v1.1"
-
-[[projects]]
-  name = "github.com/klauspost/crc32"
-  packages = ["."]
-  revision = "cb6bfca970f6908083f26f39a79009d608efd5cd"
-  version = "v1.1"
-
-[[projects]]
-  name = "github.com/mattn/go-colorable"
-  packages = ["."]
-  revision = "167de6bfdfba052fa6b2d3664c8f5272e23c9072"
-  version = "v0.0.9"
-
-[[projects]]
   name = "github.com/mattn/go-isatty"
   packages = ["."]
   revision = "0360b2af4f38e8d38c7fce2a9f4e702702d73a39"
@@ -126,18 +60,6 @@
   name = "github.com/mrjones/oauth"
   packages = ["."]
   revision = "3f67d9c274355678b2f9844b08d643e2f9213340"
-
-[[projects]]
-  branch = "master"
-  name = "github.com/nfnt/resize"
-  packages = ["."]
-  revision = "891127d8d1b52734debe1b3c3d7e747502b6c366"
-
-[[projects]]
-  branch = "master"
-  name = "github.com/pquerna/ffjson"
-  packages = ["ffjson","fflib/v1","fflib/v1/internal"]
-  revision = "d49c2bc1aa135aad0c6f4fc2056623ec78f5d5ac"
 
 [[projects]]
   branch = "master"
@@ -165,27 +87,9 @@
 
 [[projects]]
   branch = "master"
-  name = "github.com/toby3d/go-telegraph"
-  packages = ["."]
-  revision = "0c5702756850eb53708af4fe44a9c57674347299"
-
-[[projects]]
-  name = "github.com/trivago/tgo"
-  packages = ["tcontainer","treflect"]
-  revision = "e4d1ddd28c17dd89ed26327cf69fded22060671b"
-  version = "v1.0.1"
-
-[[projects]]
-  branch = "master"
   name = "github.com/ugorji/go"
   packages = ["codec"]
   revision = "f26fc641ec9d52a2161443cf9bb9fd53b9062a22"
-
-[[projects]]
-  name = "github.com/valyala/fasthttp"
-  packages = [".","fasthttputil"]
-  revision = "d42167fd04f636e20b005e9934159e95454233c7"
-  version = "v20160617"
 
 [[projects]]
   branch = "master"
@@ -198,12 +102,6 @@
   name = "github.com/weekface/mgorus"
   packages = ["."]
   revision = "83720e22971a8301c5b2738c9364accd3d9eb13a"
-
-[[projects]]
-  name = "github.com/xanzy/go-gitlab"
-  packages = ["."]
-  revision = "c35b3f712f72376e21b645514ec3635e63fe0cd2"
-  version = "v0.6.2"
 
 [[projects]]
   branch = "master"
@@ -256,6 +154,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "a523b5eacfa3d4dfb24374d1ed1d073d245bcb35dd6a43c24b4236ab747659c1"
+  inputs-digest = "dd98b2feacf6d74d38a568f0447fc74e2dd87a2390c91f27af5be4befb4c41c0"
   solver-name = "gps-cdcl"
   solver-version = 1
