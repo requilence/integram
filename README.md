@@ -3,102 +3,106 @@ Integram 2.0
 
 Framework and platform for integrating services into [Telegram](https://telegram.org) using official [Bot API](https://core.telegram.org/bots/api)
 
-[![GoDoc](https://godoc.org/github.com/Requilence/integram?status.svg)](https://godoc.org/github.com/Requilence/integram) [![CircleCI](https://img.shields.io/circleci/project/Requilence/integram.svg)](https://circleci.com/gh/Requilence/integram)
+[![GoDoc](https://godoc.org/github.com/Requilence/integram?status.svg)](https://godoc.org/github.com/requilence/integram) [![CircleCI](https://img.shields.io/circleci/project/requilence/integram.svg)](https://circleci.com/gh/requilence/integram)
 
-![Screencast](https://1153359166.rsc.cdn77.org/integram/img/screencast4.gif)
+![Screencast](https://st.integram.org/img/screencast4.gif)
 
-How to use Integram
+How to use Integram in Telegram
 ------------------
-Just use this links to add integrations you are interested in
-* [Trello](https://telegram.me/trello_bot?start=f_github)
-* [Gitlab](https://telegram.me/gitlab_bot?start=f_github)
-* [Bitbucket](https://telegram.me/bitbucket_bot?start=f_github)
-* [Simple webhook bot](https://telegram.me/Bullhorn_bot?start=f_github)
+Just use this links to add bots to your Telegram
+* [Trello](https://t.me/trello_bot?start=f_github)
+* [Gitlab](https://t.me/gitlab_bot?start=f_github)
+* [Bitbucket](https://t.me/bitbucket_bot?start=f_github)
+* [Simple webhook bot](https://t.me/bullhorn_bot?start=f_github)
 
 * [GitHub](https://telegram.me/githubbot) – GitHub bot was developed by [Igor Zhukov](https://github.com/zhukov) and it is not the part of Integram
 
 Not found you favorite service? [🤘 Vote for it](https://telegram.me/integram_bot?start=vote)
 
-Running Integram on your side
+How to run Integram on your own server
 ------------------
-You can run Integram on your own server. 
-- Create the **main.go** file (example is below)
-- Use your own bot created with [Botfather](https://telegram.me/botfather).
-- For the each service you are want to use you need to create an OAuth client(application) in it
-- Set environment variable **GOPATH** to the directory contains **main.go** file
-- Run **go get github.com/requilence/integram**
-- Specify environment variables:
-    - **INTEGRAM_PORT** - if set to 443, integram.crt and integram.key must be presented in the root
-    - **INTEGRAM_BASE_URL** - the base URL the host accessible with, f.e. **https://integram.org**
-- Run **go run main.go** or **go build && ./integram**
-- In order to run test with **go test** you need to set some environment variables:
-    - **INTEGRAM_TEST_BOT_TOKEN** - to perform some non-emulated Telegram tests
-    - **INTEGRAM_TEST_USER** - Telegram user id that have a dialog with this bot
 
-main.go example
+🐳 Docker way
 ------------------
-```go
-package main
-
-import (
-	"github.com/requilence/integram"
-	"github.com/requilence/integram/services/trello"
-	"github.com/requilence/integram/services/gitlab"
-)
-
-func main() {
-	integram.Debug=true
-	
-	integram.Register(
-        trello.Config{
-            integram.OAuthProvider{
-                ID:     "TRELLO_APP_KEY",
-                Secret: "TRELLO_APP_SECRET",
-            },
-        },
-        "BOT_TOKEN_PROVIDED_BY_@BOTFATHER",
-    )
-
-    integram.Register(
-        gitlab.Config{
-            integram.OAuthProvider{
-                ID:     "GITLAB_APP_ID",
-                Secret: "GITLAB_APP_SECRET",
-            },
-        },
-        "BOT_TOKEN_PROVIDED_BY_@BOTFATHER",
-    )
-
-		
-	integram.Run()
-}
+- Install **docker** and **docker-compose**: https://docs.docker.com/compose/install/
+- Clone the repo:
+```bash
+   git clone github.com/requilence/integram && cd integram
 ```
 
-### Dependencies and vendor directory 
+- Check the `docker-compose.yml` file for the required ENV vars for each service
+    - E.g. in order to run Trello integration you need to export: 
+    	    - **INTEGRAM_BASE_URL** – the base URL your host accessible with, e.g. **https://integram.org**
+	    - **INTEGRAM_PORT** – if set to 443 Integram will use letsencryprt to automatically fetch the SSL cert for the domain used in **INTEGRAM_BASE_URL**. You can also setup to [use your own certs](https://github.com/requilence/integram/blob/master/HOWTO#use-ssl-cert-files-instead-of-letsencrypt)
 
-All dependencies come with package itself and may be modified directly (see the [Third party libraries](https://github.com/Requilence/integram#third-party-libraries))
+	    - **TRELLO_BOT_TOKEN** – bot's token you got from [@BotFather](https://t.me/botfather)
+	    - You need to [get your own OAuth credentials from Trello](https://trello.com/app-key)
+	    - **TRELLO_OAUTH_ID** – API Key
+	    - **TRELLO_OAUTH_SECRET** – OAuth Secret
+    
+    - For the more detailed info about other services you should check corresponding repo at https://github.com/integram-org
+- Now you can run the services:
+```bash
+   docker-compose up -p integram trello gitlab ## You can specify services you want to run
+```
+- Now you should be able to see the startup logs in your console and ensure that your bots are working correctly in Telegram.
+- Add the `-d` argument to run process in background mode:
+```bash
+   docker-compose up -d -p integram trello gitlab
+   
+   ## Check the containers status
+   docker ps
+   
+   ## Fetch logs for main container
+   docker logs -f $(docker ps -aqf "name=integram_integram")   
+```
+- To update Integram to the last version:
+```bash
+    ## Fetch last version of images
+    docker-compose pull integram trello gitlab
+    ## Restart containers using the new images
+    docker-compose up --no-deps -d integram trello gitlab
+```
 
-### Requirements
 
-Go 1.5+, MongoDB 3.2+ (for data), Redis 3.2.0+ (for jobs queue)
+🛠 Old-school way (No docker)
+------------------
+- First you need to install all requirements: [Go 1.9+](https://golang.org/doc/install), [Go dep](https://github.com/golang/dep#setup), [MongoDB 3.4+ (for data)](https://docs.mongodb.com/manual/administration/install-community/), [Redis 3.2.0+ (for jobs queue)](https://redis.io/download)
+
+- Then, using [this template](https://github.com/requilence/integram/blob/master/cmd/single-process-mode/main.go) 
+ create the `main.go` file and put it to `src/integram/` inside your prefered working directory (e.g. `/var/integram/src/integram/main.go`)
+
+```bash
+    ## set the GOPATH to the absolute path of directory containing src directory that you have created
+    export GOPATH=/var/integram
+    
+    cd $GOPATH/src/integram
+    ## install dependencies
+    dep init
+```
+
+- Specify required ENV variables – check the [Docker way section](https://github.com/requilence/integram#🐳-docker-way)
+- Run it
+```bash
+    go build integram && ./integram
+```
+
+### Dependencies
+
+Dependencies are specified in `Gopkg.toml` and fetched using [Go dep](https://github.com/golang/dep)
 
 Contributing
 ------------------
 Feel free to send PRs. If you want to contribute new service integration, please [create the issue](https://integram.org/issues/new) first. Just to make sure developing is not already in progress.
 
-### Third party libraries
+### Libraries that was using in Integram
 
-* [Telegram Bindings](https://github.com/go-telegram-bot-api/telegram-bot-api) *
+* [Telegram Bindings](https://github.com/go-telegram-bot-api/telegram-bot-api)
 * [Gin – HTTP router and framework](https://github.com/gin-gonic/gin)
 * [Mgo – MongoDB driver](https://github.com/go-mgo/mgo)
-* [Jobs – background jobs](https://github.com/albrow/jobs) *
-* [Redigo – Redis driver](https://github.com/garyburd/redigo)
-* [Logrus – structure logging](https://github.com/Sirupsen/logrus)
-* [Trello bindings](https://github.com/hackerlist/trello) *
-* [Gitlab bindings](https://github.com/xanzy/go-gitlab) * 
-* [Bitbucket bindings](https://github.com/ktrysmt/go-bitbucket) *
+* [Jobs – background jobs](https://github.com/albrow/jobs)
+* [Logrus – structure logging](https://github.com/sirupsen/logrus)
 
-\* - **package source is modified**
 
 ### License
 Code available on GPLV3 [license](https://github.com/requilence/integram/blob/master/LICENSE)
