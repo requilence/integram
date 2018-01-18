@@ -12,5 +12,5 @@ RUN dep ensure -vendor-only
 
 COPY . ./
 
-RUN go build -o /go/app github.com/requilence/integram
+RUN go build -o /go/app github.com/requilence/integram/cmd/multi-process-mode
 CMD ["/go/app"]

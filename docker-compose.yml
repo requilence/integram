@@ -21,7 +21,7 @@ services:
     volumes:
         - data-redis:/data
   integram:
-    image: integram/integram
+    image: integram/integram:latest
     restart: always
     links:
       - mongo
@@ -37,11 +37,11 @@ services:
       - INTEGRAM_REDIS_URL=redis:6379
       - INTEGRAM_INSTANCE_MODE=main
 
-      ## required env vars
+      ## required ENV vars
       - INTEGRAM_PORT
       - INTEGRAM_BASE_URL
   trello:
-    image: integram/trello
+    image: integram/trello:latest
     restart: always
     links:
       - mongo
@@ -55,7 +55,7 @@ services:
       - INTEGRAM_REDIS_URL=redis:6379
       - INTEGRAM_INSTANCE_MODE=service
 
-      ## required env vars
+      ## required ENV vars
       - INTEGRAM_BASE_URL
       - TRELLO_BOT_TOKEN
       - TRELLO_OAUTH_ID
@@ -75,7 +75,7 @@ services:
       - INTEGRAM_REDIS_URL=redis:6379
       - INTEGRAM_INSTANCE_MODE=service
 
-      ## required env vars
+      ## required ENV vars
       - INTEGRAM_BASE_URL
       - GITLAB_BOT_TOKEN
       - GITLAB_OAUTH_ID
@@ -95,7 +95,7 @@ services:
       - INTEGRAM_REDIS_URL=redis:6379
       - INTEGRAM_INSTANCE_MODE=service
 
-      ## required env vars
+      ## required ENV vars
       - INTEGRAM_BASE_URL
       - BITBUCKET_BOT_TOKEN
       - BITBUCKET_OAUTH_ID
@@ -115,6 +115,6 @@ services:
       - INTEGRAM_REDIS_URL=redis:6379
       - INTEGRAM_INSTANCE_MODE=service
 
-      ## required env vars
+      ## required ENV vars
       - INTEGRAM_BASE_URL
       - WEBHOOK_BOT_TOKEN

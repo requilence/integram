@@ -4,7 +4,7 @@ volumes:
   data-mongo: {}
 services:
   mongo:
-    restart: always
+    restart: "no"
     image: mongo:3.4
     volumes:
       - data-mongo:/data/db
@@ -13,7 +13,7 @@ services:
     volumes:
       - /data/db:/data/db
   redis:
-    restart: always
+    restart: "no"
     command: redis-server --appendonly yes
     image: redis:3.2
     expose:
