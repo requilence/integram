@@ -19,7 +19,31 @@
 # [[override]]
 #  name = "github.com/x/y"
 #  version = "2.4.0"
+ignored = ["github.com/gin-gonic/gin/examples/*", "golang.org/x/oauth2/google",  "google.golang.org/appengine"]
 
+[[constraint]]
+  name = "github.com/requilence/jobs"
+  branch = "master"
+
+[[constraint]]
+  name = "github.com/requilence/telegram-bot-api"
+  branch = "master"
+
+[[constraint]]
+  branch = "master"
+  name = "golang.org/x/crypto"
+
+[[constraint]]
+  branch = "master"
+  name = "golang.org/x/oauth2"
+
+[[constraint]]
+  branch = "v2"
+  name = "gopkg.in/mgo.v2"
+
+[[constraint]]
+  name = "github.com/gin-gonic/autotls"
+  version = "0.0.1"
 
 [[constraint]]
   name = "github.com/gin-gonic/gin"
@@ -34,37 +58,17 @@
   version = "1.2.3"
 
 [[constraint]]
-  branch = "master"
-  name = "github.com/mrjones/oauth"
-
-[[constraint]]
-  name = "github.com/requilence/jobs"
-  branch = "master"
-
-[[constraint]]
   name = "github.com/sirupsen/logrus"
-  version = "1.0.3"
+  version = "1.0.4"
 
 [[constraint]]
-  branch = "master"
+  name = "github.com/mrjones/oauth"
+  revision = "3f67d9c274355678b2f9844b08d643e2f9213340"
+
+[[constraint]]
   name = "github.com/vova616/xxhash"
+  revision = "f0a9a8b74d487f9563a527daf3bd6b4fbd3f5d00"
 
 [[constraint]]
-  branch = "master"
   name = "github.com/weekface/mgorus"
-
-[[constraint]]
-  branch = "master"
-  name = "golang.org/x/oauth2"
-
-[[constraint]]
-  branch = "v2"
-  name = "gopkg.in/mgo.v2"
-
-[[constraint]]
-  branch = "master"
-  name = "github.com/requilence/telegram-bot-api"
-
-[[constraint]]
-  branch = "master"
-  name = "golang.org/x/crypto"
+  revision = "83720e22971a8301c5b2738c9364accd3d9eb13a"
