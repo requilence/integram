@@ -723,8 +723,9 @@ func TestContext_EditPressedMessageTextAndInlineKeyboard(t *testing.T) {
 
 		msg, _ := findMessageByBsonID(db, msg.ID)
 
-		if msg.Text != tt.args.text {
-			t.Errorf("%q. Context.EditPressedMessageTextAndInlineKeyboard() db check got text = %s, want %s", tt.name, msg.Text, tt.args.text)
+		textHash := fmt.Sprintf("%x", md5.Sum([]byte(tt.args.text)))
+		if msg.om.TextHash != textHash {
+			t.Errorf("%q. Context.EditPressedMessageTextAndInlineKeyboard() db check got TextHash = %s, want %s", tt.name, msg.om.TextHash, textHash)
 		}
 
 		if !reflect.DeepEqual(msg.om.InlineKeyboardMarkup, tt.args.kb) {

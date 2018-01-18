@@ -811,9 +811,26 @@ func (user *User) saveProtectedSetting(key string, value interface{}) error {
 
 // SaveSetting sets Chat's setting for service with specific key
 func (chat *Chat) SaveSetting(key string, value interface{}) error {
-	serviceID := chat.ctx.getServiceID()
 
-	_, err := chat.ctx.db.C("chats").UpsertId(chat.ID, bson.M{"$set": bson.M{"settings." + serviceID + "." + strings.ToLower(key): value}})
+	key = strings.ToLower(key)
+	serviceID := chat.ctx.getServiceID()
+	var cd chatData
+	_, err := chat.ctx.db.C("chats").FindId(chat.ID).Select(bson.M{"settings." + serviceID: 1}).
+		Apply(
+		mgo.Change{
+			Update: bson.M{
+				"$set":         bson.M{"settings." + serviceID + "." + key: value},
+				"$setOnInsert": bson.M{"createdat": time.Now()},
+			},
+			Upsert:    true,
+			ReturnNew: true,
+		},
+		&cd)
+
+	if err == nil && chat.data != nil && chat.data.Settings != nil && cd.Settings != nil && cd.Settings[serviceID] != nil {
+		chat.data.Settings[serviceID] = cd.Settings[serviceID]
+	}
+
 	return err
 }
 
@@ -824,9 +841,26 @@ func (user *User) SaveSetting(key string, value interface{}) error {
 		return errors.New("SaveSetting: user is empty")
 	}
 
+	key = strings.ToLower(key)
 	serviceID := user.ctx.getServiceID()
 
-	_, err := user.ctx.db.C("users").UpsertId(user.ID, bson.M{"$set": bson.M{"settings." + serviceID + "." + strings.ToLower(key): value}})
+	var ud userData
+	_, err := user.ctx.db.C("users").FindId(user.ID).Select(bson.M{"settings." + serviceID: 1}).
+		Apply(
+		mgo.Change{
+			Update: bson.M{
+				"$set":         bson.M{"settings." + serviceID + "." + key: value},
+				"$setOnInsert": bson.M{"createdat": time.Now()},
+			},
+			Upsert:    true,
+			ReturnNew: true,
+		},
+		&ud)
+
+	if err == nil && user.data != nil && user.data.Settings != nil && ud.Settings != nil && ud.Settings[serviceID] != nil {
+		user.data.Settings[serviceID] = ud.Settings[serviceID]
+	}
+
 	return err
 }
 
@@ -874,6 +908,10 @@ func (user *User) AuthTempToken() string {
 // OauthRedirectURL used in OAuth process as returning URL
 func (user *User) OauthRedirectURL() string {
 	providerID := user.ctx.OAuthProvider().internalID()
+	if providerID == user.ctx.ServiceName {
+		return fmt.Sprintf("%s/auth/%s", Config.BaseURL, user.ctx.ServiceName)
+	}
+
 	return fmt.Sprintf("%s/auth/%s/%s", Config.BaseURL, user.ctx.ServiceName, providerID)
 }
 
