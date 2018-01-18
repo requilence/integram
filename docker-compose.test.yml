@@ -23,7 +23,7 @@ services:
   integram:
     build: .
     command: go test github.com/requilence/integram
-    restart: no
+    restart: "no"
     links:
       - mongo
       - redis
