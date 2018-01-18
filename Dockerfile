@@ -10,11 +10,7 @@ COPY Gopkg.toml Gopkg.lock ./
 # install the dependencies without checking for go code
 RUN dep ensure -vendor-only
 
-# gobuildpackage contains the package to build and run
-# for the main instance: "github.com/requilence/integram/cmd"  or
-# for the xxx service instance: "github.com/requilence/integram/services/xxx/cmd"
-ARG gobuildpackage
 COPY . ./
 
-RUN go build -o /go/app $gobuildpackage
+RUN go build -o /go/app github.com/requilence/integram
 CMD ["/go/app"]
