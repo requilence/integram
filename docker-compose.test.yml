@@ -20,7 +20,7 @@ services:
         - "6379"
     volumes:
         - data-redis:/data
-  integram:
+  sut:
     build: .
     command: go test github.com/requilence/integram
     restart: "no"
