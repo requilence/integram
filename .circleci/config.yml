@@ -13,7 +13,7 @@ jobs:
       - run: mkdir -p $TEST_RESULTS
       - run:
           name: Start container and run tests
-          command: docker-compose -f docker-compose-test.yml up --exit-code-from sut sut | tee ${TEST_RESULTS}/test.out
+          command: docker-compose -f .circleci/docker-compose-test.yml up --exit-code-from sut sut | tee ${TEST_RESULTS}/test.out
       - store_artifacts:
           path: /tmp/test-results
           destination: raw-test-output
