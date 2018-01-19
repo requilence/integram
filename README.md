@@ -3,7 +3,7 @@ Integram 2.0
 
 Framework and platform for integrating services into [Telegram](https://telegram.org) using official [Bot API](https://core.telegram.org/bots/api)
 
-[![GoDoc](https://godoc.org/github.com/Requilence/integram?status.svg)](https://godoc.org/github.com/requilence/integram) [![CircleCI](https://img.shields.io/circleci/project/requilence/integram.svg)](https://circleci.com/gh/requilence/integram)
+[![CircleCI](https://img.shields.io/circleci/project/requilence/integram.svg)](https://circleci.com/gh/requilence/integram) [![Docker Image](https://img.shields.io/docker/build/integram/integram.svg)](https://hub.docker.com/r/integram/integram/) [![GoDoc](https://godoc.org/github.com/Requilence/integram?status.svg)](https://godoc.org/github.com/requilence/integram)
 
 ![Screencast](https://st.integram.org/img/screencast4.gif)
 
@@ -29,10 +29,9 @@ How to run Integram on your own server
 ```bash
    git clone github.com/requilence/integram && cd integram
 ```
-
 - Check the `docker-compose.yml` file for the required ENV vars for each service
     - E.g. in order to run Trello integration you need to export: 
-    	    - **INTEGRAM_BASE_URL** – the base URL your host accessible with, e.g. **https://integram.org**
+    	- **INTEGRAM_BASE_URL** – the base URL your host accessible with, e.g. **https://integram.org**
 	    - **INTEGRAM_PORT** – if set to 443 Integram will use letsencryprt to automatically fetch the SSL cert for the domain used in **INTEGRAM_BASE_URL**. You can also setup to [use your own certs](https://github.com/requilence/integram/blob/master/HOWTO#use-ssl-cert-files-instead-of-letsencrypt)
 
 	    - **TRELLO_BOT_TOKEN** – bot's token you got from [@BotFather](https://t.me/botfather)
@@ -67,13 +66,13 @@ How to run Integram on your own server
 
 🛠 Old-school way (No docker)
 ------------------
-- First you need to install all requirements: [Go 1.9+](https://golang.org/doc/install), [Go dep](https://github.com/golang/dep#setup), [MongoDB 3.4+ (for data)](https://docs.mongodb.com/manual/administration/install-community/), [Redis 3.2.0+ (for jobs queue)](https://redis.io/download)
+- First you need to install all requirements: [Go 1.9+](https://golang.org/doc/install), [Go dep](https://github.com/golang/dep#setup), [MongoDB 3.4+ (for data)](https://docs.mongodb.com/manual/administration/install-community/), [Redis 3.2+ (for jobs queue)](https://redis.io/download)
 
 - Then, using [this template](https://github.com/requilence/integram/blob/master/cmd/single-process-mode/main.go) 
  create the `main.go` file and put it to `src/integram/` inside your prefered working directory (e.g. `/var/integram/src/integram/main.go`)
 
 ```bash
-    ## set the GOPATH to the absolute path of directory containing src directory that you have created
+    ## set the GOPATH to the absolute path of directory containing 'src' directory that you have created before
     export GOPATH=/var/integram
     
     cd $GOPATH/src/integram
@@ -81,7 +80,7 @@ How to run Integram on your own server
     dep init
 ```
 
-- Specify required ENV variables – check the [Docker way section](https://github.com/requilence/integram#🐳-docker-way)
+- Specify required ENV variables – check the [Docker way section](https://github.com/requilence/integram#-docker-way)
 - Run it
 ```bash
     go build integram && ./integram
