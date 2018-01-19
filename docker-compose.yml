@@ -35,7 +35,7 @@ services:
       - TZ=UTC
       - INTEGRAM_MONGO_URL=mongodb://mongo:27017/integram
       - INTEGRAM_REDIS_URL=redis:6379
-      - INTEGRAM_INSTANCE_MODE=main
+      - INTEGRAM_INSTANCE_MODE=multi-main
 
       ## required ENV vars
       - INTEGRAM_PORT
@@ -53,7 +53,7 @@ services:
       - INTEGRAM_PORT=7000
       - INTEGRAM_MONGO_URL=mongodb://mongo:27017/integram
       - INTEGRAM_REDIS_URL=redis:6379
-      - INTEGRAM_INSTANCE_MODE=service
+      - INTEGRAM_INSTANCE_MODE=multi-service
 
       ## required ENV vars
       - INTEGRAM_BASE_URL
@@ -73,7 +73,7 @@ services:
       - INTEGRAM_PORT=7000
       - INTEGRAM_MONGO_URL=mongodb://mongo:27017/integram
       - INTEGRAM_REDIS_URL=redis:6379
-      - INTEGRAM_INSTANCE_MODE=service
+      - INTEGRAM_INSTANCE_MODE=multi-service
 
       ## required ENV vars
       - INTEGRAM_BASE_URL
@@ -93,7 +93,7 @@ services:
       - INTEGRAM_PORT=7000
       - INTEGRAM_MONGO_URL=mongodb://mongo:27017/integram
       - INTEGRAM_REDIS_URL=redis:6379
-      - INTEGRAM_INSTANCE_MODE=service
+      - INTEGRAM_INSTANCE_MODE=multi-service
 
       ## required ENV vars
       - INTEGRAM_BASE_URL
@@ -113,7 +113,7 @@ services:
       - INTEGRAM_PORT=7000
       - INTEGRAM_MONGO_URL=mongodb://mongo:27017/integram
       - INTEGRAM_REDIS_URL=redis:6379
-      - INTEGRAM_INSTANCE_MODE=service
+      - INTEGRAM_INSTANCE_MODE=multi-service
 
       ## required ENV vars
       - INTEGRAM_BASE_URL

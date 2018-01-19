@@ -13,9 +13,9 @@ import (
 type Mode string
 
 const (
-	InstanceModeMain              Mode = "main"    // run only the main worker. It will process the outgoing messages queue and route the incoming webhooks to specific services
-	InstanceModeStandAloneService Mode = "service" // run only one the registred services and their workers. Main instance must be running in order to the outgoing TG  messages could be sent
-	InstanceModeSingleProcess     Mode = "single"  // run all in one process – main worker and all registred services
+	InstanceModeMultiProcessMain    Mode = "multi-main"    // run only the main worker. It will process the outgoing messages queue, route the incoming webhooks to specific services and resolve webpreviews
+	InstanceModeMultiProcessService Mode = "multi-service" // run only one the registred services and their workers. Main instance must be running in order to the outgoing TG  messages could be sent
+	InstanceModeSingleProcess       Mode = "single" 	   // run all-in-one process – main worker and all registred services
 )
 
 type BotConfig struct {
@@ -34,7 +34,7 @@ type config struct {
 	MongoLogging bool   `envconfig:"INTEGRAM_MONGO_LOGGING" default:"0"`
 
 	// -----
-	// only make sense for InstanceModeStandAloneService
+	// only make sense for InstanceModeMultiProcessService
 	HealthcheckIntervalInSecond int    `envconfig:"INTEGRAM_HEALTHCHECK_INTERVAL" default:"30"` // interval to ping each service instance by the main instance
 	StandAloneServiceURL        string `envconfig:"INTEGRAM_STANDALONE_SERVICE_URL"`            // default will be depending on the each service's name, e.g. http://trello:7000
 
@@ -43,7 +43,7 @@ type config struct {
 var Config config
 
 func (c *config) IsMainInstance() bool {
-	if c.InstanceMode == InstanceModeMain {
+	if c.InstanceMode == InstanceModeMultiProcessMain {
 		return true
 	}
 	return false
@@ -61,7 +61,7 @@ func (c *config) ParseBaseURL() *url.URL {
 }
 
 func (c *config) IsStandAloneServiceInstance() bool {
-	if c.InstanceMode == InstanceModeStandAloneService {
+	if c.InstanceMode == InstanceModeMultiProcessService {
 		return true
 	}
 	return false
