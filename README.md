@@ -27,7 +27,7 @@ How to run Integram on your own server
 - Install **docker** and **docker-compose**: https://docs.docker.com/compose/install/
 - Clone the repo:
 ```bash
-   git clone github.com/requilence/integram && cd integram
+   git clone https://github.com/requilence/integram && cd integram
 ```
 - Check the `docker-compose.yml` file for the required ENV vars for each service
     - E.g. in order to run Trello integration you need to export: 
@@ -42,12 +42,12 @@ How to run Integram on your own server
     - For the more detailed info about other services you should check corresponding repo at https://github.com/integram-org
 - Now you can run the services:
 ```bash
-   docker-compose up -p integram trello gitlab ## You can specify services you want to run
+   docker-compose -p integram up trello gitlab ## You can specify services you want to run
 ```
 - Now you should be able to see the startup logs in your console and ensure that your bots are working correctly in Telegram.
 - Add the `-d` argument to run process in background mode:
 ```bash
-   docker-compose up -d -p integram trello gitlab
+   docker-compose -p integram up -d  trello gitlab
    
    ## Check the containers status
    docker ps
@@ -60,7 +60,7 @@ How to run Integram on your own server
     ## Fetch last version of images
     docker-compose pull integram trello gitlab
     ## Restart containers using the new images
-    docker-compose up --no-deps -d integram trello gitlab
+    docker-compose -p integram up -d trello gitlab
 ```
 
 
