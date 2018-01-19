@@ -6,7 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"fmt"
-	"github.com/requilence/integram/url"
+	"github.com/requilence/url"
 	log "github.com/sirupsen/logrus"
 	"github.com/vova616/xxhash"
 	"io/ioutil"

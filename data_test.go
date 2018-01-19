@@ -8,7 +8,7 @@ import (
 
 	"fmt"
 	"github.com/gin-gonic/gin"
-	"github.com/requilence/integram/url"
+	"github.com/requilence/url"
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 	tg "github.com/requilence/telegram-bot-api"

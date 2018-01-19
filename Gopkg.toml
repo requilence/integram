@@ -26,6 +26,10 @@ ignored = ["github.com/gin-gonic/gin/examples/*", "golang.org/x/oauth2/google", 
   branch = "master"
 
 [[constraint]]
+  name = "github.com/requilence/url"
+  branch = "master"
+
+[[constraint]]
   name = "github.com/requilence/telegram-bot-api"
   branch = "master"
 

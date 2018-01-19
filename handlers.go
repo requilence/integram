@@ -13,7 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/autotls"
 	"golang.org/x/crypto/acme/autocert"
-	"github.com/requilence/integram/url"
+	"github.com/requilence/url"
 	log "github.com/sirupsen/logrus"
 	stdlog "log"
 

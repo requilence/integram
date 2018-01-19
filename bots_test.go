@@ -1,7 +1,7 @@
 package integram
 
 import (
-	"github.com/requilence/integram/url"
+	"github.com/requilence/url"
 	"reflect"
 	"testing"
 	"time"

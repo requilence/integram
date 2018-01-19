@@ -7,7 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"github.com/requilence/integram/url"
+	"github.com/requilence/url"
 )
 
 type Mode string

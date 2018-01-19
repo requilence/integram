@@ -16,7 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/kennygrant/sanitize"
 	"github.com/mrjones/oauth"
-	"github.com/requilence/integram/url"
+	"github.com/requilence/url"
 	tg "github.com/requilence/telegram-bot-api"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/oauth2"

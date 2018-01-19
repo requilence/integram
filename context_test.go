@@ -13,7 +13,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/gin-gonic/gin"
 	"github.com/mrjones/oauth"
-	"github.com/requilence/integram/url"
+	"github.com/requilence/url"
 	"golang.org/x/oauth2"
 	"gopkg.in/mgo.v2"
 	tg "github.com/requilence/telegram-bot-api"

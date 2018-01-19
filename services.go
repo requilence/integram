@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/mrjones/oauth"
-	"github.com/requilence/integram/url"
+	"github.com/requilence/url"
 	"github.com/requilence/jobs"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/oauth2"

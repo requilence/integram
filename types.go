@@ -6,7 +6,7 @@ import (
 	"crypto/md5"
 	"encoding/base64"
 	"github.com/mrjones/oauth"
-	"github.com/requilence/integram/url"
+	"github.com/requilence/url"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/mgo.v2/bson"
 )

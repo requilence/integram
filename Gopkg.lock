@@ -73,6 +73,12 @@
   revision = "ce2732e6d01f85faca1809cf150d1e90fd1ad2fd"
 
 [[projects]]
+  branch = "master"
+  name = "github.com/requilence/url"
+  packages = ["."]
+  revision = "6fc4fc0c65da72e95d19a8e5056e222a4f12357f"
+
+[[projects]]
   name = "github.com/sirupsen/logrus"
   packages = ["."]
   revision = "d682213848ed68c0a260ca37d6dd5ace8423f5ba"
@@ -151,6 +157,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "81ac3fb535025d765f9ca4fac1d0cd6007f157c7cf668f130d2e1ec45edfb67f"
+  inputs-digest = "97739088b9ee708b67aecaf3b33fbe8794be9a097ae35b4ddebabecd5a24d623"
   solver-name = "gps-cdcl"
   solver-version = 1
