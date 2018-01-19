@@ -1,0 +1,78 @@
+
+# Gopkg.toml example
+#
+# Refer to https://github.com/golang/dep/blob/master/docs/Gopkg.toml.md
+# for detailed Gopkg.toml documentation.
+#
+# required = ["github.com/user/thing/cmd/thing"]
+# ignored = ["github.com/user/project/pkgX", "bitbucket.org/user/project/pkgA/pkgY"]
+#
+# [[constraint]]
+#   name = "github.com/user/project"
+#   version = "1.0.0"
+#
+# [[constraint]]
+#   name = "github.com/user/project2"
+#   branch = "dev"
+#   source = "github.com/myfork/project2"
+#
+# [[override]]
+#  name = "github.com/x/y"
+#  version = "2.4.0"
+ignored = ["github.com/gin-gonic/gin/examples/*", "golang.org/x/oauth2/google",  "google.golang.org/appengine"]
+
+[[constraint]]
+  name = "github.com/requilence/jobs"
+  branch = "master"
+
+[[constraint]]
+  name = "github.com/requilence/url"
+  branch = "master"
+
+[[constraint]]
+  name = "github.com/requilence/telegram-bot-api"
+  branch = "master"
+
+[[constraint]]
+  branch = "master"
+  name = "golang.org/x/crypto"
+
+[[constraint]]
+  branch = "master"
+  name = "golang.org/x/oauth2"
+
+[[constraint]]
+  branch = "v2"
+  name = "gopkg.in/mgo.v2"
+
+[[constraint]]
+  name = "github.com/gin-gonic/autotls"
+  version = "0.0.1"
+
+[[constraint]]
+  name = "github.com/gin-gonic/gin"
+  version = "1.2.0"
+
+[[constraint]]
+  name = "github.com/kelseyhightower/envconfig"
+  version = "1.3.0"
+
+[[constraint]]
+  name = "github.com/kennygrant/sanitize"
+  version = "1.2.3"
+
+[[constraint]]
+  name = "github.com/sirupsen/logrus"
+  version = "1.0.4"
+
+[[constraint]]
+  name = "github.com/mrjones/oauth"
+  revision = "3f67d9c274355678b2f9844b08d643e2f9213340"
+
+[[constraint]]
+  name = "github.com/vova616/xxhash"
+  revision = "f0a9a8b74d487f9563a527daf3bd6b4fbd3f5d00"
+
+[[constraint]]
+  name = "github.com/weekface/mgorus"
+  revision = "83720e22971a8301c5b2738c9364accd3d9eb13a"

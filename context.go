@@ -13,15 +13,15 @@ import (
 	"time"
 
 	"crypto/md5"
-	log "github.com/Sirupsen/logrus"
 	"github.com/gin-gonic/gin"
 	"github.com/kennygrant/sanitize"
 	"github.com/mrjones/oauth"
-	"github.com/requilence/integram/url"
+	"github.com/requilence/url"
+	tg "github.com/requilence/telegram-bot-api"
+	log "github.com/sirupsen/logrus"
 	"golang.org/x/oauth2"
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
-	tg "gopkg.in/telegram-bot-api.v3"
 	"os"
 	"path/filepath"
 )
@@ -208,6 +208,24 @@ func (wc *WebhookContext) FirstParse() bool {
 	return wc.firstParse
 }
 
+// Param return param from url
+func (wc *WebhookContext) Param(s string) string {
+	return wc.gin.Param(s)
+}
+
+// File serves local file
+func (wc *WebhookContext) File(path string) {
+	wc.gin.File(path)
+}
+
+func (wc *WebhookContext) Writer() http.ResponseWriter {
+	return wc.gin.Writer
+}
+
+func (wc *WebhookContext) Request() *http.Request {
+	return wc.gin.Request
+}
+
 func (wc *WebhookContext) Store(key string, b interface{}) {
 	wc.gin.Set(key, b)
 }
@@ -231,6 +249,11 @@ func (wc *WebhookContext) Response(code int, s string) {
 	wc.gin.String(code, s)
 }
 
+// Redirect send the Location header
+func (wc *WebhookContext) Redirect(code int, s string) {
+	wc.gin.Redirect(code, s)
+}
+
 // KeyboardAnswer retrieve the data related to pressed button
 // buttonText will be returned only in case this button relates to the one in db for this chat
 func (c *Context) KeyboardAnswer() (data string, buttonText string) {
@@ -243,6 +266,10 @@ func (c *Context) KeyboardAnswer() (data string, buttonText string) {
 
 	// In group chat keyboard answer always include msg_id of original message that generate this keyboard
 	if c.Chat.ID < 0 && c.Message.ReplyToMsgID != keyboard.MsgID {
+		return
+	}
+
+	if c.Message.Text == "" {
 		return
 	}
 
@@ -356,7 +383,7 @@ func (c *Context) keyboard() (chatKeyboard, error) {
 func (c *Context) Log() *log.Entry {
 	fields := log.Fields{"service": c.ServiceName}
 
-	if Debug {
+	if Config.Debug {
 		pc := make([]uintptr, 10)
 		runtime.Callers(2, pc)
 		f := runtime.FuncForPC(pc[0])
@@ -486,7 +513,7 @@ func (c *Context) EditMessageText(om *OutgoingMessage, text string) error {
 		Text: text,
 	})
 	if err != nil {
-		if err.(tg.Error).IsCantAccessChat() || err.(tg.Error).ChatMigratedToChatID() != 0 {
+		if err.(tg.Error).IsCantAccessChat() || err.(tg.Error).ChatMigrated() {
 			if c.Callback != nil && c.Callback.AnsweredAt == nil {
 				c.AnswerCallbackQuery("Sorry, message can be outdated. Bot can't edit messages created before converting to the Super Group", false)
 			}
@@ -551,6 +578,76 @@ func (c *Context) EditMessagesWithEventID(eventID string, fromState string, text
 	return edited, err
 }
 
+// DeleteMessagesWithEventID deletes the last MaxMsgsToUpdateWithEventID messages' text and inline keyboard with the corresponding eventID in ALL chats
+func (c *Context) DeleteMessagesWithEventID(eventID string) (deleted int, err error) {
+	var messages []OutgoingMessage
+	f := bson.M{"botid": c.Bot().ID, "eventid": eventID}
+
+	//update MAX_MSGS_TO_UPDATE_WITH_EVENTID last bot messages
+	c.db.C("messages").Find(f).Sort("-_id").Limit(MaxMsgsToUpdateWithEventID).All(&messages)
+	for _, message := range messages {
+		err = c.DeleteMessage(&message)
+		if err != nil {
+			c.Log().WithError(err).WithField("eventid", eventID).Error("DeleteMessagesWithEventID")
+		} else {
+			deleted++
+		}
+	}
+	return deleted, err
+}
+
+// DeleteMessage deletes the outgoing message's text and inline keyboard
+func (c *Context) DeleteMessage(om *OutgoingMessage) error {
+	bot := c.Bot()
+	if om.MsgID != 0 {
+		log.WithField("msgID", om.MsgID).Debug("DeleteMessage")
+	} else {
+		om.ChatID = 0
+		log.WithField("inlineMsgID", om.InlineMsgID).Debug("DeleteMessage")
+	}
+
+	var msg OutgoingMessage
+	var ci *mgo.ChangeInfo
+	var err error
+
+	ci, err = c.db.C("messages").Find(bson.M{"_id": om.ID}).Apply(mgo.Change{Remove: true}, &msg)
+
+	if err != nil {
+		c.Log().WithError(err).Error("DeleteMessage messages remove error")
+	}
+
+	if msg.BotID == 0 {
+		c.Log().Warn(fmt.Sprintf("DeleteMessage – message (_id=%s botid=%v id=%v) not found", om.ID, bot.ID, om.MsgID))
+		return nil
+
+	}
+	if ci.Removed == 0 {
+		c.Log().Warn(fmt.Sprintf("DeleteMessage – message (_id=%s botid=%v id=%v) not removed ", om.ID, bot.ID, om.MsgID))
+
+		return nil
+	}
+
+	_, err = bot.API.Send(tg.DeleteMessageConfig{
+		ChatID:    om.ChatID,
+		MessageID: om.MsgID,
+	})
+
+	if err != nil {
+		if err.(tg.Error).IsCantAccessChat() || err.(tg.Error).ChatMigrated() {
+			if c.Callback != nil {
+				c.AnswerCallbackQuery("Message can be outdated. Bot can't edit messages created before converting to the Super Group", false)
+			}
+		} else if err.(tg.Error).IsAntiFlood() {
+			c.Log().WithError(err).Warn("TG Anti flood activated")
+		}
+		// Oops. error is occurred – revert the original message
+		c.db.C("messages").Insert(om)
+		return err
+	}
+
+	return nil
+}
+
 // EditMessageTextAndInlineKeyboard edit the outgoing message's text and inline keyboard
 func (c *Context) EditMessageTextAndInlineKeyboard(om *OutgoingMessage, fromState string, text string, kb InlineKeyboard) error {
 	bot := c.Bot()
@@ -564,10 +661,12 @@ func (c *Context) EditMessageTextAndInlineKeyboard(om *OutgoingMessage, fromStat
 	var msg OutgoingMessage
 	var ci *mgo.ChangeInfo
 	var err error
+	om.Text = text
+	om.TextHash = om.GetTextHash()
 	if fromState != "" {
-		ci, err = c.db.C("messages").Find(bson.M{"_id": om.ID, "$or": []bson.M{{"inlinekeyboardmarkup.state": fromState}, {"inlinekeyboardmarkup": bson.M{"$exists": false}}}}).Apply(mgo.Change{Update: bson.M{"$set": bson.M{"inlinekeyboardmarkup": kb, "text": text}}}, &msg)
+		ci, err = c.db.C("messages").Find(bson.M{"_id": om.ID, "$or": []bson.M{{"inlinekeyboardmarkup.state": fromState}, {"inlinekeyboardmarkup": bson.M{"$exists": false}}}}).Apply(mgo.Change{Update: bson.M{"$set": bson.M{"inlinekeyboardmarkup": kb, "texthash": om.TextHash}}}, &msg)
 	} else {
-		ci, err = c.db.C("messages").Find(bson.M{"_id": om.ID}).Apply(mgo.Change{Update: bson.M{"$set": bson.M{"inlinekeyboardmarkup": kb, "text": text}}}, &msg)
+		ci, err = c.db.C("messages").Find(bson.M{"_id": om.ID}).Apply(mgo.Change{Update: bson.M{"$set": bson.M{"inlinekeyboardmarkup": kb, "texthash": om.TextHash}}}, &msg)
 	}
 
 	if err != nil {
@@ -606,7 +705,7 @@ func (c *Context) EditMessageTextAndInlineKeyboard(om *OutgoingMessage, fromStat
 	})
 
 	if err != nil {
-		if err.(tg.Error).IsCantAccessChat() || err.(tg.Error).ChatMigratedToChatID() != 0 {
+		if err.(tg.Error).IsCantAccessChat() || err.(tg.Error).ChatMigrated() {
 			if c.Callback != nil {
 				c.AnswerCallbackQuery("Message can be outdated. Bot can't edit messages created before converting to the Super Group", false)
 			}
@@ -654,7 +753,7 @@ func (c *Context) EditInlineKeyboard(om *OutgoingMessage, fromState string, kb I
 	})
 
 	if err != nil {
-		if err.(tg.Error).IsCantAccessChat() || err.(tg.Error).ChatMigratedToChatID() != 0 {
+		if err.(tg.Error).IsCantAccessChat() || err.(tg.Error).ChatMigrated() {
 			if c.Callback != nil {
 				c.AnswerCallbackQuery("Message can be outdated. Bot can't edit messages created before converting to the Super Group", false)
 			}

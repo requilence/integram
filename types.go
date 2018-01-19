@@ -3,12 +3,12 @@ package integram
 import (
 	"time"
 
-	log "github.com/Sirupsen/logrus"
-	"github.com/mrjones/oauth"
-	"github.com/requilence/integram/url"
-	"gopkg.in/mgo.v2/bson"
 	"crypto/md5"
 	"encoding/base64"
+	"github.com/mrjones/oauth"
+	"github.com/requilence/url"
+	log "github.com/sirupsen/logrus"
+	"gopkg.in/mgo.v2/bson"
 )
 
 // User information initiated from TG
@@ -40,9 +40,9 @@ type Chat struct {
 // OAuthProvider contains OAuth application info
 type OAuthProvider struct {
 	Service string  // Service name
-	BaseURL url.URL // Scheme + Host. Default https://{service.DefaultHost}
-	ID      string  // OAuth ID
-	Secret  string  // OAuth Secret
+	BaseURL url.URL `envconfig:"OAUTH_BASEURL"`                // Scheme + Host. Default https://{service.DefaultHost}
+	ID      string  `envconfig:"OAUTH_ID" required:"true"`     // OAuth ID
+	Secret  string  `envconfig:"OAUTH_SECRET" required:"true"` // OAuth Secret
 }
 
 // workaround to save urls as struct
@@ -73,7 +73,7 @@ func (o *OAuthProvider) internalID() string {
 
 // RedirectURL returns impersonal Redirect URL, useful when setting up the OAuth Client
 func (o *OAuthProvider) RedirectURL() string {
-	return BaseURL + "/auth/" + o.internalID()
+	return Config.BaseURL + "/auth/" + o.internalID()
 
 }
 
@@ -152,13 +152,13 @@ type webPreview struct {
 	URL       string
 	ImageURL  string
 	Token     string `bson:"_id"`
-	Hash	  string
+	Hash      string
 	Redirects int
 	Created   time.Time
 }
 
-func (wp *webPreview) CalculateHash() string{
-	md5Hash:=md5.Sum([]byte(wp.Title+wp.Headline+wp.Text+wp.URL+wp.ImageURL))
+func (wp *webPreview) CalculateHash() string {
+	md5Hash := md5.Sum([]byte(wp.Title + wp.Headline + wp.Text + wp.URL + wp.ImageURL))
 
 	return base64.URLEncoding.EncodeToString(md5Hash[:])
 }

@@ -3,7 +3,7 @@ package integram
 import (
 	"errors"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	"github.com/mrjones/oauth"
 	"golang.org/x/oauth2"
 	"gopkg.in/mgo.v2"
@@ -262,7 +262,7 @@ func TestService_DoJob(t *testing.T) {
 			fmt.Printf("time: %d\n", job.Time())
 			jt := job.Time()
 			if dCounter < 4 && jt <= prevTime {
-				t.Error("TestService_DoJob next try job's time must be greater than on prev attempt")
+				t.Error("TestService_DoJob next try job's1 time must be greater than on prev attempt")
 			}
 			prevTime = jt
 			prevdCounter = dCounter

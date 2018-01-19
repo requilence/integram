@@ -8,10 +8,10 @@ import (
 
 	"fmt"
 	"github.com/gin-gonic/gin"
-	"github.com/requilence/integram/url"
+	"github.com/requilence/url"
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
-	tg "gopkg.in/telegram-bot-api.v3"
+	tg "github.com/requilence/telegram-bot-api"
 	"strings"
 )
 
@@ -1079,7 +1079,7 @@ func TestUser_ServiceHookURL(t *testing.T) {
 		fields fields
 		want   string
 	}{
-		{"hook exists", fields{ID: 9999999999, ctx: &Context{db: db, ServiceName: "servicewithoauth1"}, data: &userData{Hooks: []serviceHook{{Token: "hereisthetoken", Services: []string{"servicewithoauth1"}}}}}, "https://integram.org/hereisthetoken"},
+		{"hook exists", fields{ID: 9999999999, ctx: &Context{db: db, ServiceName: "servicewithoauth1"}, data: &userData{Hooks: []serviceHook{{Token: "hereisthetoken", Services: []string{"servicewithoauth1"}}}}}, "https://integram.org/servicewithoauth1/hereisthetoken"},
 	}
 	for _, tt := range tests {
 		user := &User{
@@ -1114,7 +1114,7 @@ func TestChat_ServiceHookURL(t *testing.T) {
 		fields fields
 		want   string
 	}{
-		{"hook exists", fields{ID: -9999999999, ctx: &Context{db: db, ServiceName: "servicewithoauth1"}, data: &chatData{Hooks: []serviceHook{{Token: "hereisthetoken", Services: []string{"servicewithoauth1"}}}}}, "https://integram.org/hereisthetoken"},
+		{"hook exists", fields{ID: -9999999999, ctx: &Context{db: db, ServiceName: "servicewithoauth1"}, data: &chatData{Hooks: []serviceHook{{Token: "hereisthetoken", Services: []string{"servicewithoauth1"}}}}}, "https://integram.org/servicewithoauth1/hereisthetoken"},
 	}
 	for _, tt := range tests {
 		chat := &Chat{
@@ -1436,7 +1436,7 @@ func TestUser_OauthRedirectURL(t *testing.T) {
 		want                  string
 	}{
 		{"service with default host", fields{ID: 9999999999, ctx: &Context{db: db, ServiceName: "servicewithoauth2"}}, nil, "https://integram.org/auth/servicewithoauth2"},
-		{"service with custom host", fields{ID: 9999999999, ctx: &Context{db: db, ServiceName: "servicewithoauth1", ServiceBaseURL: *URLMustParse("http://sub.someother.com")}}, bson.M{"_id": "5tOPeQ", "service": "servicewithoauth1", "baseurl": bson.M{"scheme": "https", "host": "sub.someother.com", "path": ""}}, "https://integram.org/auth/5tOPeQ"},
+		{"service with custom host", fields{ID: 9999999999, ctx: &Context{db: db, ServiceName: "servicewithoauth1", ServiceBaseURL: *URLMustParse("http://sub.someother.com")}}, bson.M{"_id": "5tOPeQ", "service": "servicewithoauth1", "baseurl": bson.M{"scheme": "https", "host": "sub.someother.com", "path": ""}}, "https://integram.org/auth/servicewithoauth1/5tOPeQ"},
 	}
 	for _, tt := range tests {
 		user := &User{
@@ -1479,7 +1479,7 @@ func TestUser_OauthInitURL(t *testing.T) {
 		want   string
 	}{
 		{"oauth2", fields{ID: 9999999999, ctx: &Context{db: db, ServiceName: "servicewithoauth2"}}, "https://sub.example.com/oauth/authorize?access_type=offline&client_id=ID&response_type=code&state=fake1"},
-		{"oauth1", fields{ID: 9999999999, ctx: &Context{db: db, ServiceName: "servicewithoauth1"}}, "https://integram.org/oauth1/fake1"},
+		{"oauth1", fields{ID: 9999999999, ctx: &Context{db: db, ServiceName: "servicewithoauth1"}}, "https://integram.org/oauth1/servicewithoauth1/fake1"},
 	}
 	for _, tt := range tests {
 		user := &User{

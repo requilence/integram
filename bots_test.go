@@ -1,7 +1,7 @@
 package integram
 
 import (
-	"github.com/requilence/integram/url"
+	"github.com/requilence/url"
 	"reflect"
 	"testing"
 	"time"
@@ -9,7 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	mgo "gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
-	tg "gopkg.in/telegram-bot-api.v3"
+	tg "github.com/requilence/telegram-bot-api"
 	"image"
 	"image/color"
 	"image/draw"
@@ -1237,7 +1237,7 @@ func TestIncomingMessage_SetCallbackAction(t *testing.T) {
 		Contact               *tg.Contact
 		Location              *tg.Location
 		Venue                 *tg.Venue
-		NewChatMember         *User
+		NewChatMember         []*User
 		LeftChatMember        *User
 		NewChatTitle          string
 		NewChatPhoto          *[]tg.PhotoSize
@@ -1284,7 +1284,7 @@ func TestIncomingMessage_SetCallbackAction(t *testing.T) {
 			Contact:               tt.fields.Contact,
 			Location:              tt.fields.Location,
 			Venue:                 tt.fields.Venue,
-			NewChatMember:         tt.fields.NewChatMember,
+			NewChatMembers:        tt.fields.NewChatMember,
 			LeftChatMember:        tt.fields.LeftChatMember,
 			NewChatTitle:          tt.fields.NewChatTitle,
 			NewChatPhoto:          tt.fields.NewChatPhoto,
@@ -1380,7 +1380,7 @@ func TestIncomingMessage_SetReplyAction(t *testing.T) {
 		Contact               *tg.Contact
 		Location              *tg.Location
 		Venue                 *tg.Venue
-		NewChatMember         *User
+		NewChatMembers        []*User
 		LeftChatMember        *User
 		NewChatTitle          string
 		NewChatPhoto          *[]tg.PhotoSize
@@ -1426,7 +1426,7 @@ func TestIncomingMessage_SetReplyAction(t *testing.T) {
 			Contact:               tt.fields.Contact,
 			Location:              tt.fields.Location,
 			Venue:                 tt.fields.Venue,
-			NewChatMember:         tt.fields.NewChatMember,
+			NewChatMembers:        tt.fields.NewChatMembers,
 			LeftChatMember:        tt.fields.LeftChatMember,
 			NewChatTitle:          tt.fields.NewChatTitle,
 			NewChatPhoto:          tt.fields.NewChatPhoto,
@@ -1760,7 +1760,7 @@ func Test_scheduleMessageSender_Send(t *testing.T) {
 		if err := sms.Send(tt.args.m); (err != nil) != tt.wantErr {
 			t.Errorf("%q. scheduleMessageSender.Send() error = %v, wantErr %v", tt.name, err, tt.wantErr)
 		}
-		time.Sleep(time.Second * 2)
+		time.Sleep(time.Second * 3)
 		msgFound := OutgoingMessage{}
 		db.C("messages").FindId(tt.args.m.ID).One(&msgFound)
 		if !tt.wantErr && msgFound.MsgID <= 0 {

@@ -1,0 +1,43 @@
+version: '3'
+volumes:
+  data-redis: {}
+  data-mongo: {}
+services:
+  mongo:
+    restart: "no"
+    image: mongo:3.4
+    volumes:
+      - data-mongo:/data/db
+    expose:
+      - "27017"
+    volumes:
+      - /data/db:/data/db
+  redis:
+    restart: "no"
+    command: redis-server --appendonly yes
+    image: redis:3.2
+    expose:
+        - "6379"
+    volumes:
+        - data-redis:/data
+  sut:
+    build: ../
+    command: go test github.com/requilence/integram
+    restart: "no"
+    links:
+      - mongo
+      - redis
+    depends_on:
+      - mongo
+      - redis
+    environment:
+      - TZ=UTC
+      - INTEGRAM_MONGO_URL=mongodb://mongo:27017/integram
+      - INTEGRAM_REDIS_URL=redis:6379
+      - INTEGRAM_INSTANCE_MODE=single
+      - INTEGRAM_BASE_URL=https://integram.org
+      - INTEGRAM_DEBUG=0
+      ## required env vars
+      - INTEGRAM_PORT
+      - INTEGRAM_TEST_BOT_TOKEN
+      - INTEGRAM_TEST_USER

@@ -6,12 +6,13 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
-	"github.com/requilence/integram/url"
+	"github.com/requilence/url"
+	log "github.com/sirupsen/logrus"
 	"github.com/vova616/xxhash"
 	"io/ioutil"
 	"math/rand"
 	"reflect"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -194,4 +195,44 @@ func getHostFromURL(s string) string {
 
 func Logger() *log.Logger {
 	return log.StandardLogger()
+}
+
+var currentGitHead string
+var refRE = regexp.MustCompile(`ref: ([^\n^\s]+)`)
+
+// GetVersion returns the current HEAD git commit if .git exists
+func GetVersion() string {
+	if currentGitHead == "" {
+		b, err := ioutil.ReadFile(".git/HEAD")
+
+		if err != nil {
+			currentGitHead = "unknown"
+			return currentGitHead
+		}
+
+		p := refRE.FindStringSubmatch(string(b))
+
+		if len(p) < 2 {
+			currentGitHead = string(b)
+			return currentGitHead
+		}
+
+		b, err = ioutil.ReadFile(".git/" + p[1])
+		if err != nil {
+			currentGitHead = p[1]
+			return currentGitHead
+		}
+
+		currentGitHead = string(b)
+	}
+	return currentGitHead
+}
+
+// GetVersion returns the current HEAD git commit(first 7 symbols) if .git exists
+func GetShortVersion() string {
+	v := GetVersion()
+	if len(v) > 7 {
+		return v[0:7]
+	}
+	return v
 }

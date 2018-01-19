@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	tg "gopkg.in/telegram-bot-api.v3"
+	tg "github.com/requilence/telegram-bot-api"
 )
 
 func TestIncomingMessage_IsEventBotAddedToGroup(t *testing.T) {
@@ -28,7 +28,7 @@ func TestIncomingMessage_IsEventBotAddedToGroup(t *testing.T) {
 		Contact               *tg.Contact
 		Location              *tg.Location
 		Venue                 *tg.Venue
-		NewChatMember         *User
+		NewChatMember         []*User
 		LeftChatMember        *User
 		NewChatTitle          string
 		NewChatPhoto          *[]tg.PhotoSize
@@ -46,8 +46,8 @@ func TestIncomingMessage_IsEventBotAddedToGroup(t *testing.T) {
 		fields fields
 		want   bool
 	}{
-		{"NewChatMember with user equal to bot", fields{Message: Message{BotID: 12345}, NewChatMember: &User{ID: 12345}}, true},
-		{"NewChatMember with user not equal to bot", fields{Message: Message{BotID: 123456}, NewChatMember: &User{ID: 12345}}, false},
+		{"NewChatMember with user equal to bot", fields{Message: Message{BotID: 12345}, NewChatMember: []*User{&User{ID: 12345}}}, true},
+		{"NewChatMember with user not equal to bot", fields{Message: Message{BotID: 123456}, NewChatMember: []*User{&User{ID: 12345}}}, false},
 		{"GroupChatCreated with user not equal to bot", fields{Message: Message{BotID: 123456}, GroupChatCreated: true}, true},
 		{"NewChatMember with user not equal to bot", fields{Message: Message{BotID: 123456}, SuperGroupChatCreated: true}, true},
 	}
@@ -72,7 +72,7 @@ func TestIncomingMessage_IsEventBotAddedToGroup(t *testing.T) {
 			Contact:               tt.fields.Contact,
 			Location:              tt.fields.Location,
 			Venue:                 tt.fields.Venue,
-			NewChatMember:         tt.fields.NewChatMember,
+			NewChatMembers:         tt.fields.NewChatMember,
 			LeftChatMember:        tt.fields.LeftChatMember,
 			NewChatTitle:          tt.fields.NewChatTitle,
 			NewChatPhoto:          tt.fields.NewChatPhoto,
@@ -112,7 +112,7 @@ func TestIncomingMessage_GetCommand(t *testing.T) {
 		Contact               *tg.Contact
 		Location              *tg.Location
 		Venue                 *tg.Venue
-		NewChatMember         *User
+		NewChatMembers        []*User
 		LeftChatMember        *User
 		NewChatTitle          string
 		NewChatPhoto          *[]tg.PhotoSize
@@ -157,7 +157,7 @@ func TestIncomingMessage_GetCommand(t *testing.T) {
 			Contact:               tt.fields.Contact,
 			Location:              tt.fields.Location,
 			Venue:                 tt.fields.Venue,
-			NewChatMember:         tt.fields.NewChatMember,
+			NewChatMembers:        tt.fields.NewChatMembers,
 			LeftChatMember:        tt.fields.LeftChatMember,
 			NewChatTitle:          tt.fields.NewChatTitle,
 			NewChatPhoto:          tt.fields.NewChatPhoto,
