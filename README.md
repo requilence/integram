@@ -3,7 +3,8 @@ Integram 2.0
 
 Framework and platform for integrating services into [Telegram](https://telegram.org) using official [Bot API](https://core.telegram.org/bots/api)
 
-ℹ️ Individual integrations repos are located at https://github.com/integram-org.
+ℹ️ Integrations repos are now located at https://github.com/integram-org
+
 [![CircleCI](https://img.shields.io/circleci/project/requilence/integram.svg)](https://circleci.com/gh/requilence/integram) [![Docker Image](https://img.shields.io/docker/build/integram/integram.svg)](https://hub.docker.com/r/integram/integram/) [![GoDoc](https://godoc.org/github.com/Requilence/integram?status.svg)](https://godoc.org/github.com/requilence/integram)
 
 ![Screencast](https://st.integram.org/img/screencast4.gif)
