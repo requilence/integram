@@ -3,6 +3,7 @@ Integram 2.0
 
 Framework and platform for integrating services into [Telegram](https://telegram.org) using official [Bot API](https://core.telegram.org/bots/api)
 
+ℹ️ Individual integrations repos are located at https://github.com/integram-org.
 [![CircleCI](https://img.shields.io/circleci/project/requilence/integram.svg)](https://circleci.com/gh/requilence/integram) [![Docker Image](https://img.shields.io/docker/build/integram/integram.svg)](https://hub.docker.com/r/integram/integram/) [![GoDoc](https://godoc.org/github.com/Requilence/integram?status.svg)](https://godoc.org/github.com/requilence/integram)
 
 ![Screencast](https://st.integram.org/img/screencast4.gif)
@@ -30,21 +31,21 @@ How to run Integram on your own server
    git clone https://github.com/requilence/integram && cd integram
 ```
 - Check the `docker-compose.yml` file for the required ENV vars for each service
-    - E.g. in order to run Trello integration you need to export: 
+    - E.g. in order to run the Trello integration you are need to export: 
     	- **INTEGRAM_BASE_URL** – the base URL your host accessible with, e.g. **https://integram.org**
 	    - **INTEGRAM_PORT** – if set to 443 Integram will use letsencryprt to automatically fetch the SSL cert for the domain used in **INTEGRAM_BASE_URL**. You can also setup to [use your own certs](https://github.com/requilence/integram/blob/master/HOWTO#use-ssl-cert-files-instead-of-letsencrypt)
 
 	    - **TRELLO_BOT_TOKEN** – bot's token you got from [@BotFather](https://t.me/botfather)
-	    - You need to [get your own OAuth credentials from Trello](https://trello.com/app-key)
+	    - You are need to [get your own OAuth credentials from Trello](https://trello.com/app-key)
 	    - **TRELLO_OAUTH_ID** – API Key
 	    - **TRELLO_OAUTH_SECRET** – OAuth Secret
     
-    - For the more detailed info about other services you should check corresponding repo at https://github.com/integram-org
-- Now you can run the services:
+    - For the more detailed info about other services you should check the corresponding repo at https://github.com/integram-org
+- Now you can run services:
 ```bash
    docker-compose -p integram up trello gitlab ## You can specify services you want to run
 ```
-- Now you should be able to see the startup logs in your console and ensure that your bots are working correctly in Telegram.
+- Now you should be able to see startup logs in your console and ensure that your bots are working correctly in Telegram.
 - Add the `-d` argument to run process in background mode:
 ```bash
    docker-compose -p integram up -d  trello gitlab
@@ -69,7 +70,7 @@ How to run Integram on your own server
 - First you need to install all requirements: [Go 1.9+](https://golang.org/doc/install), [Go dep](https://github.com/golang/dep#setup), [MongoDB 3.4+ (for data)](https://docs.mongodb.com/manual/administration/install-community/), [Redis 3.2+ (for jobs queue)](https://redis.io/download)
 
 - Then, using [this template](https://github.com/requilence/integram/blob/master/cmd/single-process-mode/main.go) 
- create the `main.go` file and put it to `src/integram/` inside your prefered working directory (e.g. `/var/integram/src/integram/main.go`)
+ create the `main.go` file and put it to `src/integram/` inside your preferred working directory (e.g. `/var/integram/src/integram/main.go`)
 
 ```bash
     ## set the GOPATH to the absolute path of directory containing 'src' directory that you have created before
