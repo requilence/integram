@@ -1,0 +1,4 @@
+vendor
+.env
+Dockerfile
+docker-compose*

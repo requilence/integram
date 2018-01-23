@@ -13,4 +13,11 @@ RUN dep ensure -vendor-only
 COPY . ./
 
 RUN go build -o /go/app github.com/requilence/integram/cmd/multi-process-mode
-CMD ["/go/app"]
+
+# move the builded binary into the tiny alpine linux image
+FROM alpine:latest
+RUN apk --no-cache add ca-certificates && rm -rf /var/cache/apk/*
+WORKDIR /app
+
+COPY --from=builder /go/app .
+CMD ["./app"]

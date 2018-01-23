@@ -23,7 +23,7 @@ services:
     image: integram/integram:latest
     restart: always
     volumes:
-      - data-mainapp:/go/.conf
+      - data-mainapp:/app/.conf
     links:
       - mongo
       - redis
@@ -37,7 +37,7 @@ services:
       - INTEGRAM_MONGO_URL=mongodb://mongo:27017/integram
       - INTEGRAM_REDIS_URL=redis:6379
       - INTEGRAM_INSTANCE_MODE=multi-main
-      - INTEGRAM_CONFIG_DIR=/go/.conf
+      - INTEGRAM_CONFIG_DIR=/app/.conf
       ## required ENV vars
       - INTEGRAM_PORT
       - INTEGRAM_BASE_URL
