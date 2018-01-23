@@ -32,7 +32,7 @@ type config struct {
 	Port         string `envconfig:"INTEGRAM_PORT" default:"7000"`
 	Debug        bool   `envconfig:"INTEGRAM_DEBUG" default:"1"`
 	MongoLogging bool   `envconfig:"INTEGRAM_MONGO_LOGGING" default:"0"`
-
+	ConfigDir    string `envconfig:"INTEGRAM_CONFIG_DIR" default:"./.conf"` // default is $GOPATH/.conf
 	// -----
 	// only make sense for InstanceModeMultiProcessService
 	HealthcheckIntervalInSecond int    `envconfig:"INTEGRAM_HEALTHCHECK_INTERVAL" default:"30"` // interval to ping each service instance by the main instance
@@ -73,8 +73,6 @@ func (c *config) IsSingleProcessInstance() bool {
 	}
 	return false
 }
-
-
 
 func init() {
 	c := make(chan os.Signal, 1)

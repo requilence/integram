@@ -3,8 +3,7 @@ Integram 2.0
 
 Framework and platform for integrating services into [Telegram](https://telegram.org) using official [Bot API](https://core.telegram.org/bots/api)
 
-ℹ️ Integrations repos are now located at https://github.com/integram-org
-
+ℹ️ Individual integrations repos are located at https://github.com/integram-org.
 [![CircleCI](https://img.shields.io/circleci/project/requilence/integram.svg)](https://circleci.com/gh/requilence/integram) [![Docker Image](https://img.shields.io/docker/build/integram/integram.svg)](https://hub.docker.com/r/integram/integram/) [![GoDoc](https://godoc.org/github.com/Requilence/integram?status.svg)](https://godoc.org/github.com/requilence/integram)
 
 ![Screencast](https://st.integram.org/img/screencast4.gif)
@@ -34,12 +33,17 @@ How to run Integram on your own server
 - Check the `docker-compose.yml` file for the required ENV vars for each service
     - E.g. in order to run the Trello integration you are need to export: 
     	- **INTEGRAM_BASE_URL** – the base URL your host accessible with, e.g. **https://integram.org**
-	    - **INTEGRAM_PORT** – if set to 443 Integram will use letsencryprt to automatically fetch the SSL cert for the domain used in **INTEGRAM_BASE_URL**. You can also setup to [use your own certs](https://github.com/requilence/integram/blob/master/HOWTO#use-ssl-cert-files-instead-of-letsencrypt)
-
+	    - **INTEGRAM_PORT** – if set to 443 Integram will use ssl.key/ssl.cert at /go/.conf. 
+	    
+	        This directory is mounted on your host machine. Just get the path and put these files inside
+            ```bash
+               ## Get the path of config directory on the host machine
+               docker volume inspect -f '{{ .Mountpoint }}' integram_data-mainapp
+            ```
 	    - **TRELLO_BOT_TOKEN** – bot's token you got from [@BotFather](https://t.me/botfather)
 	    - You are need to [get your own OAuth credentials from Trello](https://trello.com/app-key)
-	    - **TRELLO_OAUTH_ID** – API Key
-	    - **TRELLO_OAUTH_SECRET** – OAuth Secret
+	      - **TRELLO_OAUTH_ID** – API Key
+	      - **TRELLO_OAUTH_SECRET** – OAuth Secret
     
     - For the more detailed info about other services you should check the corresponding repo at https://github.com/integram-org
 - Now you can run services:

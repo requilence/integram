@@ -11,8 +11,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/gin-gonic/autotls"
-	"golang.org/x/crypto/acme/autocert"
 	"github.com/requilence/url"
 	log "github.com/sirupsen/logrus"
 	stdlog "log"
@@ -30,7 +28,6 @@ import (
 )
 
 var pwd string
-var cacheDir string
 
 var startedAt time.Time
 
@@ -52,9 +49,8 @@ func init() {
 	log.Infof("Integram mode: %s", Config.InstanceMode)
 
 	pwd = getCurrentDir()
-	cacheDir = strings.TrimSuffix(os.Getenv("GOPATH"), string(os.PathSeparator)) + string(os.PathSeparator) + ".cache"
 
-	os.Mkdir(cacheDir, 0655)
+	os.Mkdir(Config.ConfigDir, 0655)
 	startedAt = time.Now()
 
 	dbConnect()
@@ -211,28 +207,17 @@ func Run() {
 	var err error
 
 	if Config.Port == "443" || Config.Port == "1443" {
-		if _, err := os.Stat("integram.crt"); !os.IsNotExist(err) {
-				log.Infof("SSL: Using integram.key/integram.crt found in the root dir")
-				err = router.RunTLS(":"+Config.Port, "integram.crt", "integram.key")
+		if _, err := os.Stat(Config.ConfigDir + string(os.PathSeparator) + "ssl.crt"); !os.IsNotExist(err) {
+				log.Infof("SSL: Using ssl.key/ssl.crt")
+				err = router.RunTLS(":"+Config.Port, Config.ConfigDir+ string(os.PathSeparator) + "ssl.crt", Config.ConfigDir+ string(os.PathSeparator) + "ssl.key")
 		} else {
-			p := strings.Split(Config.ParseBaseURL().Host, ":")
-			domain:=p[0]
-			log.Infof("SSL: using LetsEncrypt to get cert for the '%s' domain", domain)
-
-			m := autocert.Manager{
-				Prompt:     autocert.AcceptTOS,
-				HostPolicy: autocert.HostWhitelist(domain),
-				Cache:      autocert.DirCache(cacheDir),
-			}
-
-			err = autotls.RunWithManager(router, m)
+			log.Fatalf("ssl.crt and ssl.key files not found at '%s'" + Config.ConfigDir)
 		}
 
 	} else {
 		if Config.IsMainInstance() || Config.IsSingleProcessInstance() {
 			log.Warnf("WARNING! It is recommended to use Integram with a SSL.\n"+
-				"Just set the INTEGRAM_PORT to 443 and INTEGRAM_BASE_URL contained the correct domain that points to this server IP.\n"+
-				"SSL cert will be obtained automatically using LetsEncrypt")
+				"Set the INTEGRAM_PORT to 443 and put integram.crt & integram.key files at '%s'", Config.ConfigDir)
 		}
 		err = router.Run(":" + Config.Port)
 	}
