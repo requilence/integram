@@ -46,10 +46,6 @@ ignored = ["github.com/gin-gonic/gin/examples/*", "golang.org/x/oauth2/google", 
   name = "gopkg.in/mgo.v2"
 
 [[constraint]]
-  name = "github.com/gin-gonic/autotls"
-  version = "0.0.1"
-
-[[constraint]]
   name = "github.com/gin-gonic/gin"
   version = "1.2.0"
 
