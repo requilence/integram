@@ -157,7 +157,7 @@ func Run() {
 		router.StaticFile("/", "index.html")
 	}
 
-	router.LoadHTMLFiles(pwd+"/webpreview.tmpl", pwd+"/oauthredirect.tmpl")
+	router.LoadHTMLFiles("webpreview.tmpl", "oauthredirect.tmpl")
 
 	router.NoRoute(func(c *gin.Context) {
 		// todo: good 404
@@ -350,8 +350,10 @@ func serviceHookHandler(c *gin.Context) {
 
 	if p1 == "auth" || p1 == "oauth1" {
 		service = p2
-	} else {
+	} else if p2 != "" {
 		service = p1
+	} else {
+		p2 = p1
 	}
 
 	if s, _ = serviceByName(service); service != "" && service != "healthcheck" && s == nil {
