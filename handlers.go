@@ -211,7 +211,7 @@ func Run() {
 				log.Infof("SSL: Using ssl.key/ssl.crt")
 				err = router.RunTLS(":"+Config.Port, Config.ConfigDir+ string(os.PathSeparator) + "ssl.crt", Config.ConfigDir+ string(os.PathSeparator) + "ssl.key")
 		} else {
-			log.Fatalf("ssl.crt and ssl.key files not found at '%s'" + Config.ConfigDir)
+			log.Fatalf("INTEGRAM_PORT set to 443, but ssl.crt and ssl.key files not found at '%s'", Config.ConfigDir)
 		}
 
 	} else {
