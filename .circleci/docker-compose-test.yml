@@ -10,8 +10,6 @@ services:
       - data-mongo:/data/db
     expose:
       - "27017"
-    volumes:
-      - /data/db:/data/db
   redis:
     restart: "no"
     command: redis-server --appendonly yes
@@ -21,8 +19,9 @@ services:
     volumes:
         - data-redis:/data
   sut:
-    build: ../
-    command: go test github.com/requilence/integram
+    build:
+      dockerfile: .circleci/Dockerfile.test
+      context: ..
     restart: "no"
     links:
       - mongo
