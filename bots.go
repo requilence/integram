@@ -1407,6 +1407,12 @@ func sendMessage(m *OutgoingMessage) error {
 	if m.ChatID == 0 {
 		return errors.New("ChatID empty")
 	}
+
+	bot := botByID(m.BotID)
+
+	if bot == nil {
+		return fmt.Errorf("Can't send TG message: Unknown bot id=%d", m.BotID)
+	}
 	var err error
 	var tgMsg tg.Message
 	var rescheduled bool
@@ -1418,7 +1424,7 @@ func sendMessage(m *OutgoingMessage) error {
 			if m.ReplyToMsgID != 0 {
 				msg.BaseChat.ReplyToMessageID = m.ReplyToMsgID
 			}
-			tgMsg, err = botByID(m.BotID).API.Send(msg)
+			tgMsg, err = bot.API.Send(msg)
 
 		} else {
 			msg := tg.NewDocumentUpload(m.ChatID, m.FilePath)
@@ -1427,7 +1433,7 @@ func sendMessage(m *OutgoingMessage) error {
 			if m.ReplyToMsgID != 0 {
 				msg.BaseChat.ReplyToMessageID = m.ReplyToMsgID
 			}
-			tgMsg, err = botByID(m.BotID).API.Send(msg)
+			tgMsg, err = bot.API.Send(msg)
 
 		}
 
@@ -1444,7 +1450,7 @@ func sendMessage(m *OutgoingMessage) error {
 		}
 
 	} else if m.Location != nil {
-		tgMsg, err = botByID(m.BotID).API.Send(tg.LocationConfig{BaseChat: msg.BaseChat, Latitude: m.Location.Latitude, Longitude: m.Location.Longitude})
+		tgMsg, err = bot.API.Send(tg.LocationConfig{BaseChat: msg.BaseChat, Latitude: m.Location.Latitude, Longitude: m.Location.Longitude})
 	} else {
 
 		if m.KeyboardHide {
@@ -1474,7 +1480,8 @@ func sendMessage(m *OutgoingMessage) error {
 		if m.ParseMode != "" {
 			msg.ParseMode = m.ParseMode
 		}
-		tgMsg, err = botByID(m.BotID).API.Send(msg)
+
+		tgMsg, err = bot.API.Send(msg)
 	}
 
 	if err == nil {
@@ -1601,7 +1608,6 @@ func sendMessage(m *OutgoingMessage) error {
 
 			db := mongoSession.Clone().DB(mongo.Database)
 			defer db.Session.Close()
-			bot := botByID(m.BotID)
 
 			if len(bot.services) == 1 {
 				removeHooksForChat(db, bot.services[0].Name, m.ChatID)
@@ -1613,7 +1619,6 @@ func sendMessage(m *OutgoingMessage) error {
 		} else if tgErr.ChatDiactivated() {
 			db := mongoSession.Clone().DB(mongo.Database)
 			defer db.Session.Close()
-			bot := botByID(m.BotID)
 
 			if len(bot.services) == 1 {
 				removeHooksForChat(db, bot.services[0].Name, m.ChatID)
