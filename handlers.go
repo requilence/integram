@@ -3,7 +3,6 @@ package integram
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"path"
 	"runtime"
@@ -25,9 +24,8 @@ import (
 	"bytes"
 	"sync"
 	"os"
+	"html/template"
 )
-
-var pwd string
 
 var startedAt time.Time
 
@@ -46,11 +44,20 @@ func init() {
 		gin.SetMode(gin.ReleaseMode)
 		log.SetLevel(log.InfoLevel)
 	}
+	if Config.InstanceMode != InstanceModeMultiProcessService && Config.InstanceMode !=InstanceModeMultiProcessMain && Config.InstanceMode != InstanceModeSingleProcess{
+		panic("WRONG InstanceMode "+Config.InstanceMode)
+	}
 	log.Infof("Integram mode: %s", Config.InstanceMode)
 
-	pwd = getCurrentDir()
+	if _, err := os.Stat(Config.ConfigDir); err != nil {
+		if os.IsNotExist(err) {
+			err = os.MkdirAll(Config.ConfigDir, os.ModePerm)
+			if err != nil {
+				log.WithError(err).Errorf("Failed to create the missing ConfigDir at '%s'", Config.ConfigDir)
+			}
+		}
+	}
 
-	os.Mkdir(Config.ConfigDir, 0655)
 	startedAt = time.Now()
 
 	dbConnect()
@@ -144,6 +151,13 @@ func Run() {
 	// Configure
 	router := gin.New()
 
+	// register some HTML templates
+	templ1 := template.Must(template.New("webpreview").Parse(htmlTemplateWebpreview))
+	templ2 := template.Must(template.New("determineTZ").Parse(htmlTemplateDetermineTZ))
+
+	router.SetHTMLTemplate(templ1)
+	router.SetHTMLTemplate(templ2)
+
 	// Middlewares
 	router.Use(cloneMiddleware)
 	router.Use(ginRecovery)
@@ -156,8 +170,6 @@ func Run() {
 	if Config.IsMainInstance() || Config.IsSingleProcessInstance() {
 		router.StaticFile("/", "index.html")
 	}
-
-	router.LoadHTMLFiles("webpreview.tmpl", "oauthredirect.tmpl")
 
 	router.NoRoute(func(c *gin.Context) {
 		// todo: good 404
@@ -235,6 +247,7 @@ func webPreviewHandler(c *gin.Context, token string) {
 
 	if err != nil {
 		c.AbortWithError(http.StatusNotFound, errors.New("Not found"))
+		return
 	}
 
 	if !strings.Contains(c.Request.UserAgent(), "TelegramBot") {
@@ -249,7 +262,8 @@ func webPreviewHandler(c *gin.Context, token string) {
 	p := gin.H{"title": wp.Title, "headline": wp.Headline, "text": wp.Text, "imageURL": wp.ImageURL}
 
 	log.WithFields(log.Fields(p)).Debug("WP")
-	c.HTML(http.StatusOK, "webpreview.tmpl", p)
+
+	c.HTML(http.StatusOK, "webpreview", p)
 
 }
 
@@ -343,17 +357,38 @@ func serviceHookHandler(c *gin.Context) {
 	// temp ugly routing before deprecating hook URL without service name
 
 	var service string
+	var webhookToken string
+
 	var s *Service
 	p1 := c.Param("param1")
 	p2 := c.Param("param2")
 	p3 := c.Param("param3")
 
-	if p1 == "auth" || p1 == "oauth1" {
-		service = p2
-	} else if p2 != "" {
-		service = p1
-	} else {
-		p2 = p1
+	switch p1 {
+		// webpreview handler
+		case "a": webPreviewHandler(c, p2); return;
+
+		// determine user's TZ and redirect (only withing baseURL)
+		case "tz": c.HTML(http.StatusOK, "determineTZ", gin.H{"redirectURL": Config.BaseURL+c.Query("r")}); return;
+
+		// /oauth1/service_name
+		// /auth/service_name
+		case "auth", "oauth1": service = p2;
+
+		default:
+
+			if p2 != "" {
+				// service known
+				//
+				// /service/token
+				service = p1
+				webhookToken = p2
+			} else {
+				// service unknown - to be determined
+				//
+				// /token
+				webhookToken = p1
+			}
 	}
 
 	if s, _ = serviceByName(service); service != "" && service != "healthcheck" && s == nil {
@@ -361,12 +396,8 @@ func serviceHookHandler(c *gin.Context) {
 		return
 	}
 
-	if p1 == "a" {
-		// webpreview handler
-		webPreviewHandler(c, p2)
-		return
-	}
 
+	// in case of multi-process mode redirect from the main process to the corresponding service
 	if Config.IsMainInstance() && s != nil {
 		proxy := reverseProxyForService(s.Name)
 		proxy.ServeHTTP(c.Writer, c.Request)
@@ -376,10 +407,13 @@ func serviceHookHandler(c *gin.Context) {
 	if p1 == "oauth1" {
 		// /oauth1/service_name/auth_temp_id
 		oAuthInitRedirect(c, p2, p3)
+		
+		return
 	} else if p1 == "auth" {
 
 		if p3 == "" {
 			/*
+				For the default(usually means non self-hosted) service's OAuth
 				/auth/service_name == /auth/service_name/service_name
 			*/
 			p3 = p2
@@ -387,6 +421,7 @@ func serviceHookHandler(c *gin.Context) {
 
 		// /auth/service_name/provider_id
 		oAuthCallback(c, p3)
+		return
 	}
 
 	db := c.MustGet("db").(*mgo.Database)
@@ -425,7 +460,7 @@ func serviceHookHandler(c *gin.Context) {
 		queryChat, query, err := s.TokenHandler(ctx, wctx)
 
 		if err != nil {
-			log.WithFields(log.Fields{"token": p2}).WithError(err).Error("TokenHandler error")
+			log.WithFields(log.Fields{"token": webhookToken}).WithError(err).Error("TokenHandler error")
 		}
 
 		if query == nil {
@@ -436,7 +471,7 @@ func serviceHookHandler(c *gin.Context) {
 			chats, err := ctx.FindChats(query)
 
 			if err != nil {
-				log.WithFields(log.Fields{"token": p2}).WithError(err).Error("FindChats error")
+				log.WithFields(log.Fields{"token": webhookToken}).WithError(err).Error("FindChats error")
 			}
 
 			for _, chat := range chats {
@@ -446,7 +481,7 @@ func serviceHookHandler(c *gin.Context) {
 				err := s.WebhookHandler(&ctxCopy, wctx)
 
 				if err != nil {
-					ctx.Log().WithFields(log.Fields{"token": p2}).WithError(err).Error("WebhookHandler returned error")
+					ctx.Log().WithFields(log.Fields{"token": webhookToken}).WithError(err).Error("WebhookHandler returned error")
 					if err == ErrorFlood {
 						c.String(http.StatusTooManyRequests, err.Error())
 						return
@@ -458,7 +493,7 @@ func serviceHookHandler(c *gin.Context) {
 			users, err := ctx.FindUsers(query)
 
 			if err != nil {
-				log.WithFields(log.Fields{"token": p2}).WithError(err).Error("findUsers error")
+				log.WithFields(log.Fields{"token": webhookToken}).WithError(err).Error("findUsers error")
 			}
 
 			for _, user := range users {
@@ -469,7 +504,7 @@ func serviceHookHandler(c *gin.Context) {
 				err := s.WebhookHandler(&ctxCopy, wctx)
 
 				if err != nil {
-					ctx.Log().WithFields(log.Fields{"token": p2}).WithError(err).Error("WebhookHandler returned error")
+					ctx.Log().WithFields(log.Fields{"token": webhookToken}).WithError(err).Error("WebhookHandler returned error")
 					if err == ErrorFlood {
 						c.String(http.StatusTooManyRequests, err.Error())
 						return
@@ -479,7 +514,7 @@ func serviceHookHandler(c *gin.Context) {
 			}
 		}
 
-	} else if p2[0:1] == "u" {
+	} else if webhookToken[0:1] == "u" {
 		// Here is some trick
 		// If token starts with u - this is notification with TG User behavior (id >0)
 		// User can set which groups will receive notifications on this webhook
@@ -487,7 +522,7 @@ func serviceHookHandler(c *gin.Context) {
 
 		// If token starts with c - this is notification with TG Chat behavior
 		// So just one chat will receive this notification
-		user, err := ctx.FindUser(bson.M{"hooks.token": p2})
+		user, err := ctx.FindUser(bson.M{"hooks.token": webhookToken})
 		// todo: improve this part
 
 		if err == nil {
@@ -503,7 +538,7 @@ func serviceHookHandler(c *gin.Context) {
 		}
 
 		for i, hook := range user.Hooks {
-			if hook.Token == p2 {
+			if hook.Token == webhookToken {
 				user.Hooks = user.Hooks[i : i+1]
 				if len(hook.Services) == 1 {
 					ctx.ServiceName = hook.Services[0]
@@ -530,7 +565,7 @@ func serviceHookHandler(c *gin.Context) {
 		if !(err == nil && user.ID > 0) {
 			err := errors.New("Unknown user token")
 
-			log.WithFields(log.Fields{"token": p2}).Error(err)
+			log.WithFields(log.Fields{"token": webhookToken}).Error(err)
 			// Todo: Some services(f.e. Trello) removes webhook after received 410 HTTP Gone
 			// But this is not safe in case of e.g. db down
 			//
@@ -538,15 +573,13 @@ func serviceHookHandler(c *gin.Context) {
 			return
 		}
 		hooks = user.Hooks
-	} else if p2[0:1] == "c" || p2[0:1] == "h" {
-		chat, err := ctx.FindChat(bson.M{"hooks.token": p2})
+	} else if webhookToken[0:1] == "c" || webhookToken[0:1] == "h" {
+		chat, err := ctx.FindChat(bson.M{"hooks.token": webhookToken})
 
 		if !(err == nil && chat.ID != 0) {
-			x, _ := ioutil.ReadAll(c.Request.Body)
-			ioutil.WriteFile(fmt.Sprintf("./raw/%v_%d.json", p2, time.Now().Unix()), x, 0644)
 
 			err := errors.New("Unknown chat token")
-			log.WithFields(log.Fields{"token": p2}).Error(err)
+			log.WithFields(log.Fields{"token": webhookToken}).Error(err)
 			// Todo: Some services(f.e. Trello) removes webhook after received 410 HTTP Gone
 			// But this is not safe in case of db unavailable
 
@@ -571,7 +604,7 @@ func serviceHookHandler(c *gin.Context) {
 	}
 
 	for _, hook := range hooks {
-		if hook.Token == p2 {
+		if hook.Token == webhookToken {
 			isHandled := false
 			for _, serviceName := range hook.Services {
 				s, _ := serviceByName(serviceName)
@@ -594,7 +627,7 @@ func serviceHookHandler(c *gin.Context) {
 							err := s.WebhookHandler(ctx, wctx)
 
 							if err != nil {
-								ctx.Log().WithFields(log.Fields{"token": p2}).WithError(err).Error("WebhookHandler returned error")
+								ctx.Log().WithFields(log.Fields{"token": webhookToken}).WithError(err).Error("WebhookHandler returned error")
 								if err == ErrorFlood {
 									c.String(http.StatusTooManyRequests, err.Error())
 									return
@@ -606,18 +639,17 @@ func serviceHookHandler(c *gin.Context) {
 						}
 					} else {
 						//todo: maybe inform user?
-						ctx.Log().WithField("token", p2).Warn("No target chats for token")
+						ctx.Log().WithField("token", webhookToken).Warn("No target chats for token")
 					}
 				}
 			}
 			if !isHandled {
-				log.WithField("token", p2).Warn("Hook not handled")
+				log.WithField("token", webhookToken).Warn("Hook not handled")
 			}
 			c.AbortWithStatus(200)
 			return
 		}
 	}
-
 }
 
 func oAuthInitRedirect(c *gin.Context, service string, authTempID string) {
@@ -650,12 +682,16 @@ func oAuthInitRedirect(c *gin.Context, service string, authTempID string) {
 
 	s, _ := serviceByName(val.Service)
 
-	// Ajax request with time zone provided
-	tz := c.Request.URL.Query().Get("tz")
-	if tz != "" {
-		db.C("users").Update(bson.M{"_id": val.UserID}, bson.M{"$set": bson.M{"tz": tz}})
-		c.AbortWithStatus(200)
-		return
+	// user's TZ provided
+	tzName := c.Request.URL.Query().Get("tz")
+
+	if tzName != "" {
+		l, err := time.LoadLocation(tzName)
+		if err == nil && l != nil {
+			db.C("users").Update(bson.M{"_id": val.UserID}, bson.M{"$set": bson.M{"tz": tzName}})
+		} else {
+			log.WithError(err).Errorf("oAuthInitRedirect: Bad TZ: %s", tzName)
+		}
 	}
 
 	if s.DefaultOAuth1 != nil {
@@ -670,7 +706,7 @@ func oAuthInitRedirect(c *gin.Context, service string, authTempID string) {
 		// Todo: Self-hosted services not implemented for OAuth1
 		ctx := &Context{ServiceName: val.Service, ServiceBaseURL: *u, gin: c}
 		o := ctx.OAuthProvider()
-		requestToken, url, err := o.OAuth1Client(ctx).GetRequestTokenAndUrl(fmt.Sprintf("%s/auth/%s/%s/?state=%s", Config.BaseURL, s.Name, o.internalID(), authTempID))
+		requestToken, oauthURL, err := o.OAuth1Client(ctx).GetRequestTokenAndUrl(fmt.Sprintf("%s/auth/%s/%s/?state=%s", Config.BaseURL, s.Name, o.internalID(), authTempID))
 		if err != nil {
 			log.WithField("oauthID", authTempID).WithError(err).Error("Error getting OAuth request URL")
 			c.String(http.StatusServiceUnavailable, "Error getting OAuth request URL")
@@ -681,8 +717,8 @@ func oAuthInitRedirect(c *gin.Context, service string, authTempID string) {
 		if err != nil {
 			ctx.Log().WithError(err).Error("oAuthInitRedirect error updating authTempID")
 		}
-		// hijack JS redirect to determine user's timezone
-		c.HTML(http.StatusOK, "oauthredirect.tmpl", gin.H{"url": url})
+
+		c.Redirect(303, oauthURL)
 		fmt.Println("HTML")
 	} else {
 		c.String(http.StatusNotImplemented, "Redirect is for OAuth1 only")

@@ -21,6 +21,7 @@ import (
 	"os"
 )
 
+const standAloneServicesFileName = "standAloneServices.json"
 // Map of Services configs per name. See Register func
 var serviceMapMutex = sync.RWMutex{}
 var services = make(map[string]*Service)
@@ -294,7 +295,13 @@ func ensureStandAloneService(serviceName string, machineURL string, botToken str
 }
 
 func loadStandAloneServicesFromFile() error {
-	b, err := ioutil.ReadFile(Config.ConfigDir + string(os.PathSeparator) + "standAloneServices.json")
+	f, err := os.OpenFile(Config.ConfigDir + string(os.PathSeparator) + standAloneServicesFileName, os.O_RDONLY, 0666)
+	if err != nil {
+		return err
+	}
+	var b []byte
+
+	_, err = f.Read(b)
 	if err != nil {
 		return err
 	}
@@ -342,7 +349,7 @@ func saveStandAloneServicesToFile() error {
 		return err
 	}
 
-	return ioutil.WriteFile(Config.ConfigDir + string(os.PathSeparator) + "standAloneServices.json", jsonData, 0655)
+	return ioutil.WriteFile(Config.ConfigDir + string(os.PathSeparator) + standAloneServicesFileName, jsonData, 0655)
 }
 
 // Register the service's config and corresponding botToken

@@ -19,5 +19,5 @@ FROM alpine:latest
 RUN apk --no-cache add ca-certificates && rm -rf /var/cache/apk/*
 WORKDIR /app
 
-COPY --from=builder /go/app /go/src/github.com/requilence/integram/webpreview.tmpl /go/src/github.com/requilence/integram/oauthredirect.tmpl /go/src/github.com/requilence/integram/index.html ./
+COPY --from=builder /go/app ./
 CMD ["./app"]
