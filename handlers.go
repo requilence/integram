@@ -152,11 +152,10 @@ func Run() {
 	router := gin.New()
 
 	// register some HTML templates
-	templ1 := template.Must(template.New("webpreview").Parse(htmlTemplateWebpreview))
-	templ2 := template.Must(template.New("determineTZ").Parse(htmlTemplateDetermineTZ))
+	templ := template.Must(template.New("webpreview").Parse(htmlTemplateWebpreview))
+	template.Must(templ.New("determineTZ").Parse(htmlTemplateDetermineTZ))
 
-	router.SetHTMLTemplate(templ1)
-	router.SetHTMLTemplate(templ2)
+	router.SetHTMLTemplate(templ)
 
 	// Middlewares
 	router.Use(cloneMiddleware)

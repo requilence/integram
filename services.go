@@ -295,13 +295,8 @@ func ensureStandAloneService(serviceName string, machineURL string, botToken str
 }
 
 func loadStandAloneServicesFromFile() error {
-	f, err := os.OpenFile(Config.ConfigDir + string(os.PathSeparator) + standAloneServicesFileName, os.O_RDONLY, 0666)
-	if err != nil {
-		return err
-	}
-	var b []byte
+	b, err := ioutil.ReadFile(Config.ConfigDir + string(os.PathSeparator) + standAloneServicesFileName)
 
-	_, err = f.Read(b)
 	if err != nil {
 		return err
 	}
