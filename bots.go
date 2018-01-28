@@ -1209,7 +1209,7 @@ func (m *IncomingMessage) GetFileInfo(c *Context, allowedTypes []FileType) (info
 	if m.Sticker != nil && fileTypeAllowed(allowedTypes, FileTypeSticker) {
 		info.Type = FileTypeSticker
 		var remotePath string
-		remotePath, err = GetRemoteFilePath(c, m.Audio.FileID)
+		remotePath, err = GetRemoteFilePath(c, m.Sticker.FileID)
 		if err != nil {
 			return
 		}
