@@ -637,7 +637,13 @@ func tgIncomingMessageHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service,
 func removeHooksForChat(db *mgo.Database, serviceName string, chatID int64) {
 	err := db.C("users").Update(bson.M{"hooks.services": []string{serviceName}, "hooks.chats": chatID}, bson.M{"$pull": bson.M{"hooks.$.chats": chatID}})
 	if err != nil {
-		log.WithError(err).Error("removeHooksForChat remove outdated hook chats")
+		if err != mgo.ErrNotFound {
+			err = db.C("chats").Update(bson.M{"_id": chatID, "hooks.services": []string{serviceName}}, bson.M{"$pull": bson.M{"hooks.$.services": serviceName}})
+		}
+
+		if err != nil {
+			log.WithError(err).Error("removeHooksForChat remove outdated hook chats")
+		}
 	}
 }
 

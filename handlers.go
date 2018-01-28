@@ -565,10 +565,8 @@ func serviceHookHandler(c *gin.Context) {
 			err := errors.New("Unknown user token")
 
 			log.WithFields(log.Fields{"token": webhookToken}).Error(err)
-			// Todo: Some services(f.e. Trello) removes webhook after received 410 HTTP Gone
-			// But this is not safe in case of e.g. db down
-			//
-			// c.AbortWithError(http.StatusGone, err)
+
+			c.AbortWithError(http.StatusNotFound, err)
 			return
 		}
 		hooks = user.Hooks
@@ -578,9 +576,7 @@ func serviceHookHandler(c *gin.Context) {
 		if !(err == nil && chat.ID != 0) {
 
 			err := errors.New("Unknown chat token")
-			log.WithFields(log.Fields{"token": webhookToken}).Error(err)
-			// Todo: Some services(f.e. Trello) removes webhook after received 410 HTTP Gone
-			// But this is not safe in case of db unavailable
+			c.AbortWithError(http.StatusNotFound, err)
 
 			return
 		} else {
@@ -628,7 +624,7 @@ func serviceHookHandler(c *gin.Context) {
 							if err != nil {
 								ctx.Log().WithFields(log.Fields{"token": webhookToken}).WithError(err).Error("WebhookHandler returned error")
 								if err == ErrorFlood {
-									c.String(http.StatusTooManyRequests, err.Error())
+									c.AbortWithError(http.StatusTooManyRequests, err)
 									return
 								}
 							} else {
@@ -637,8 +633,10 @@ func serviceHookHandler(c *gin.Context) {
 
 						}
 					} else {
-						//todo: maybe inform user?
-						ctx.Log().WithField("token", webhookToken).Warn("No target chats for token")
+						// Some services(f.e. Trello) removes webhook after received 410 HTTP Gone
+						// In this case we can safely answer 410 code because we know that DB is up (token was found)
+						c.AbortWithError(http.StatusGone, errors.New("No TG chats associated with this webhook URL"))
+						return
 					}
 				}
 			}

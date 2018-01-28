@@ -134,7 +134,7 @@ type OutgoingMessage struct {
 	ParseMode            string         `bson:",omitempty"`
 	OneTimeKeyboard      bool           `bson:",omitempty"`
 	Selective            bool           `bson:",omitempty"`
-	ForceReply           bool           `bson:",omitempty"`
+	ForceReply           bool           `bson:",omitempty"`  // in the private dialog assume user's message as the reply for the last message sent by the bot if bot's message has Reply handler and ForceReply set
 	WebPreview           bool           `bson:",omitempty"`
 	Silent               bool           `bson:",omitempty"`
 	FilePath             string         `bson:",omitempty"`
@@ -1044,7 +1044,7 @@ func initBots() error {
 		tgPool, err = jobs.NewPool(&jobs.PoolConfig{
 			Key:        "_telegram",
 			NumWorkers: Config.TGPool,
-			BatchSize:  10,
+			BatchSize:  100,
 		})
 
 		if err != nil {
@@ -1608,7 +1608,6 @@ func sendMessage(m *OutgoingMessage) error {
 
 			db := mongoSession.Clone().DB(mongo.Database)
 			defer db.Session.Close()
-
 			if len(bot.services) == 1 {
 				removeHooksForChat(db, bot.services[0].Name, m.ChatID)
 			}
@@ -1619,6 +1618,7 @@ func sendMessage(m *OutgoingMessage) error {
 		} else if tgErr.ChatDiactivated() {
 			db := mongoSession.Clone().DB(mongo.Database)
 			defer db.Session.Close()
+			bot := botByID(m.BotID)
 
 			if len(bot.services) == 1 {
 				removeHooksForChat(db, bot.services[0].Name, m.ChatID)
