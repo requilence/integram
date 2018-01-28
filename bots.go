@@ -267,6 +267,40 @@ func (service *Service) registerBot(fullTokenWithID string) error {
 	return nil
 }
 
+// Compare if InlineKeyboard.tg() of 2 keyboards are equal
+func whetherTGInlineKeyboardsAreEqual(tg1, tg2 [][]tg.InlineKeyboardButton) bool {
+
+	if len(tg1) != len(tg2) {
+		return false
+	}
+
+	for i := 0; i < len(tg1); i++ {
+		if len(tg1[i]) != len(tg2[i]) {
+			return false
+		}
+		for j := 0; j < len(tg1[i]); j++ {
+			b1 := tg1[i][j]
+			b2 := tg2[i][j]
+			if b1.Text != b2.Text ||
+				b1.CallbackData == nil && b2.CallbackData != nil ||
+				b1.CallbackData != nil && b2.CallbackData == nil ||
+				b1.CallbackData != nil && b2.CallbackData != nil && *b1.CallbackData != *b2.CallbackData ||
+				b1.URL == nil && b2.URL != nil ||
+				b1.URL != nil && b2.URL == nil ||
+				b1.URL != nil && b2.URL != nil && *b1.URL != *b2.URL ||
+				b1.SwitchInlineQuery == nil && b2.SwitchInlineQuery != nil ||
+				b1.SwitchInlineQuery != nil && b2.SwitchInlineQuery == nil ||
+				b1.SwitchInlineQuery != nil && b2.SwitchInlineQuery != nil && *b1.SwitchInlineQuery != *b2.SwitchInlineQuery ||
+				b1.SwitchInlineQueryCurrentChat == nil && b2.SwitchInlineQueryCurrentChat != nil ||
+				b1.SwitchInlineQueryCurrentChat != nil && b2.SwitchInlineQueryCurrentChat == nil ||
+				b1.SwitchInlineQueryCurrentChat != nil && b2.SwitchInlineQueryCurrentChat != nil && *b1.SwitchInlineQueryCurrentChat != *b2.SwitchInlineQueryCurrentChat {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 // Find the InlineButton in Keyboard by the Data
 func (keyboard *InlineKeyboard) Find(buttonData string) (i, j int, but *InlineButton) {
 	for i, buttonsRow := range keyboard.Buttons {

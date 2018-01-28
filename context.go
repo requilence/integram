@@ -659,14 +659,15 @@ func (c *Context) EditMessageTextAndInlineKeyboard(om *OutgoingMessage, fromStat
 	}
 
 	var msg OutgoingMessage
-	var ci *mgo.ChangeInfo
+
 	var err error
 	om.Text = text
+	prevTextHash:=om.TextHash
 	om.TextHash = om.GetTextHash()
 	if fromState != "" {
-		ci, err = c.db.C("messages").Find(bson.M{"_id": om.ID, "$or": []bson.M{{"inlinekeyboardmarkup.state": fromState}, {"inlinekeyboardmarkup": bson.M{"$exists": false}}}}).Apply(mgo.Change{Update: bson.M{"$set": bson.M{"inlinekeyboardmarkup": kb, "texthash": om.TextHash}}}, &msg)
+		_, err = c.db.C("messages").Find(bson.M{"_id": om.ID, "$or": []bson.M{{"inlinekeyboardmarkup.state": fromState}, {"inlinekeyboardmarkup": bson.M{"$exists": false}}}}).Apply(mgo.Change{Update: bson.M{"$set": bson.M{"inlinekeyboardmarkup": kb, "texthash": om.TextHash}}}, &msg)
 	} else {
-		ci, err = c.db.C("messages").Find(bson.M{"_id": om.ID}).Apply(mgo.Change{Update: bson.M{"$set": bson.M{"inlinekeyboardmarkup": kb, "texthash": om.TextHash}}}, &msg)
+		_, err = c.db.C("messages").Find(bson.M{"_id": om.ID}).Apply(mgo.Change{Update: bson.M{"$set": bson.M{"inlinekeyboardmarkup": kb, "texthash": om.TextHash}}}, &msg)
 	}
 
 	if err != nil {
@@ -678,10 +679,14 @@ func (c *Context) EditMessageTextAndInlineKeyboard(om *OutgoingMessage, fromStat
 		return nil
 
 	}
-	if ci.Updated == 0 {
-		c.Log().Warn(fmt.Sprintf("EditMessageTextAndInlineKeyboard – message (_id=%s botid=%v id=%v state %s) not updated ", om.ID, bot.ID, om.MsgID, fromState))
+	tgKeyboard := kb.tg()
 
-		return nil
+	if prevTextHash == om.TextHash {
+		prevTGKeyboard := om.InlineKeyboardMarkup.tg()
+		if whetherTGInlineKeyboardsAreEqual(prevTGKeyboard, tgKeyboard) {
+			c.Log().Debugf("EditMessageTextAndInlineKeyboard – message (_id=%s botid=%v id=%v state %s) not updated both text and kb have not changed", om.ID, bot.ID, om.MsgID, fromState)
+			return nil
+		}
 	}
 
 	if om.ParseMode == "HTML" {
@@ -697,7 +702,7 @@ func (c *Context) EditMessageTextAndInlineKeyboard(om *OutgoingMessage, fromStat
 			ChatID:          om.ChatID,
 			InlineMessageID: om.InlineMsgID,
 			MessageID:       om.MsgID,
-			ReplyMarkup:     &tg.InlineKeyboardMarkup{InlineKeyboard: kb.tg()},
+			ReplyMarkup:     &tg.InlineKeyboardMarkup{InlineKeyboard: tgKeyboard},
 		},
 		ParseMode: om.ParseMode,
 		Text:      text,
@@ -733,13 +738,16 @@ func (c *Context) EditInlineKeyboard(om *OutgoingMessage, fromState string, kb I
 	}
 	var msg OutgoingMessage
 
-	ci, err := c.db.C("messages").Find(bson.M{"_id": om.ID, "$or": []bson.M{{"inlinekeyboardmarkup.state": fromState}, {"inlinekeyboardmarkup": bson.M{"$exists": false}}}}).Apply(mgo.Change{Update: bson.M{"$set": bson.M{"inlinekeyboardmarkup": kb}}}, &msg)
+	_, err := c.db.C("messages").Find(bson.M{"_id": om.ID, "$or": []bson.M{{"inlinekeyboardmarkup.state": fromState}, {"inlinekeyboardmarkup": bson.M{"$exists": false}}}}).Apply(mgo.Change{Update: bson.M{"$set": bson.M{"inlinekeyboardmarkup": kb}}}, &msg)
 
 	if msg.BotID == 0 {
 		return fmt.Errorf("EditInlineKeyboard – message (botid=%v id=%v state %s) not found", bot.ID, om.MsgID, fromState)
 	}
 
-	if ci.Updated == 0 {
+	tgKeyboard := kb.tg()
+	prevTGKeyboard := om.InlineKeyboardMarkup.tg()
+	if whetherTGInlineKeyboardsAreEqual(prevTGKeyboard, tgKeyboard) {
+		c.Log().Debugf("EditMessageTextAndInlineKeyboard – message (_id=%s botid=%v id=%v state %s) not updated both text and kb have not changed", om.ID, bot.ID, om.MsgID, fromState)
 		return nil
 	}
 
@@ -748,7 +756,7 @@ func (c *Context) EditInlineKeyboard(om *OutgoingMessage, fromState string, kb I
 			ChatID:          om.ChatID,
 			MessageID:       om.MsgID,
 			InlineMessageID: om.InlineMsgID,
-			ReplyMarkup:     &tg.InlineKeyboardMarkup{InlineKeyboard: kb.tg()},
+			ReplyMarkup:     &tg.InlineKeyboardMarkup{InlineKeyboard: tgKeyboard},
 		},
 	})
 
