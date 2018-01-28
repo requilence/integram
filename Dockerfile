@@ -20,4 +20,5 @@ RUN apk --no-cache add ca-certificates && rm -rf /var/cache/apk/*
 WORKDIR /app
 
 COPY --from=builder /go/app ./
+COPY --from=builder /usr/local/go/lib/time/zoneinfo.zip /usr/local/go/lib/time/zoneinfo.zip
 CMD ["./app"]
