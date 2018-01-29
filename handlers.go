@@ -25,6 +25,9 @@ import (
 	"sync"
 	"os"
 	"html/template"
+	"os/signal"
+	"syscall"
+	"github.com/requilence/jobs"
 )
 
 var startedAt time.Time
@@ -44,8 +47,8 @@ func init() {
 		gin.SetMode(gin.ReleaseMode)
 		log.SetLevel(log.InfoLevel)
 	}
-	if Config.InstanceMode != InstanceModeMultiProcessService && Config.InstanceMode !=InstanceModeMultiProcessMain && Config.InstanceMode != InstanceModeSingleProcess{
-		panic("WRONG InstanceMode "+Config.InstanceMode)
+	if Config.InstanceMode != InstanceModeMultiProcessService && Config.InstanceMode != InstanceModeMultiProcessMain && Config.InstanceMode != InstanceModeSingleProcess {
+		panic("WRONG InstanceMode " + Config.InstanceMode)
 	}
 	log.Infof("Integram mode: %s", Config.InstanceMode)
 
@@ -107,6 +110,32 @@ func ReverseProxy(target *url.URL) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		proxy.ServeHTTP(c.Writer, c.Request)
 	}
+}
+
+func gracefulShutdownJobPools() {
+	sigs := make(chan os.Signal, 1)
+	done := make(chan bool, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+	exitCode := 0
+
+	go func() {
+		sig := <-sigs
+		fmt.Printf("Got '%s' signal\n", sig.String())
+		for name, pool := range jobs.Pools {
+			fmt.Printf("Shutdown '%s' jobs pool...\n", name)
+			pool.Close()
+			err := pool.Wait()
+			if err != nil {
+				exitCode = 1
+				fmt.Printf("Error while waiting for pool shutdown: %s\n", err.Error())
+			}
+		}
+		fmt.Printf("All jobs pool finished\n")
+
+		done <- true
+	}()
+	<- done
+	syscall.Exit(exitCode)
 }
 
 // Run initiates Integram to listen webhooks, TG updates and start the workers pool
@@ -217,10 +246,12 @@ func Run() {
 
 	var err error
 
+	go gracefulShutdownJobPools()
+
 	if Config.Port == "443" || Config.Port == "1443" {
 		if _, err := os.Stat(Config.ConfigDir + string(os.PathSeparator) + "ssl.crt"); !os.IsNotExist(err) {
-				log.Infof("SSL: Using ssl.key/ssl.crt")
-				err = router.RunTLS(":"+Config.Port, Config.ConfigDir+ string(os.PathSeparator) + "ssl.crt", Config.ConfigDir+ string(os.PathSeparator) + "ssl.key")
+			log.Infof("SSL: Using ssl.key/ssl.crt")
+			err = router.RunTLS(":"+Config.Port, Config.ConfigDir+string(os.PathSeparator)+"ssl.crt", Config.ConfigDir+string(os.PathSeparator)+"ssl.key")
 		} else {
 			log.Fatalf("INTEGRAM_PORT set to 443, but ssl.crt and ssl.key files not found at '%s'", Config.ConfigDir)
 		}
@@ -364,37 +395,41 @@ func serviceHookHandler(c *gin.Context) {
 	p3 := c.Param("param3")
 
 	switch p1 {
-		// webpreview handler
-		case "a": webPreviewHandler(c, p2); return;
+	// webpreview handler
+	case "a":
+		webPreviewHandler(c, p2)
+		return
 
-		// determine user's TZ and redirect (only withing baseURL)
-		case "tz": c.HTML(http.StatusOK, "determineTZ", gin.H{"redirectURL": Config.BaseURL+c.Query("r")}); return;
+	// determine user's TZ and redirect (only withing baseURL)
+	case "tz":
+		c.HTML(http.StatusOK, "determineTZ", gin.H{"redirectURL": Config.BaseURL + c.Query("r")})
+		return
 
-		// /oauth1/service_name
-		// /auth/service_name
-		case "auth", "oauth1": service = p2;
+	// /oauth1/service_name
+	// /auth/service_name
+	case "auth", "oauth1":
+		service = p2
 
-		default:
+	default:
 
-			if p2 != "" {
-				// service known
-				//
-				// /service/token
-				service = p1
-				webhookToken = p2
-			} else {
-				// service unknown - to be determined
-				//
-				// /token
-				webhookToken = p1
-			}
+		if p2 != "" {
+			// service known
+			//
+			// /service/token
+			service = p1
+			webhookToken = p2
+		} else {
+			// service unknown - to be determined
+			//
+			// /token
+			webhookToken = p1
+		}
 	}
 
 	if s, _ = serviceByName(service); service != "" && service != "healthcheck" && s == nil {
 		c.String(404, "Service not found")
 		return
 	}
-
 
 	// in case of multi-process mode redirect from the main process to the corresponding service
 	if Config.IsMainInstance() && s != nil {
@@ -406,7 +441,7 @@ func serviceHookHandler(c *gin.Context) {
 	if p1 == "oauth1" {
 		// /oauth1/service_name/auth_temp_id
 		oAuthInitRedirect(c, p2, p3)
-		
+
 		return
 	} else if p1 == "auth" {
 
