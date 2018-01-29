@@ -491,7 +491,8 @@ func (c *Context) EditMessageText(om *OutgoingMessage, text string) error {
 	textHash := fmt.Sprintf("%x", md5.Sum([]byte(text)))
 	bot := c.Bot()
 	if om.TextHash == textHash {
-		return errors.New("EditMessageText: text not mofified")
+		c.Log().Debugf("EditMessageText – message (_id=%s botid=%v id=%v) not updated text have not changed", om.ID.Hex(), bot.ID, om.MsgID)
+		return nil
 	}
 
 	if om.ParseMode == "HTML" {
@@ -675,7 +676,7 @@ func (c *Context) EditMessageTextAndInlineKeyboard(om *OutgoingMessage, fromStat
 	}
 
 	if msg.BotID == 0 {
-		c.Log().Warn(fmt.Sprintf("EditMessageTextAndInlineKeyboard – message (_id=%s botid=%v id=%v state %s) not found", om.ID, bot.ID, om.MsgID, fromState))
+		c.Log().Warn(fmt.Sprintf("EditMessageTextAndInlineKeyboard – message (_id=%s botid=%v id=%v state %s) not found", om.ID.Hex(), bot.ID, om.MsgID, fromState))
 		return nil
 
 	}
@@ -684,7 +685,7 @@ func (c *Context) EditMessageTextAndInlineKeyboard(om *OutgoingMessage, fromStat
 	if prevTextHash == om.TextHash {
 		prevTGKeyboard := om.InlineKeyboardMarkup.tg()
 		if whetherTGInlineKeyboardsAreEqual(prevTGKeyboard, tgKeyboard) {
-			c.Log().Debugf("EditMessageTextAndInlineKeyboard – message (_id=%s botid=%v id=%v state %s) not updated both text and kb have not changed", om.ID, bot.ID, om.MsgID, fromState)
+			c.Log().Debugf("EditMessageTextAndInlineKeyboard – message (_id=%s botid=%v id=%v state %s) not updated both text and kb have not changed", om.ID.Hex(), bot.ID, om.MsgID, fromState)
 			return nil
 		}
 	}
