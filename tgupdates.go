@@ -648,6 +648,10 @@ func removeHooksForChat(db *mgo.Database, serviceName string, chatID int64) {
 }
 
 func migrateToSuperGroup(db *mgo.Database, fromChatID int64, toChatID int64) {
+	if fromChatID == toChatID {
+		return
+	}
+
 	var chat chatData
 	_, err := db.C("chats").FindId(fromChatID).Apply(mgo.Change{
 		Update: bson.M{"$set": bson.M{"migratedtochatid": toChatID}, "$unset": bson.M{"hooks": "", "membersids": ""}},
@@ -659,9 +663,9 @@ func migrateToSuperGroup(db *mgo.Database, fromChatID int64, toChatID int64) {
 	if chat.ID != 0 {
 		chat.ID = toChatID
 		chat.Type = "supergroup"
-		err := db.C("chats").Insert(chat)
+		err := db.C("chats").UpdateId(fromChatID, bson.M{"$set": bson.M{"type": "supergroup", "_id": toChatID}})
 		if err != nil {
-			log.WithError(err).Error("migrateToSuperGroup insert")
+			log.WithError(err).Error("migrateToSuperGroup ID update error")
 		}
 	}
 
