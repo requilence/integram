@@ -663,9 +663,12 @@ func migrateToSuperGroup(db *mgo.Database, fromChatID int64, toChatID int64) {
 	if chat.ID != 0 {
 		chat.ID = toChatID
 		chat.Type = "supergroup"
-		err := db.C("chats").UpdateId(fromChatID, bson.M{"$set": bson.M{"type": "supergroup", "_id": toChatID}})
+		chat.MigratedFromChatID = toChatID
+
+		_, err := db.C("chats").Upsert(bson.M{"_id": toChatID, "migratedfromchatid": bson.M{"$exists": false}}, chat)
+
 		if err != nil {
-			log.WithError(err).Error("migrateToSuperGroup ID update error")
+			log.WithError(err).Error("migrateToSuperGroup ID insert error")
 		}
 	}
 

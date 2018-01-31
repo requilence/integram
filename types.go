@@ -126,14 +126,15 @@ type userProtected struct {
 
 // Struct for chat's data. Used to store in MongoDB
 type chatData struct {
-	Chat             `bson:",inline"`
-	KeyboardPerBot   []chatKeyboard `bson:",omitempty"`
-	Settings         map[string]interface{}
-	Hooks            []serviceHook
-	MembersCount     int
-	MembersIDs       []int64
-	Deactivated      bool  `bson:",omitempty"`
-	MigratedToChatID int64 `bson:",omitempty"`
+	Chat               `bson:",inline"`
+	KeyboardPerBot     []chatKeyboard `bson:",omitempty"`
+	Settings           map[string]interface{}
+	Hooks              []serviceHook
+	MembersCount       int
+	MembersIDs         []int64
+	Deactivated        bool  `bson:",omitempty"`
+	MigratedToChatID   int64 `bson:",omitempty"`
+	MigratedFromChatID int64 `bson:",omitempty"`
 }
 
 type chatKeyboard struct {
