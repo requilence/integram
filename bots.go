@@ -963,7 +963,8 @@ func (m *OutgoingMessage) Send() error {
 		return errors.New("Text, FilePath and Location are empty")
 	}
 
-	if m.ctx.messageAnsweredAt == nil {
+
+	if m.ctx != nil && m.ctx.messageAnsweredAt == nil {
 		n := time.Now()
 		m.ctx.messageAnsweredAt = &n
 	}
