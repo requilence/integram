@@ -1412,6 +1412,8 @@ func TestContext_NewMessage(t *testing.T) {
 			Callback:              tt.fields.Callback,
 			inlineQueryAnsweredAt: tt.fields.inlineQueryAnsweredAt,
 		}
+
+		tt.want.ctx = c
 		if got := c.NewMessage(); !reflect.DeepEqual(got, tt.want) {
 			t.Errorf("%q. Context.NewMessage() = %v, want %v", tt.name, got, tt.want)
 		}
