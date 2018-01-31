@@ -143,6 +143,7 @@ type OutgoingMessage struct {
 	FileRemoveAfter      bool           `bson:",omitempty"`
 	SendAfter            *time.Time     `bson:",omitempty"`
 	processed            bool
+	ctx					 *Context
 }
 
 // Keyboard is a Shorthand for [][]Button
@@ -960,6 +961,11 @@ func (m *OutgoingMessage) Send() error {
 
 	if m.Text == "" && m.FilePath == "" && m.Location == nil {
 		return errors.New("Text, FilePath and Location are empty")
+	}
+
+	if m.ctx.messageAnsweredAt == nil {
+		n := time.Now()
+		m.ctx.messageAnsweredAt = &n
 	}
 
 	return activeMessageSender.Send(m)

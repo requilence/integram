@@ -58,6 +58,15 @@ func ensureIndexes() {
 	db.C("chats_cache").EnsureIndex(mgo.Index{Key: []string{"expiresat"}, ExpireAfter: time.Second})
 	db.C("chats_cache").EnsureIndex(mgo.Index{Key: []string{"key", "chatid", "service"}, Unique: true})
 
+	db.C("stats").EnsureIndex(mgo.Index{Key: []string{"exp"}, ExpireAfter: time.Second})
+	db.C("stats").EnsureIndex(mgo.Index{Key: []string{"s","k", "d"}, Unique: true})
+
+	db.C("stats_unique").EnsureIndex(mgo.Index{Key: []string{"exp"}, ExpireAfter: time.Second})
+	db.C("stats_unique").EnsureIndex(mgo.Index{Key: []string{"s", "k", "d", "p"}, Unique: true})
+	db.C("stats_unique").EnsureIndex(mgo.Index{Key: []string{"s", "k", "d", "p", "u"}, Unique: true})
+
+
+
 }
 
 func dbConnect() {

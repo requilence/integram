@@ -44,6 +44,8 @@ type Context struct {
 
 	Callback              *callback  // Telegram inline buttons callback if it it triggired current request
 	inlineQueryAnsweredAt *time.Time // used to log slow inline responses
+	messageAnsweredAt *time.Time 	 // used to log slow messages responses
+
 }
 
 type chosenInlineResult struct {
@@ -411,6 +413,7 @@ func (c *Context) Log() *log.Entry {
 
 	if c.Callback != nil {
 		fields["callback"] = c.Callback.Data
+		fields["callback_id"] = c.Callback.ID
 
 		if c.Callback.Message.MsgID > 0 {
 			fields["callback_msgid"] = c.Callback.Message.MsgID
@@ -910,6 +913,7 @@ func (c *Context) NewMessage() *OutgoingMessage {
 	} else {
 		msg.ChatID = c.User.ID
 	}
+	msg.ctx = c
 	return msg
 }
 

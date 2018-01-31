@@ -134,7 +134,7 @@ func gracefulShutdownJobPools() {
 
 		done <- true
 	}()
-	<- done
+	<-done
 	syscall.Exit(exitCode)
 }
 
@@ -487,7 +487,7 @@ func serviceHookHandler(c *gin.Context) {
 		ctx.ServiceName = s.Name
 
 		if c.Request.Method == "HEAD" {
-			c.Status(200)
+			c.Status(http.StatusNoContent)
 			return
 		}
 
@@ -498,6 +498,8 @@ func serviceHookHandler(c *gin.Context) {
 		}
 
 		if query == nil {
+			ctx.StatInc(StatWebhookProcessingError)
+			c.Status(http.StatusNoContent)
 			return
 		}
 
@@ -508,6 +510,11 @@ func serviceHookHandler(c *gin.Context) {
 				log.WithFields(log.Fields{"token": webhookToken}).WithError(err).Error("FindChats error")
 			}
 
+			if len(chats) == 0 {
+				c.String(http.StatusAccepted, "Webhook accepted but no associated chats found")
+				return
+			}
+
 			for _, chat := range chats {
 				ctxCopy := *ctx
 				ctxCopy.Chat = chat.Chat
@@ -515,19 +522,27 @@ func serviceHookHandler(c *gin.Context) {
 				err := s.WebhookHandler(&ctxCopy, wctx)
 
 				if err != nil {
+					ctxCopy.StatIncChat(StatWebhookProcessingError)
 					ctx.Log().WithFields(log.Fields{"token": webhookToken}).WithError(err).Error("WebhookHandler returned error")
 					if err == ErrorFlood {
 						c.String(http.StatusTooManyRequests, err.Error())
 						return
 					}
-
+				} else {
+					ctxCopy.StatIncChat(StatWebhookHandled)
 				}
 			}
+
 		} else {
 			users, err := ctx.FindUsers(query)
 
 			if err != nil {
 				log.WithFields(log.Fields{"token": webhookToken}).WithError(err).Error("findUsers error")
+			}
+
+			if len(users) == 0 {
+				c.String(http.StatusAccepted, "Webhook accepted but no associated chats found")
+				return
 			}
 
 			for _, user := range users {
@@ -538,14 +553,18 @@ func serviceHookHandler(c *gin.Context) {
 				err := s.WebhookHandler(&ctxCopy, wctx)
 
 				if err != nil {
+					ctxCopy.StatIncUser(StatWebhookProcessingError)
+
 					ctx.Log().WithFields(log.Fields{"token": webhookToken}).WithError(err).Error("WebhookHandler returned error")
 					if err == ErrorFlood {
 						c.String(http.StatusTooManyRequests, err.Error())
 						return
 					}
+				} else {
+					ctxCopy.StatIncUser(StatWebhookHandled)
 				}
-				//hooks=append(hooks, serviceHook{Token: token, Services: []string{"gmail"}, Chats: []int64{user.ID}})
 			}
+
 		}
 
 	} else if webhookToken[0:1] == "u" {
@@ -559,7 +578,13 @@ func serviceHookHandler(c *gin.Context) {
 		user, err := ctx.FindUser(bson.M{"hooks.token": webhookToken})
 		// todo: improve this part
 
-		if err == nil {
+		if !(err == nil && user.ID != 0) {
+			err := errors.New("Unknown user token")
+			log.WithFields(log.Fields{"token": webhookToken}).Warn(err)
+
+			c.AbortWithError(http.StatusNotFound, err)
+			return
+		} else {
 			if c.Request.Method == "GET" {
 				c.String(200, "Hi here! This link isn't working in a browser. Please follow the instructions in the chat")
 				return
@@ -569,6 +594,7 @@ func serviceHookHandler(c *gin.Context) {
 				c.Status(200)
 				return
 			}
+
 		}
 
 		for i, hook := range user.Hooks {
@@ -596,14 +622,6 @@ func serviceHookHandler(c *gin.Context) {
 		ctx.User = user.User
 		ctx.User.ctx = ctx
 
-		if !(err == nil && user.ID > 0) {
-			err := errors.New("Unknown user token")
-
-			log.WithFields(log.Fields{"token": webhookToken}).Error(err)
-
-			c.AbortWithError(http.StatusNotFound, err)
-			return
-		}
 		hooks = user.Hooks
 	} else if webhookToken[0:1] == "c" || webhookToken[0:1] == "h" {
 		chat, err := ctx.FindChat(bson.M{"hooks.token": webhookToken})
@@ -632,41 +650,31 @@ func serviceHookHandler(c *gin.Context) {
 		c.AbortWithError(http.StatusNotFound, nil)
 		return
 	}
+	atLeastOneChatProcessedWithoutErrors := false
 
 	for _, hook := range hooks {
 		if hook.Token == webhookToken {
-			isHandled := false
+			if len(hook.Services) > 1 {
+				ctx.Log().Errorf("Deprecated multi-service hook")
+			}
 			for _, serviceName := range hook.Services {
 				s, _ := serviceByName(serviceName)
-				if s != nil {
-					if Config.IsMainInstance() {
-						proxy := reverseProxyForService(serviceName)
-						proxy.ServeHTTP(c.Writer, c.Request)
 
-						return
-					}
-					ctx.ServiceName = serviceName
+				if s == nil {
+					continue
+				}
 
-					if len(hook.Chats) == 0 && ctx.Chat.ID != 0 {
+				if Config.IsMainInstance() {
+					proxy := reverseProxyForService(serviceName)
+					proxy.ServeHTTP(c.Writer, c.Request)
+					return
+				}
+
+				ctx.ServiceName = serviceName
+
+				if len(hook.Chats) == 0 {
+					if ctx.Chat.ID != 0 {
 						hook.Chats = []int64{ctx.Chat.ID}
-					}
-
-					if len(hook.Chats) > 0 {
-						for _, chatID := range hook.Chats {
-							ctx.Chat = Chat{ID: chatID, ctx: ctx}
-							err := s.WebhookHandler(ctx, wctx)
-
-							if err != nil {
-								ctx.Log().WithFields(log.Fields{"token": webhookToken}).WithError(err).Error("WebhookHandler returned error")
-								if err == ErrorFlood {
-									c.AbortWithError(http.StatusTooManyRequests, err)
-									return
-								}
-							} else {
-								isHandled = true
-							}
-
-						}
 					} else {
 						// Some services(f.e. Trello) removes webhook after received 410 HTTP Gone
 						// In this case we can safely answer 410 code because we know that DB is up (token was found)
@@ -674,14 +682,44 @@ func serviceHookHandler(c *gin.Context) {
 						return
 					}
 				}
+
+				for _, chatID := range hook.Chats {
+					ctxCopy := *ctx
+					ctxCopy.Chat = Chat{ID: chatID, ctx: &ctxCopy}
+
+					err := s.WebhookHandler(&ctxCopy, wctx)
+
+					if err != nil {
+						ctxCopy.Log().WithFields(log.Fields{"token": webhookToken}).WithError(err).Error("WebhookHandler returned error")
+						if err == ErrorFlood {
+							c.AbortWithError(http.StatusTooManyRequests, err)
+							return
+						}
+					} else {
+
+						if ctxCopy.messageAnsweredAt != nil {
+							ctxCopy.StatIncChat(StatWebhookProducedMessageToChat)
+						}
+						atLeastOneChatProcessedWithoutErrors = true
+					}
+				}
 			}
-			if !isHandled {
+
+			if atLeastOneChatProcessedWithoutErrors {
+				ctx.StatIncUser(StatWebhookHandled)
+				c.AbortWithStatus(200)
+			} else {
+				ctx.StatIncUser(StatWebhookProcessingError)
 				log.WithField("token", webhookToken).Warn("Hook not handled")
+
+				// need to answer 2xx otherwise we webhook will be retried and the error will reappear
+				// todo: maybe throw 500 if error because of DB fault etc.
+				c.AbortWithStatus(http.StatusAccepted)
 			}
-			c.AbortWithStatus(200)
 			return
 		}
 	}
+	c.AbortWithError(404, errors.New("No hooks"))
 }
 
 func oAuthInitRedirect(c *gin.Context, service string, authTempID string) {
@@ -850,6 +888,8 @@ func oAuthCallback(c *gin.Context, oauthProviderID string) {
 	if err != nil {
 		ctx.Log().WithError(err).WithError(err).Error("oAuthCallback: can't saveProtectedSettings")
 	}
+
+	ctx.StatIncUser(StatOAuthSuccess)
 
 	if s.OAuthSuccessful != nil {
 		s.DoJob(s.OAuthSuccessful, ctx)

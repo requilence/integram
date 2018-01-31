@@ -96,6 +96,7 @@ func updateRoutine(b *Bot, u *tg.Update) {
 
 	if context.Message != nil && !context.MessageEdited {
 
+
 		if service.TGNewMessageHandler == nil {
 			context.Log().Warn("Received Message but TGNewMessageHandler not set for service")
 			return
@@ -113,6 +114,12 @@ func updateRoutine(b *Bot, u *tg.Update) {
 		if err != nil {
 			log.WithError(err).Error("can't add incoming message to db")
 		}
+		if context.messageAnsweredAt != nil {
+			context.StatIncChat(StatIncomingMessageAnswered)
+		} else {
+			context.StatIncChat(StatIncomingMessageNotAnswered)
+		}
+
 
 	} else if context.InlineQuery != nil {
 		if service.TGInlineQueryHandler == nil {
@@ -124,11 +131,22 @@ func updateRoutine(b *Bot, u *tg.Update) {
 		err := service.TGInlineQueryHandler(context)
 
 		if err != nil {
+			if strings.Contains(err.Error(), "QUERY_ID_INVALID") {
+				context.StatIncUser(StatInlineQueryTimeouted)
+			} else if !strings.Contains(err.Error(), "context canceled"){
+				context.StatIncUser(StatInlineQueryCanceled)
+			}
 			context.Log().WithError(err).WithField("secSpent", time.Now().Sub(queryHandlerStarted).Seconds()).WithField("secSpentSinceUpdate", time.Now().Sub(updateReceivedAt).Seconds()).Error("BotUpdateHandler InlineQuery error")
+			context.StatIncUser(StatInlineQueryProcessingError)
 		} else {
+
 			if context.inlineQueryAnsweredAt == nil {
+				context.StatIncUser(StatInlineQueryNotAnswered)
+
 				context.Log().WithError(err).Error("BotUpdateHandler InlineQuery not answered")
 			} else {
+				context.StatIncUser(StatInlineQueryAnswered)
+
 				secsSpent := context.inlineQueryAnsweredAt.Sub(updateReceivedAt).Seconds()
 				if secsSpent > 10 {
 					context.Log().WithError(err).Errorf("BotUpdateHandler InlineQuery 10 sec exceeded: %.1f sec spent after update, %.1f sec after the handle", secsSpent, time.Now().Sub(queryHandlerStarted).Seconds())
@@ -145,6 +163,7 @@ func updateRoutine(b *Bot, u *tg.Update) {
 		}
 
 		err := service.TGChosenInlineResultHandler(context)
+		context.StatIncUser(StatInlineQueryChosen)
 
 		if err != nil {
 			context.Log().WithError(err).Error("BotUpdateHandler error")
