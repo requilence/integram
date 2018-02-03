@@ -35,8 +35,8 @@ type stat struct {
 	Counter       uint32  `bson:"v"`
 	UniqueCounter uint32  `bson:"uv"`
 
-	Series5m       map[uint16]uint32 `bson:"v5m"`
-	UniqueSeries5m map[uint16]uint32 `bson:"uv5m"`
+	Series5m       map[string]uint32 `bson:"v5m"`
+	UniqueSeries5m map[string]uint32 `bson:"uv5m"`
 }
 
 // count only once per user/chat per period
@@ -52,6 +52,10 @@ type uniqueStat struct {
 }
 
 func (c *Context) StatIncBy(key StatKey, uniqueID int64, inc int) error {
+
+	if !Config.MongoLogging {
+		return nil
+	}
 
 	n := time.Now()
 	unixDay := uint16(n.Unix() / (24 * 60 * 60))
@@ -85,10 +89,6 @@ func (c *Context) StatIncBy(key StatKey, uniqueID int64, inc int) error {
 				"$setOnInsert": bson.M{"expiresat": time.Unix(startOfTheDayTS+24*60*60, 0)},
 			})
 
-		if err != nil {
-			c.Log().WithError(err).Error("stats_unique 1 upsert error")
-		}
-
 		if err == nil && (ci.Matched > 0 || ci.UpsertedId != nil) {
 			// this ID wasn't found for the current day. So we can add to both overall and 5min period
 			updateInc["uv"] = 1
@@ -104,10 +104,6 @@ func (c *Context) StatIncBy(key StatKey, uniqueID int64, inc int) error {
 
 				"$setOnInsert": bson.M{"exp": time.Unix(startOfTheDayTS+24*60*60, 0)},
 			})
-
-		if err != nil {
-			c.Log().WithError(err).Error("stats_unique 2 upsert error")
-		}
 
 		if err == nil && (ci.Matched > 0 || ci.UpsertedId != nil) {
 			// this ID wasn't found for the current day. So we can add to both overall and 5min period
