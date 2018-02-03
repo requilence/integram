@@ -1548,6 +1548,8 @@ func sendMessage(m *OutgoingMessage) error {
 		}
 		if m.ChatID > 0 {
 			db.C("users").UpdateId(m.ChatID, bson.M{"$unset": bson.M{"botstoppedat": ""}})
+		} else {
+			db.C("chats").UpdateId(m.ChatID, bson.M{"$unset": bson.M{"botkickedat": ""}})
 		}
 
 		return nil
@@ -1653,6 +1655,7 @@ func sendMessage(m *OutgoingMessage) error {
 				removeHooksForChat(db, bot.services[0].Name, m.ChatID)
 			}
 
+			db.C("chats").Update(bson.M{"_id": m.ChatID, "botkickedat": bson.M{"$exists": false}}, bson.M{"$set": bson.M{"botkickedat": time.Now()}})
 			log.WithField("chat", m.ChatID).WithField("bot", m.BotID).Warn("sendMessage error: Bot kicked")
 
 			return nil
@@ -1691,7 +1694,7 @@ func sendMessage(m *OutgoingMessage) error {
 			}
 		}
 
-		log.WithError(err).WithField("chat", m.ChatID).Error("TG error while sending a message")
+		log.WithError(err).WithField("chat", m.ChatID).WithField("bot", m.BotID).Error("TG error while sending a message")
 		return nil
 	}
 	log.WithError(err).WithField("chat", m.ChatID).Error("Error while sending a message")

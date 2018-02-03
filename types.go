@@ -110,6 +110,8 @@ type userData struct {
 	Protected       map[string]*userProtected // Protected settings used for some core functional
 	Settings        map[string]interface{}
 	Hooks           []serviceHook
+
+	BotStoppedAt 	*time.Time `bson:",omitempty"`
 }
 
 // Core settings for Telegram User behavior per Service
@@ -130,11 +132,11 @@ type chatData struct {
 	KeyboardPerBot     []chatKeyboard `bson:",omitempty"`
 	Settings           map[string]interface{}
 	Hooks              []serviceHook
-	MembersCount       int
 	MembersIDs         []int64
-	Deactivated        bool  `bson:",omitempty"`
-	MigratedToChatID   int64 `bson:",omitempty"`
-	MigratedFromChatID int64 `bson:",omitempty"`
+	Deactivated        bool  	  `bson:",omitempty"`
+	BotKickedAt        *time.Time `bson:",omitempty"`
+	MigratedToChatID   int64	  `bson:",omitempty"`
+	MigratedFromChatID int64	  `bson:",omitempty"`
 }
 
 type chatKeyboard struct {

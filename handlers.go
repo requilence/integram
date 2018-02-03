@@ -632,6 +632,16 @@ func serviceHookHandler(c *gin.Context) {
 			c.AbortWithError(http.StatusNotFound, err)
 
 			return
+		} else if chat.Deactivated {
+			err := errors.New("TG chat was deactivated")
+			c.AbortWithError(http.StatusGone, err)
+
+			return
+		} else if chat.BotKickedAt != nil {
+			err := errors.New("Bot was kicked from the TG chat")
+			c.AbortWithError(http.StatusGone, err)
+
+			return
 		} else {
 			if c.Request.Method == "GET" {
 				c.String(200, "Hi here! This link isn't working in a browser. Please follow the instructions in the chat")
@@ -683,10 +693,22 @@ func serviceHookHandler(c *gin.Context) {
 					}
 				}
 
+				// todo: if bot kicked or stopped in all chats – need to remove the webhook?
+
 				for _, chatID := range hook.Chats {
 					ctxCopy := *ctx
 					ctxCopy.Chat = Chat{ID: chatID, ctx: &ctxCopy}
 
+					if chatID < 0 {
+						if data, _ := ctxCopy.Chat.getData(); data != nil && (data.Deactivated || data.BotKickedAt != nil) {
+
+							continue
+						}
+					} else {
+						if data, _ := ctxCopy.User.getData(); data != nil && (data.BotStoppedAt != nil) {
+							continue
+						}
+					}
 					err := s.WebhookHandler(&ctxCopy, wctx)
 
 					if err != nil {
