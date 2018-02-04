@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"crypto/md5"
 	"github.com/gin-gonic/gin"
 	"github.com/kennygrant/sanitize"
 	"github.com/mrjones/oauth"
