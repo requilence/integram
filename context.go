@@ -304,13 +304,9 @@ func saveKeyboard(m *OutgoingMessage, db *mgo.Database) error {
 				m.Selective = false
 				goto OUTER
 			}
-			var info *mgo.ChangeInfo
 
-			info, err = db.C("users").UpdateAll(bson.M{"_id": bson.M{"$in": usersID}}, bson.M{"$pull": bson.M{"keyboardperchat": bson.M{"chatid": m.ChatID}}})
-			log.WithField("changes", *info).WithError(err).Debug("pulling exist user's keybpards")
-
-			info, err = db.C("users").UpdateAll(bson.M{"_id": bson.M{"$in": usersID}}, bson.M{"$push": bson.M{"keyboardperchat": chatKB}})
-			log.WithField("changes", *info).WithError(err).Debug("setting keyboards")
+			_, err = db.C("users").UpdateAll(bson.M{"_id": bson.M{"$in": usersID}}, bson.M{"$pull": bson.M{"keyboardperchat": bson.M{"chatid": m.ChatID}}})
+			_, err = db.C("users").UpdateAll(bson.M{"_id": bson.M{"$in": usersID}}, bson.M{"$push": bson.M{"keyboardperchat": chatKB}})
 
 		} else {
 			var info *mgo.ChangeInfo
@@ -319,15 +315,10 @@ func saveKeyboard(m *OutgoingMessage, db *mgo.Database) error {
 				//	info, err = db.C("chats").UpdateAll(bson.M{}, bson.M{"$pull": bson.M{"keyboardperbot": bson.M{"chatid": m.ChatID}}})
 				info, err = db.C("users").UpdateAll(bson.M{}, bson.M{"$pull": bson.M{"keyboardperchat": bson.M{"chatid": m.ChatID}}})
 
-				log.WithField("changes", info).WithError(err).WithField("chatID", m.ChatID).Info("unsetting all user's keyboards for chat")
-
-				log.WithField("changes", *info).WithError(err).Debug("pulling exist user's keybpards")
 				kbAr := []chatKeyboard{chatKB}
 				info, err = db.C("chats").UpsertId(m.ChatID, bson.M{"$set": bson.M{"keyboardperbot": kbAr}})
 			} else {
 				info, err = db.C("chats").UpdateAll(bson.M{"_id": m.ChatID}, bson.M{"$pull": bson.M{"keyboardperbot": bson.M{"botid": m.BotID}}})
-				log.WithField("changes", info).WithError(err).WithField("chatID", m.ChatID).Info("unsetting all user's keyboards for chat")
-
 				info, err = db.C("chats").UpsertId(m.ChatID, bson.M{"$push": bson.M{"keyboardperbot": chatKB}})
 			}
 
@@ -491,13 +482,8 @@ func (c *Context) EditMessageText(om *OutgoingMessage, text string) error {
 	if om == nil {
 		return errors.New("Empty message provided")
 	}
-	textHash := fmt.Sprintf("%x", md5.Sum([]byte(text)))
-	bot := c.Bot()
-	if om.TextHash == textHash {
-		c.Log().Debugf("EditMessageText – message (_id=%s botid=%v id=%v) not updated text have not changed", om.ID.Hex(), bot.ID, om.MsgID)
-		return nil
-	}
 
+	bot := c.Bot()
 	if om.ParseMode == "HTML" {
 		textCleared, err := sanitize.HTMLAllowing(text, []string{"a", "b", "strong", "i", "em", "a", "code", "pre"}, []string{"href"})
 
@@ -505,6 +491,16 @@ func (c *Context) EditMessageText(om *OutgoingMessage, text string) error {
 			text = textCleared
 		}
 	}
+	om.Text = text
+	prevTextHash := om.TextHash
+	om.TextHash = om.GetTextHash()
+
+
+	if om.TextHash == prevTextHash {
+		c.Log().Debugf("EditMessageText – message (_id=%s botid=%v id=%v) not updated text have not changed", om.ID.Hex(), bot.ID, om.MsgID)
+		return nil
+	}
+
 
 	_, err := bot.API.Send(tg.EditMessageTextConfig{
 		BaseEdit: tg.BaseEdit{
@@ -525,7 +521,7 @@ func (c *Context) EditMessageText(om *OutgoingMessage, text string) error {
 			c.Log().WithError(err).Warn("TG Anti flood activated")
 		}
 	} else {
-		err = c.db.C("messages").UpdateId(om.ID, bson.M{"$set": bson.M{"texthash": textHash}})
+		err = c.db.C("messages").UpdateId(om.ID, bson.M{"$set": bson.M{"texthash": om.TextHash}})
 	}
 	return err
 }
@@ -665,9 +661,7 @@ func (c *Context) EditMessageTextAndInlineKeyboard(om *OutgoingMessage, fromStat
 	var msg OutgoingMessage
 
 	var err error
-	om.Text = text
-	prevTextHash:=om.TextHash
-	om.TextHash = om.GetTextHash()
+
 	if fromState != "" {
 		_, err = c.db.C("messages").Find(bson.M{"_id": om.ID, "$or": []bson.M{{"inlinekeyboardmarkup.state": fromState}, {"inlinekeyboardmarkup": bson.M{"$exists": false}}}}).Apply(mgo.Change{Update: bson.M{"$set": bson.M{"inlinekeyboardmarkup": kb, "texthash": om.TextHash}}}, &msg)
 	} else {
@@ -683,6 +677,19 @@ func (c *Context) EditMessageTextAndInlineKeyboard(om *OutgoingMessage, fromStat
 		return nil
 
 	}
+
+	if om.ParseMode == "HTML" {
+		textCleared, err := sanitize.HTMLAllowing(text, []string{"a", "b", "strong", "i", "em", "a", "code", "pre"}, []string{"href"})
+
+		if err == nil && textCleared != "" {
+			text = textCleared
+		}
+	}
+
+	om.Text = text
+	prevTextHash := om.TextHash
+	om.TextHash = om.GetTextHash()
+
 	tgKeyboard := kb.tg()
 
 	if prevTextHash == om.TextHash {
@@ -693,13 +700,6 @@ func (c *Context) EditMessageTextAndInlineKeyboard(om *OutgoingMessage, fromStat
 		}
 	}
 
-	if om.ParseMode == "HTML" {
-		textCleared, err := sanitize.HTMLAllowing(text, []string{"a", "b", "strong", "i", "em", "a", "code", "pre"}, []string{"href"})
-
-		if err == nil && textCleared != "" {
-			text = textCleared
-		}
-	}
 
 	_, err = bot.API.Send(tg.EditMessageTextConfig{
 		BaseEdit: tg.BaseEdit{
@@ -722,7 +722,7 @@ func (c *Context) EditMessageTextAndInlineKeyboard(om *OutgoingMessage, fromStat
 			c.Log().WithError(err).Warn("TG Anti flood activated")
 		}
 		// Oops. error is occurred – revert the original keyboard
-		c.db.C("messages").Update(bson.M{"_id": msg.ID}, bson.M{"$set": bson.M{"inlinekeyboardmarkup": msg.InlineKeyboardMarkup}})
+		c.db.C("messages").Update(bson.M{"_id": msg.ID}, bson.M{"$set": bson.M{"texthash": om.TextHash, "inlinekeyboardmarkup": msg.InlineKeyboardMarkup}})
 		return err
 	}
 
@@ -731,7 +731,6 @@ func (c *Context) EditMessageTextAndInlineKeyboard(om *OutgoingMessage, fromStat
 
 // EditInlineKeyboard edit the outgoing message's inline keyboard
 func (c *Context) EditInlineKeyboard(om *OutgoingMessage, fromState string, kb InlineKeyboard) error {
-	log.WithField("msgID", om.MsgID).Info("EditInlineKeyboard")
 
 	bot := c.Bot()
 	if om.MsgID != 0 {
