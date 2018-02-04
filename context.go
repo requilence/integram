@@ -661,6 +661,18 @@ func (c *Context) EditMessageTextAndInlineKeyboard(om *OutgoingMessage, fromStat
 
 	var err error
 
+	if om.ParseMode == "HTML" {
+		textCleared, err := sanitize.HTMLAllowing(text, []string{"a", "b", "strong", "i", "em", "a", "code", "pre"}, []string{"href"})
+
+		if err == nil && textCleared != "" {
+			text = textCleared
+		}
+	}
+
+	om.Text = text
+	prevTextHash := om.TextHash
+	om.TextHash = om.GetTextHash()
+
 	if fromState != "" {
 		_, err = c.db.C("messages").Find(bson.M{"_id": om.ID, "$or": []bson.M{{"inlinekeyboardmarkup.state": fromState}, {"inlinekeyboardmarkup": bson.M{"$exists": false}}}}).Apply(mgo.Change{Update: bson.M{"$set": bson.M{"inlinekeyboardmarkup": kb, "texthash": om.TextHash}}}, &msg)
 	} else {
@@ -676,18 +688,6 @@ func (c *Context) EditMessageTextAndInlineKeyboard(om *OutgoingMessage, fromStat
 		return nil
 
 	}
-
-	if om.ParseMode == "HTML" {
-		textCleared, err := sanitize.HTMLAllowing(text, []string{"a", "b", "strong", "i", "em", "a", "code", "pre"}, []string{"href"})
-
-		if err == nil && textCleared != "" {
-			text = textCleared
-		}
-	}
-
-	om.Text = text
-	prevTextHash := om.TextHash
-	om.TextHash = om.GetTextHash()
 
 	tgKeyboard := kb.tg()
 
@@ -721,7 +721,7 @@ func (c *Context) EditMessageTextAndInlineKeyboard(om *OutgoingMessage, fromStat
 			c.Log().WithError(err).Warn("TG Anti flood activated")
 		}
 		// Oops. error is occurred – revert the original keyboard
-		c.db.C("messages").Update(bson.M{"_id": msg.ID}, bson.M{"$set": bson.M{"texthash": om.TextHash, "inlinekeyboardmarkup": msg.InlineKeyboardMarkup}})
+		c.db.C("messages").Update(bson.M{"_id": msg.ID}, bson.M{"$set": bson.M{"texthash": prevTextHash, "inlinekeyboardmarkup": msg.InlineKeyboardMarkup}})
 		return err
 	}
 
