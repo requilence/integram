@@ -53,7 +53,7 @@ type uniqueStat struct {
 
 func (c *Context) StatIncBy(key StatKey, uniqueID int64, inc int) error {
 
-	if !Config.MongoLogging {
+	if !Config.MongoStatistic {
 		return nil
 	}
 
