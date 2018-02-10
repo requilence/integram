@@ -1685,9 +1685,23 @@ func sendMessage(m *OutgoingMessage) error {
 			_, err := sendMessageJob.Schedule(0, time.Now().Add(time.Duration(delay+rand.Intn(10))*time.Second), &m)
 			return err
 		} else if tgErr.IsParseError() {
+
 			if offset := tgErr.ParseErrorOffset(); offset > -1 {
-				mrk := MarkdownRichText{}
-				m.SetText(m.Text[0:offset] + mrk.Esc(m.Text[offset:offset+1]) + m.Text[offset+1:])
+
+				var escapedSymbol = ""
+				if m.ParseMode == "Markdown" {
+					log.WithError(tgErr.Err).WithField("chat", m.ChatID).WithField("bot", m.BotID).Error("Bad Markdown in the text")
+
+					mrk := MarkdownRichText{}
+					escapedSymbol = mrk.Esc(m.Text[offset:offset+1])
+				} else {
+					log.WithError(tgErr.Err).WithField("chat", m.ChatID).WithField("bot", m.BotID).Error("Bad HTML in the text")
+
+					mrk := HTMLRichText{}
+					escapedSymbol = mrk.EncodeEntities(m.Text[offset:offset+1])
+				}
+
+				m.SetText(m.Text[0:offset] + escapedSymbol + m.Text[offset+1:])
 
 				rescheduled = true
 				_, err := sendMessageJob.Schedule(0, time.Now(), &m)
