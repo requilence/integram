@@ -13,6 +13,8 @@ import (
 	"gopkg.in/mgo.v2/bson"
 	tg "github.com/requilence/telegram-bot-api"
 	"strings"
+	"os"
+	"strconv"
 )
 
 func clearData() {
@@ -223,7 +225,11 @@ func TestContext_ServiceCache(t *testing.T) {
 }
 
 func TestUser_IsPrivateStarted(t *testing.T) {
-	db.C("users").Insert(userData{User: User{ID: 9999999999}, Protected: map[string]*userProtected{"servicewithbottoken": {PrivateStarted: true}}})
+	bt := strings.Split(os.Getenv("INTEGRAM_TEST_BOT_TOKEN"), ":")
+	botID, _ := strconv.ParseInt(bt[0], 10, 64)
+
+	msg := Message{ChatID: 9999999999, FromID: 9999999999, MsgID: 1, BotID: botID}
+	db.C("messages").Insert(&msg)
 
 	c := &Context{db: db, Chat: Chat{ID: -9999999999}, User: User{ID: 9999999999}, ServiceName: "servicewithbottoken"}
 	c.User.ctx = c
@@ -263,6 +269,8 @@ func TestUser_IsPrivateStarted(t *testing.T) {
 		}
 	}
 	db.C("users").RemoveId(9999999999)
+	db.C("messages").RemoveId(msg.ID)
+
 }
 
 func TestUser_SetCache(t *testing.T) {
