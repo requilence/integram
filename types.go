@@ -110,13 +110,10 @@ type userData struct {
 	Protected       map[string]*userProtected // Protected settings used for some core functional
 	Settings        map[string]interface{}
 	Hooks           []serviceHook
-
-	BotStoppedAt 	*time.Time `bson:",omitempty"`
 }
 
 // Core settings for Telegram User behavior per Service
 type userProtected struct {
-	PrivateStarted    bool   // if user previously send any private msg to bot
 	OAuthToken        string // Oauth token. Used to perform API queries
 	OAuthExpireDate   *time.Time
 	OAuthRefreshToken string
@@ -126,15 +123,21 @@ type userProtected struct {
 	AfterAuthData    []byte // Gob encoded arg's
 }
 
+// Core settings for Telegram Chat behavior per Service
+type chatProtected struct {
+	BotStoppedOrKickedAt *time.Time `bson:",omitempty"`  // when we informed that bot was stopped by user
+}
+
 // Struct for chat's data. Used to store in MongoDB
 type chatData struct {
 	Chat               `bson:",inline"`
 	KeyboardPerBot     []chatKeyboard `bson:",omitempty"`
 	Settings           map[string]interface{}
+	Protected          map[string]*chatProtected
+
 	Hooks              []serviceHook
 	MembersIDs         []int64
 	Deactivated        bool  	  `bson:",omitempty"`
-	BotKickedAt        *time.Time `bson:",omitempty"`
 	MigratedToChatID   int64	  `bson:",omitempty"`
 	MigratedFromChatID int64	  `bson:",omitempty"`
 }

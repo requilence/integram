@@ -17,6 +17,7 @@ import (
 
 	"crypto/md5"
 	"github.com/kennygrant/sanitize"
+
 	"github.com/requilence/jobs"
 	tg "github.com/requilence/telegram-bot-api"
 	log "github.com/sirupsen/logrus"
@@ -134,7 +135,7 @@ type OutgoingMessage struct {
 	ParseMode            string         `bson:",omitempty"`
 	OneTimeKeyboard      bool           `bson:",omitempty"`
 	Selective            bool           `bson:",omitempty"`
-	ForceReply           bool           `bson:",omitempty"`  // in the private dialog assume user's message as the reply for the last message sent by the bot if bot's message has Reply handler and ForceReply set
+	ForceReply           bool           `bson:",omitempty"` // in the private dialog assume user's message as the reply for the last message sent by the bot if bot's message has Reply handler and ForceReply set
 	WebPreview           bool           `bson:",omitempty"`
 	Silent               bool           `bson:",omitempty"`
 	FilePath             string         `bson:",omitempty"`
@@ -143,7 +144,7 @@ type OutgoingMessage struct {
 	FileRemoveAfter      bool           `bson:",omitempty"`
 	SendAfter            *time.Time     `bson:",omitempty"`
 	processed            bool
-	ctx					 *Context
+	ctx                  *Context
 }
 
 // Keyboard is a Shorthand for [][]Button
@@ -963,7 +964,6 @@ func (m *OutgoingMessage) Send() error {
 		return errors.New("Text, FilePath and Location are empty")
 	}
 
-
 	if m.ctx != nil && m.ctx.messageAnsweredAt == nil {
 		n := time.Now()
 		m.ctx.messageAnsweredAt = &n
@@ -1546,11 +1546,6 @@ func sendMessage(m *OutgoingMessage) error {
 		if err != nil {
 			log.WithError(err).Error("Error outgoing inserting message in db")
 		}
-		if m.ChatID > 0 {
-			db.C("users").UpdateId(m.ChatID, bson.M{"$unset": bson.M{"botstoppedat": ""}})
-		} else {
-			db.C("chats").UpdateId(m.ChatID, bson.M{"$unset": bson.M{"botkickedat": ""}})
-		}
 
 		return nil
 	}
@@ -1598,7 +1593,10 @@ func sendMessage(m *OutgoingMessage) error {
 			db := mongoSession.Clone().DB(mongo.Database)
 			defer db.Session.Close()
 
-			db.C("users").Update(bson.M{"_id": m.ChatID, "botstoppedat": bson.M{"$exists": false}}, bson.M{"$set": bson.M{"botstoppedat": time.Now()}})
+			serviceName := bot.services[0].Name
+
+			key := "protected." + serviceName + ".botstoppedorkickedat"
+			db.C("chats").Update(bson.M{"_id": m.ChatID, key: bson.M{"$exists": false}}, bson.M{"$set": bson.M{key: time.Now()}})
 
 			log.WithField("chat", m.ChatID).WithField("bot", m.BotID).Warn("sendMessage error: Bot stopped by user")
 			if m.BackupChatID != 0 {
@@ -1651,11 +1649,14 @@ func sendMessage(m *OutgoingMessage) error {
 
 			db := mongoSession.Clone().DB(mongo.Database)
 			defer db.Session.Close()
+			serviceName := bot.services[0].Name
 			if len(bot.services) == 1 {
-				removeHooksForChat(db, bot.services[0].Name, m.ChatID)
+				removeHooksForChat(db, serviceName, m.ChatID)
 			}
 
-			db.C("chats").Update(bson.M{"_id": m.ChatID, "botkickedat": bson.M{"$exists": false}}, bson.M{"$set": bson.M{"botkickedat": time.Now()}})
+			key := "protected." + serviceName + ".botstoppedorkickedat"
+			db.C("chats").Update(bson.M{"_id": m.ChatID, key: bson.M{"$exists": false}}, bson.M{"$set": bson.M{key: time.Now()}})
+
 			log.WithField("chat", m.ChatID).WithField("bot", m.BotID).Warn("sendMessage error: Bot kicked")
 
 			return nil

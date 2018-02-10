@@ -28,7 +28,6 @@ const (
 )
 
 type stat struct {
-	//ID            string  `bson:"_id"` // service_key_day
 	Service       string  `bson:"s"`
 	DayN          uint16  `bson:"d"` // Days since unix epoch (Unix TS)/(24*60*60)
 	Key           StatKey `bson:"k"`
@@ -41,7 +40,6 @@ type stat struct {
 
 // count only once per user/chat per period
 type uniqueStat struct {
-	ID      string  `bson:"_id"` // service_day
 	Service string  `bson:"s"`
 	DayN    uint16  // Days since unix epoch (Unix TS)/(24*60*60)
 	Key     StatKey `bson:"k"`
@@ -86,7 +84,7 @@ func (c *Context) StatIncBy(key StatKey, uniqueID int64, inc int) error {
 					"u": uniqueID,
 				},
 
-				"$setOnInsert": bson.M{"expiresat": time.Unix(startOfTheDayTS+24*60*60, 0)},
+				"$setOnInsert": bson.M{"exp": time.Unix(startOfTheDayTS+24*60*60, 0)},
 			})
 
 		if err == nil && (ci.Matched > 0 || ci.UpsertedId != nil) {

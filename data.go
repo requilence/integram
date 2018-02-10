@@ -58,7 +58,6 @@ func ensureIndexes() {
 	db.C("chats_cache").EnsureIndex(mgo.Index{Key: []string{"expiresat"}, ExpireAfter: time.Second})
 	db.C("chats_cache").EnsureIndex(mgo.Index{Key: []string{"key", "chatid", "service"}, Unique: true})
 
-	db.C("stats").EnsureIndex(mgo.Index{Key: []string{"exp"}, ExpireAfter: time.Second})
 	db.C("stats").EnsureIndex(mgo.Index{Key: []string{"s","k", "d"}, Unique: true})
 
 	db.C("stats_unique").EnsureIndex(mgo.Index{Key: []string{"exp"}, ExpireAfter: time.Second})
@@ -147,7 +146,7 @@ func (c *Context) FindChat(query interface{}) (chatData, error) {
 	chat := chatData{}
 	serviceID := c.getServiceID()
 
-	err := c.db.C("chats").Find(query).Select(bson.M{"type": 1, "firstname": 1, "lastname": 1, "username": 1, "title": 1, "settings." + serviceID: 1, "keyboardperbot": 1, "tz": 1, "hooks": 1}).One(&chat)
+	err := c.db.C("chats").Find(query).Select(bson.M{"type": 1, "firstname": 1, "lastname": 1, "username": 1, "title": 1, "settings." + serviceID: 1, "protected." + serviceID: 1, "keyboardperbot": 1, "tz": 1, "deactivated":1, "hooks": 1}).One(&chat)
 	if err != nil {
 		//c.Log().WithError(err).WithField("query", query).Error("Can't find chat")
 		return chat, err
@@ -162,7 +161,7 @@ func (c *Context) FindChats(query interface{}) ([]chatData, error) {
 	chats := []chatData{}
 	serviceID := c.getServiceID()
 
-	err := c.db.C("chats").Find(query).Select(bson.M{"type": 1, "firstname": 1, "lastname": 1, "username": 1, "title": 1, "settings." + serviceID: 1, "keyboardperbot": 1, "tz": 1, "hooks": 1}).All(&chats)
+	err := c.db.C("chats").Find(query).Select(bson.M{"type": 1, "firstname": 1, "lastname": 1, "username": 1, "title": 1, "settings." + serviceID: 1, "protected." + serviceID: 1, "keyboardperbot": 1, "tz": 1, "deactivated":1, "hooks": 1}).All(&chats)
 	if err != nil {
 		//c.Log().WithError(err).WithField("query", query).Error("Can't find chat")
 		return chats, err
@@ -357,11 +356,11 @@ func (user *User) Chat() Chat {
 
 // IsPrivateStarted indicates if user started the private dialog with a bot (e.g. pressed the start button)
 func (user *User) IsPrivateStarted() bool {
-	p, _ := user.protectedSettings()
-	if p == nil {
-		return false
+	err := user.ctx.Db().C("messages").Find(bson.M{"chatid": user.ID, "botid": user.ctx.Bot().ID, "fromid": user.ID}).Select(bson.M{"_id": 1}).One(nil)
+	if err == nil{
+		return true
 	}
-	return p.PrivateStarted
+	return false
 }
 
 // SetCache set the User's cache with specific key and TTL
@@ -496,6 +495,20 @@ func (chat *Chat) getData() (*chatData, error) {
 
 }
 
+// OAuthValid checks if OAuthToken for service is set
+func (chat *Chat) BotWasKickedOrStopped() bool {
+	ps, _ := chat.protectedSettings()
+
+	if ps == nil {
+		return false
+	}
+
+	if ps.BotStoppedOrKickedAt != nil {
+		return true
+	}
+	return false
+}
+
 func (user *User) getData() (*userData, error) {
 
 	if user.ID == 0 {
@@ -562,6 +575,30 @@ func (user *User) protectedSettings() (*userProtected, error) {
 	// Not a error – just empty settings
 	return data.Protected[serviceID], err
 }
+
+func (chat *Chat) protectedSettings() (*chatProtected, error) {
+
+	data, err := chat.getData()
+
+	if err != nil {
+		return nil, err
+	}
+	//	fmt.Printf("user.getData: %+v\n%v", data, err)
+
+	serviceID := chat.ctx.getServiceID()
+
+	if data.Protected == nil {
+		data.Protected = make(map[string]*chatProtected)
+	} else if protected, ok := data.Protected[serviceID]; ok {
+		return protected, nil
+	}
+
+	data.Protected[serviceID] = &chatProtected{}
+
+	// Not a error – just empty settings
+	return data.Protected[serviceID], err
+}
+
 
 // Settings bind User's settings for service to the interface
 func (user *User) Settings(out interface{}) error {

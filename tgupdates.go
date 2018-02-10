@@ -120,7 +120,6 @@ func updateRoutine(b *Bot, u *tg.Update) {
 			context.StatIncChat(StatIncomingMessageNotAnswered)
 		}
 
-
 	} else if context.InlineQuery != nil {
 		if service.TGInlineQueryHandler == nil {
 			context.Log().Warn("Received InlineQuery but TGInlineQueryHandler not set for service")
@@ -133,7 +132,7 @@ func updateRoutine(b *Bot, u *tg.Update) {
 		if err != nil {
 			if strings.Contains(err.Error(), "QUERY_ID_INVALID") {
 				context.StatIncUser(StatInlineQueryTimeouted)
-			} else if !strings.Contains(err.Error(), "context canceled"){
+			} else if !strings.Contains(err.Error(), "context canceled") {
 				context.StatIncUser(StatInlineQueryCanceled)
 			}
 			context.Log().WithError(err).WithField("secSpent", time.Now().Sub(queryHandlerStarted).Seconds()).WithField("secSpentSinceUpdate", time.Now().Sub(updateReceivedAt).Seconds()).Error("BotUpdateHandler InlineQuery error")
@@ -537,7 +536,6 @@ func tgIncomingMessageHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service,
 	im.BotID = b.ID
 
 	service, err := detectServiceByBot(b.ID)
-	//fmt.Printf("detectService: %+v\n", service)
 
 	if err != nil {
 		log.WithError(err).WithField("bot", b.ID).Error("Can't detect service")
@@ -636,17 +634,12 @@ func tgIncomingMessageHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service,
 
 	}
 
-	// update PrivateStarted in case we received private message from user
-	if ctx != nil && ctx.Message != nil && ctx.Message.ChatID == ctx.User.ID {
-		protected, err := ctx.User.protectedSettings()
-		if err != nil {
-			log.WithError(err).Error("tgIncomingMessageHandler protectedSettings error")
-		} else {
-			if !protected.PrivateStarted {
-				protected.PrivateStarted = true
-				ctx.User.saveProtectedSettings()
-			}
-		}
+	// unset botstoppedorkickedat in case it was previosly set
+	// E.g. bot was stopped by user and now restarted
+	// Or it was kicked from a group chat and now it is invited again
+	if ctx != nil && ctx.Message != nil {
+		key := "protected." + ctx.ServiceName + ".botstoppedorkickedat"
+		ctx.Db().C("chats").Update(bson.M{"_id": ctx.Chat.ID, key: bson.M{"$exists": true}}, bson.M{"$unset": bson.M{key: ""}})
 	}
 
 	return service, ctx
@@ -706,12 +699,8 @@ func tgUpdateHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service, *Context
 			log.Infof("Group %v migrated to supergroup %v", u.Message.Chat.ID, u.Message.MigrateToChatID)
 			migrateToSuperGroup(db, u.Message.Chat.ID, u.Message.MigrateToChatID)
 			return nil, nil
-		} else {
-			//todo: need optimization
-			if u.Message.Chat.IsGroup() || u.Message.Chat.IsSuperGroup() {
-				db.C("chats").UpdateId(u.Message.Chat.ID, bson.M{"$unset": bson.M{"botkickedat": ""}, "$addToSet": bson.M{"membersids": u.Message.From.ID}})
-			}
 		}
+
 		return tgIncomingMessageHandler(u, b, db)
 	} else if u.CallbackQuery != nil {
 		if u.CallbackQuery.Message != nil && (u.CallbackQuery.Message.Chat.IsGroup() || u.CallbackQuery.Message.Chat.IsSuperGroup()) {

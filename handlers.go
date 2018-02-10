@@ -22,12 +22,12 @@ import (
 	nativeurl "net/url"
 
 	"bytes"
-	"sync"
-	"os"
-	"html/template"
-	"os/signal"
-	"syscall"
 	"github.com/requilence/jobs"
+	"html/template"
+	"os"
+	"os/signal"
+	"sync"
+	"syscall"
 )
 
 var startedAt time.Time
@@ -312,6 +312,7 @@ func (s *Service) TriggerEventHandler(queryChat bool, bsonQuery map[string]inter
 	defer db.Session.Close()
 
 	ctx := &Context{db: db, ServiceName: s.Name}
+	atLeastOneWasHandled := false
 
 	if queryChat {
 		chats, err := ctx.FindChats(bsonQuery)
@@ -319,13 +320,17 @@ func (s *Service) TriggerEventHandler(queryChat bool, bsonQuery map[string]inter
 		if err != nil {
 			s.Log().WithError(err).Error("FindChats error")
 		}
-
 		for _, chat := range chats {
+			if chat.Deactivated || chat.BotWasKickedOrStopped() {
+				continue
+			}
 			ctx.Chat = chat.Chat
 			err := s.EventHandler(ctx, data)
 
 			if err != nil {
 				ctx.Log().WithError(err).Error("EventHandler returned error")
+			} else {
+				atLeastOneWasHandled = true
 			}
 		}
 	} else {
@@ -343,9 +348,14 @@ func (s *Service) TriggerEventHandler(queryChat bool, bsonQuery map[string]inter
 
 			if err != nil {
 				ctx.Log().WithError(err).Error("EventHandler returned error")
+			} else {
+				atLeastOneWasHandled = true
 			}
-			//hooks=append(hooks, serviceHook{Token: token, Services: []string{"gmail"}, Chats: []int64{user.ID}})
 		}
+	}
+
+	if !atLeastOneWasHandled {
+		return errors.New("No single chat was handled")
 	}
 	return nil
 }
@@ -484,8 +494,6 @@ func serviceHookHandler(c *gin.Context) {
 	// if service has its own TokenHandler use it to resolve the URL query and get the user/chat db Query
 	if s != nil && s.TokenHandler != nil {
 
-		ctx.ServiceName = s.Name
-
 		if c.Request.Method == "HEAD" {
 			c.Status(http.StatusNoContent)
 			return
@@ -516,6 +524,9 @@ func serviceHookHandler(c *gin.Context) {
 			}
 
 			for _, chat := range chats {
+				if chat.Deactivated || chat.BotWasKickedOrStopped() {
+					continue
+				}
 				ctxCopy := *ctx
 				ctxCopy.Chat = chat.Chat
 				ctxCopy.Chat.ctx = &ctxCopy
@@ -566,6 +577,7 @@ func serviceHookHandler(c *gin.Context) {
 			}
 
 		}
+		c.AbortWithStatus(http.StatusAccepted)
 
 	} else if webhookToken[0:1] == "u" {
 		// Here is some trick
@@ -628,18 +640,15 @@ func serviceHookHandler(c *gin.Context) {
 
 		if !(err == nil && chat.ID != 0) {
 
-			err := errors.New("Unknown chat token")
-			c.AbortWithError(http.StatusNotFound, err)
+			c.String(http.StatusNotFound, "Сhat not found")
 
 			return
 		} else if chat.Deactivated {
-			err := errors.New("TG chat was deactivated")
-			c.AbortWithError(http.StatusGone, err)
+			c.String(http.StatusGone, "TG chat was deactivated")
 
 			return
-		} else if chat.BotKickedAt != nil {
-			err := errors.New("Bot was kicked from the TG chat")
-			c.AbortWithError(http.StatusGone, err)
+		} else if chat.BotWasKickedOrStopped() {
+			c.String(http.StatusGone, "Bot was kicked or stopped in the TG chat")
 
 			return
 		} else {
@@ -657,7 +666,7 @@ func serviceHookHandler(c *gin.Context) {
 		ctx.Chat = chat.Chat
 		ctx.Chat.ctx = ctx
 	} else {
-		c.AbortWithError(http.StatusNotFound, nil)
+		c.String(http.StatusNotFound, "Unknown token format")
 		return
 	}
 	atLeastOneChatProcessedWithoutErrors := false
@@ -699,15 +708,12 @@ func serviceHookHandler(c *gin.Context) {
 					ctxCopy := *ctx
 					ctxCopy.Chat = Chat{ID: chatID, ctx: &ctxCopy}
 
-					if chatID < 0 {
-						if data, _ := ctxCopy.Chat.getData(); data != nil && (data.Deactivated || data.BotKickedAt != nil) {
-
+					if ctx.Chat.ID == chatID {
+						if ctx.Chat.BotWasKickedOrStopped() || ctx.Chat.data.Deactivated {
 							continue
 						}
-					} else {
-						if data, _ := ctxCopy.User.getData(); data != nil && (data.BotStoppedAt != nil) {
-							continue
-						}
+					} else if d, _ := ctxCopy.Chat.getData(); d != nil && (d.BotWasKickedOrStopped() || d.Deactivated) {
+						continue
 					}
 					err := s.WebhookHandler(&ctxCopy, wctx)
 
