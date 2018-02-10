@@ -276,7 +276,7 @@ func webPreviewHandler(c *gin.Context, token string) {
 	err := db.C("previews").Find(bson.M{"_id": token}).One(&wp)
 
 	if err != nil {
-		c.AbortWithError(http.StatusNotFound, errors.New("Not found"))
+		c.String(http.StatusNotFound, "Not found")
 		return
 	}
 
@@ -534,10 +534,14 @@ func serviceHookHandler(c *gin.Context) {
 
 				if err != nil {
 					ctxCopy.StatIncChat(StatWebhookProcessingError)
-					ctx.Log().WithFields(log.Fields{"token": webhookToken}).WithError(err).Error("WebhookHandler returned error")
 					if err == ErrorFlood {
 						c.String(http.StatusTooManyRequests, err.Error())
 						return
+					} else if strings.HasPrefix(err.Error(), ErrorBadRequstPrefix) {
+						c.String(http.StatusBadRequest, err.Error())
+						return
+					} else {
+						ctx.Log().WithFields(log.Fields{"token": webhookToken}).WithError(err).Error("WebhookHandler returned error")
 					}
 				} else {
 					ctxCopy.StatIncChat(StatWebhookHandled)
@@ -566,10 +570,14 @@ func serviceHookHandler(c *gin.Context) {
 				if err != nil {
 					ctxCopy.StatIncUser(StatWebhookProcessingError)
 
-					ctx.Log().WithFields(log.Fields{"token": webhookToken}).WithError(err).Error("WebhookHandler returned error")
 					if err == ErrorFlood {
 						c.String(http.StatusTooManyRequests, err.Error())
 						return
+					} else if strings.HasPrefix(err.Error(), ErrorBadRequstPrefix) {
+						c.String(http.StatusBadRequest, err.Error())
+						return
+					} else {
+						ctxCopy.Log().WithFields(log.Fields{"token": webhookToken}).WithError(err).Error("WebhookHandler returned error")
 					}
 				} else {
 					ctxCopy.StatIncUser(StatWebhookHandled)
@@ -591,10 +599,7 @@ func serviceHookHandler(c *gin.Context) {
 		// todo: improve this part
 
 		if !(err == nil && user.ID != 0) {
-			err := errors.New("Unknown user token")
-			log.WithFields(log.Fields{"token": webhookToken}).Warn(err)
-
-			c.AbortWithError(http.StatusNotFound, err)
+			c.String(http.StatusNotFound, "Unknown user token")
 			return
 		} else {
 			if c.Request.Method == "GET" {
@@ -723,7 +728,7 @@ func serviceHookHandler(c *gin.Context) {
 				} else {
 					// Some services(f.e. Trello) removes webhook after received 410 HTTP Gone
 					// In this case we can safely answer 410 code because we know that DB is up (token was found)
-					c.AbortWithError(http.StatusGone, errors.New("No TG chats associated with this webhook URL"))
+					c.String(http.StatusGone, "No TG chats associated with this webhook URL")
 					return
 				}
 			}
@@ -744,10 +749,14 @@ func serviceHookHandler(c *gin.Context) {
 				err := s.WebhookHandler(&ctxCopy, wctx)
 
 				if err != nil {
-					ctxCopy.Log().WithFields(log.Fields{"token": webhookToken}).WithError(err).Error("WebhookHandler returned error")
 					if err == ErrorFlood {
-						c.AbortWithError(http.StatusTooManyRequests, err)
+						c.String(http.StatusTooManyRequests, err.Error())
 						return
+					} else if strings.HasPrefix(err.Error(), ErrorBadRequstPrefix) {
+						c.String(http.StatusBadRequest, err.Error())
+						return
+					} else {
+						ctxCopy.Log().WithFields(log.Fields{"token": webhookToken}).WithError(err).Error("WebhookHandler returned error")
 					}
 				} else {
 
@@ -867,7 +876,7 @@ func oAuthCallback(c *gin.Context, oauthProviderID string) {
 		err := errors.New("Unknown auth token")
 
 		log.WithFields(log.Fields{"token": authTempID}).Error(err)
-		c.AbortWithError(http.StatusForbidden, errors.New("can't find user"))
+		c.String(http.StatusForbidden, "This OAuth is not associated with any user")
 		return
 	}
 

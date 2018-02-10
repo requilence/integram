@@ -879,6 +879,7 @@ type scheduleMessageSender struct{}
 var activeMessageSender = messageSender(scheduleMessageSender{})
 
 var ErrorFlood = fmt.Errorf("Too many messages. You could not send the same message more than once per %d sec. The number of messages sent to chat must not exceed %d in %d sec", antiFloodTimeout, antiFloodChatLimit, antiFloodChatDuration)
+var ErrorBadRequstPrefix = "Can't process your request: "
 
 func (t scheduleMessageSender) Send(m *OutgoingMessage) error {
 	if m.processed {
