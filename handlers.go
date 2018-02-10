@@ -672,80 +672,106 @@ func serviceHookHandler(c *gin.Context) {
 	atLeastOneChatProcessedWithoutErrors := false
 
 	for _, hook := range hooks {
-		if hook.Token == webhookToken {
-			if len(hook.Services) > 1 {
-				ctx.Log().Errorf("Deprecated multi-service hook")
-			}
-			for _, serviceName := range hook.Services {
-				s, _ := serviceByName(serviceName)
+		if hook.Token != webhookToken {
+			continue
+		}
 
-				if s == nil {
-					continue
+		if len(hook.Services) > 1 && Config.IsMainInstance() {
+			if s == nil {
+				sName := ""
+
+				// temp hack for deprecated multi-service webhooks
+				if c.Request.Header.Get("X-Event-Key") != "" {
+					sName = "bitbucket"
+				} else if c.Request.Header.Get("X-Gitlab-Event") != "" {
+					sName = "gitlab"
+				} else if c.Request.Header.Get("X-GitHub-Event") != "" {
+					sName = "github"
+				} else {
+					sName = "webhook"
 				}
 
-				if Config.IsMainInstance() {
-					proxy := reverseProxyForService(serviceName)
-					proxy.ServeHTTP(c.Writer, c.Request)
+				ctx.Log().Errorf("Deprecated multi-service hook: detected %s", sName)
+				s, _ = serviceByName(sName)
+
+			}
+		}
+
+		for _, serviceName := range hook.Services {
+			// in case this requests contains serviceMame skip the others
+			if s != nil && s.Name != serviceName {
+				continue
+			}
+
+			s, _ = serviceByName(serviceName)
+
+			if s == nil {
+				continue
+			}
+
+			if Config.IsMainInstance() {
+				proxy := reverseProxyForService(serviceName)
+				proxy.ServeHTTP(c.Writer, c.Request)
+				return
+			}
+
+			ctx.ServiceName = serviceName
+
+			if len(hook.Chats) == 0 {
+				if ctx.Chat.ID != 0 {
+					hook.Chats = []int64{ctx.Chat.ID}
+				} else {
+					// Some services(f.e. Trello) removes webhook after received 410 HTTP Gone
+					// In this case we can safely answer 410 code because we know that DB is up (token was found)
+					c.AbortWithError(http.StatusGone, errors.New("No TG chats associated with this webhook URL"))
 					return
 				}
+			}
 
-				ctx.ServiceName = serviceName
+			// todo: if bot kicked or stopped in all chats – need to remove the webhook?
 
-				if len(hook.Chats) == 0 {
-					if ctx.Chat.ID != 0 {
-						hook.Chats = []int64{ctx.Chat.ID}
-					} else {
-						// Some services(f.e. Trello) removes webhook after received 410 HTTP Gone
-						// In this case we can safely answer 410 code because we know that DB is up (token was found)
-						c.AbortWithError(http.StatusGone, errors.New("No TG chats associated with this webhook URL"))
-						return
-					}
-				}
+			for _, chatID := range hook.Chats {
+				ctxCopy := *ctx
+				ctxCopy.Chat = Chat{ID: chatID, ctx: &ctxCopy}
 
-				// todo: if bot kicked or stopped in all chats – need to remove the webhook?
-
-				for _, chatID := range hook.Chats {
-					ctxCopy := *ctx
-					ctxCopy.Chat = Chat{ID: chatID, ctx: &ctxCopy}
-
-					if ctx.Chat.ID == chatID {
-						if ctx.Chat.BotWasKickedOrStopped() || ctx.Chat.data.Deactivated {
-							continue
-						}
-					} else if d, _ := ctxCopy.Chat.getData(); d != nil && (d.BotWasKickedOrStopped() || d.Deactivated) {
+				if ctx.Chat.ID == chatID {
+					if ctx.Chat.BotWasKickedOrStopped() || ctx.Chat.data.Deactivated {
 						continue
 					}
-					err := s.WebhookHandler(&ctxCopy, wctx)
+				} else if d, _ := ctxCopy.Chat.getData(); d != nil && (d.BotWasKickedOrStopped() || d.Deactivated) {
+					continue
+				}
+				err := s.WebhookHandler(&ctxCopy, wctx)
 
-					if err != nil {
-						ctxCopy.Log().WithFields(log.Fields{"token": webhookToken}).WithError(err).Error("WebhookHandler returned error")
-						if err == ErrorFlood {
-							c.AbortWithError(http.StatusTooManyRequests, err)
-							return
-						}
-					} else {
-
-						if ctxCopy.messageAnsweredAt != nil {
-							ctxCopy.StatIncChat(StatWebhookProducedMessageToChat)
-						}
-						atLeastOneChatProcessedWithoutErrors = true
+				if err != nil {
+					ctxCopy.Log().WithFields(log.Fields{"token": webhookToken}).WithError(err).Error("WebhookHandler returned error")
+					if err == ErrorFlood {
+						c.AbortWithError(http.StatusTooManyRequests, err)
+						return
 					}
+				} else {
+
+					if ctxCopy.messageAnsweredAt != nil {
+						ctxCopy.StatIncChat(StatWebhookProducedMessageToChat)
+					}
+					atLeastOneChatProcessedWithoutErrors = true
 				}
 			}
-
-			if atLeastOneChatProcessedWithoutErrors {
-				ctx.StatIncUser(StatWebhookHandled)
-				c.AbortWithStatus(200)
-			} else {
-				ctx.StatIncUser(StatWebhookProcessingError)
-				log.WithField("token", webhookToken).Warn("Hook not handled")
-
-				// need to answer 2xx otherwise we webhook will be retried and the error will reappear
-				// todo: maybe throw 500 if error because of DB fault etc.
-				c.AbortWithStatus(http.StatusAccepted)
-			}
-			return
 		}
+
+		if atLeastOneChatProcessedWithoutErrors {
+			ctx.StatIncUser(StatWebhookHandled)
+			c.AbortWithStatus(200)
+		} else {
+			ctx.StatIncUser(StatWebhookProcessingError)
+			log.WithField("token", webhookToken).Warn("Hook not handled")
+
+			// need to answer 2xx otherwise we webhook will be retried and the error will reappear
+			// todo: maybe throw 500 if error because of DB fault etc.
+			c.AbortWithStatus(http.StatusAccepted)
+		}
+		return
+
 	}
 	c.AbortWithError(404, errors.New("No hooks"))
 }
