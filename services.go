@@ -431,7 +431,7 @@ func Register(servicer Servicer, botToken string) {
 
 				jobType, err := jobs.RegisterTypeWithPoolKey(jobNameOld, "_"+service.Name, job.Retries, job.HandlerFunc)
 				if err != nil {
-					panic(err)
+					service.Log().WithError(err).Error("RegisterTypeWithPoolKey JobOldPrefix")
 				} else {
 					jobsPerService[service.Name][jobNameOld] = jobType
 				}
