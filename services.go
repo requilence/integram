@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 	"os"
+	"strings"
 )
 
 const standAloneServicesFileName = "standAloneServices.json"
@@ -55,6 +56,7 @@ type Service struct {
 
 	JobsPool int // Worker pool to be created for service. Default to 1 worker. Workers will be inited only if jobs types are available
 
+	JobOldPrefix 	string
 	Jobs []Job // Job types that can be scheduled
 
 	Modules []Module // you can inject modules and use it across different services
@@ -415,11 +417,24 @@ func Register(servicer Servicer, botToken string) {
 			gob.Register(m)
 
 			jobName := getFuncName(job.HandlerFunc)
+
 			jobType, err := jobs.RegisterTypeWithPoolKey(jobName, "_"+service.Name, job.Retries, job.HandlerFunc)
 			if err != nil {
 				panic(err)
 			} else {
 				jobsPerService[service.Name][jobName] = jobType
+			}
+
+			if service.JobOldPrefix != "" {
+				p := strings.Split(jobName, ".")
+				jobNameOld := service.JobOldPrefix+"."+p[1]
+
+				jobType, err := jobs.RegisterTypeWithPoolKey(jobNameOld, "_"+service.Name, job.Retries, job.HandlerFunc)
+				if err != nil {
+					panic(err)
+				} else {
+					jobsPerService[service.Name][jobNameOld] = jobType
+				}
 			}
 		}
 		go func(pool *jobs.Pool, service *Service) {
