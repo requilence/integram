@@ -586,7 +586,7 @@ func serviceHookHandler(c *gin.Context) {
 
 		}
 		c.AbortWithStatus(http.StatusAccepted)
-
+		return
 	} else if webhookToken[0:1] == "u" {
 		// Here is some trick
 		// If token starts with u - this is notification with TG User behavior (id >0)
