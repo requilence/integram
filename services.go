@@ -427,7 +427,8 @@ func Register(servicer Servicer, botToken string) {
 
 			if service.JobOldPrefix != "" {
 				p := strings.Split(jobName, ".")
-				jobNameOld := service.JobOldPrefix+"."+p[1]
+
+				jobNameOld := service.JobOldPrefix+"."+p[len(p)-1]
 
 				jobType, err := jobs.RegisterTypeWithPoolKey(jobNameOld, "_"+service.Name, job.Retries, job.HandlerFunc)
 				if err != nil {
