@@ -557,7 +557,7 @@ func (s *Service) SheduleJob(handlerFunc interface{}, priority int, time time.Ti
 
 // EmptyContext returns context on behalf of service without user/chat relation
 func (s *Service) EmptyContext() *Context {
-	db := mongoSession.DB(mongo.Database)
+	db := mongoSession.Clone().DB(mongo.Database)
 
 	ctx := &Context{db: db, ServiceName: s.Name}
 	return ctx
