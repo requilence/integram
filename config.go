@@ -26,6 +26,7 @@ type config struct {
 	BaseURL      string `envconfig:"INTEGRAM_BASE_URL" required:"true"`
 	InstanceMode Mode   `envconfig:"INTEGRAM_INSTANCE_MODE" default:"single"` // please refer to the constants declaration
 
+	TGPoolBatchSize int   `envconfig:"INTEGRAM_TG_POOL_BATCH_SIZE" default:"100"` // Maximum simultaneously message sending
 	TGPool         int    `envconfig:"INTEGRAM_TG_POOL" default:"10"` // Maximum simultaneously message sending
 	MongoURL       string `envconfig:"INTEGRAM_MONGO_URL" default:"mongodb://localhost:27017/integram"`
 	RedisURL       string `envconfig:"INTEGRAM_REDIS_URL" default:"127.0.0.1:6379"`
@@ -34,6 +35,7 @@ type config struct {
 	MongoLogging   bool   `envconfig:"INTEGRAM_MONGO_LOGGING" default:"0"`
 	MongoStatistic bool   `envconfig:"INTEGRAM_MONGO_STATISTIC" default:"0"`
 	ConfigDir      string `envconfig:"INTEGRAM_CONFIG_DIR" default:"./.conf"` // default is $GOPATH/.conf
+
 
 	// -----
 	// only make sense for InstanceModeMultiProcessService

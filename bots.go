@@ -1086,7 +1086,7 @@ func initBots() error {
 		tgPool, err = jobs.NewPool(&jobs.PoolConfig{
 			Key:        "_telegram",
 			NumWorkers: Config.TGPool,
-			BatchSize:  100,
+			BatchSize:  Config.TGPoolBatchSize,
 		})
 
 		if err != nil {
