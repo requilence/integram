@@ -1459,7 +1459,13 @@ func sendMessage(m *OutgoingMessage) error {
 	var tgMsg tg.Message
 	var rescheduled bool
 	if m.FilePath != "" {
+		if _, err := os.Stat(m.FilePath); os.IsNotExist(err) {
+			log.Errorf("Can't send message with attachment, file not exists: %s", m.FilePath)
+			return nil
+		}
+
 		if m.FileType == "image" {
+
 			msg := tg.NewPhotoUpload(m.ChatID, m.FilePath)
 			msg.FileName = m.FileName
 			msg.Caption = m.Text
