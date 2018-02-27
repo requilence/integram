@@ -999,21 +999,25 @@ func (user *User) OAuthHTTPClient() *http.Client {
 		ts := user.ctx.OAuthProvider().OAuth2Client(user.ctx).TokenSource(oauth2.NoContext, &oauth2.Token{AccessToken: ps.OAuthToken, RefreshToken: ps.OAuthRefreshToken, Expiry: *ps.OAuthExpireDate, TokenType: "Bearer"})
 		if ps.OAuthExpireDate != nil && ps.OAuthExpireDate.Before(time.Now().Add(time.Second*5)) {
 			token, err := ts.Token()
-			if err != nil || token == nil {
+			if err != nil {
 				if strings.Contains(err.Error(), "revoked") {
 					ps.OAuthToken = ""
 					ps.OAuthExpireDate = nil
 					user.saveProtectedSettings()
+					//todo: provide revoked callback
 				}
 				user.ctx.Log().WithError(err).Error("OAuth token refresh failed")
 				return nil
 			}
-			ps.OAuthToken = token.AccessToken
-			if token.RefreshToken != "" {
-				ps.OAuthRefreshToken = token.RefreshToken
+
+			if token != nil {
+				ps.OAuthToken = token.AccessToken
+				if token.RefreshToken != "" {
+					ps.OAuthRefreshToken = token.RefreshToken
+				}
+				ps.OAuthExpireDate = &token.Expiry
+				user.saveProtectedSettings()
 			}
-			ps.OAuthExpireDate = &token.Expiry
-			user.saveProtectedSettings()
 		}
 		return oauth2.NewClient(oauth2.NoContext, ts)
 	} else if user.ctx.Service().DefaultOAuth1 != nil {
@@ -1052,16 +1056,28 @@ func (user *User) OAuthToken() string {
 	if ps != nil {
 		if ps.OAuthExpireDate != nil && ps.OAuthExpireDate.Before(time.Now().Add(time.Second*5)) {
 			token, err := user.ctx.OAuthProvider().OAuth2Client(user.ctx).TokenSource(oauth2.NoContext, &oauth2.Token{AccessToken: ps.OAuthToken, Expiry: *ps.OAuthExpireDate, RefreshToken: ps.OAuthRefreshToken}).Token()
+
 			if err != nil {
+				if strings.Contains(err.Error(), "revoked") {
+					//remove stored OAuthToken
+					//todo: provide revoked callback
+					ps.OAuthToken = ""
+					ps.OAuthExpireDate = nil
+					user.saveProtectedSettings()
+				}
 				user.ctx.Log().WithError(err).Error("OAuth token refresh failed")
 				return ""
 			}
-			ps.OAuthToken = token.AccessToken
-			if token.RefreshToken != "" {
-				ps.OAuthRefreshToken = token.RefreshToken
+
+			if token != nil {
+				ps.OAuthToken = token.AccessToken
+				if token.RefreshToken != "" {
+					ps.OAuthRefreshToken = token.RefreshToken
+				}
+				ps.OAuthExpireDate = &token.Expiry
+				user.saveProtectedSettings()
+
 			}
-			ps.OAuthExpireDate = &token.Expiry
-			user.saveProtectedSettings()
 
 		}
 		return ps.OAuthToken
