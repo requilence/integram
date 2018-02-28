@@ -11,7 +11,6 @@ import (
 	"github.com/vova616/xxhash"
 	"io/ioutil"
 	"math/rand"
-	"reflect"
 	"regexp"
 	"runtime"
 	"strings"
@@ -171,9 +170,6 @@ func URLMustParse(s string) *url.URL {
 	return u
 }
 
-func getFuncName(i interface{}) string {
-	return runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name()
-}
 
 func getBaseURL(s string) (*url.URL, error) {
 	u, err := url.Parse(s)

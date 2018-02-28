@@ -771,14 +771,14 @@ func (m *OutgoingMessage) SetReplyAction(handlerFunc interface{}, args ...interf
 // SetCallbackAction sets the reply func that will be called when user reply the message
 // !!! Please note that you must omit first arg *integram.Context, because it will be automatically prepended as message reply received and will contain actual context
 func (m *Message) SetCallbackAction(handlerFunc interface{}, args ...interface{}) *Message {
-	funcName := runtime.FuncForPC(reflect.ValueOf(handlerFunc).Pointer()).Name()
+	service, err := detectServiceByBot(m.BotID)
 
-	if _, ok := actionFuncs[funcName]; !ok {
-		log.Panic(errors.New("Action for '" + funcName + "' not registred in service's configuration!"))
-		return m
+	if err != nil {
+		log.WithError(err).Errorf("SetCallbackAction detectServiceByBot")
 	}
+	funcName := getShortServiceFuncName(service.Name, handlerFunc)
 
-	err := verifyTypeMatching(handlerFunc, args...)
+	err = verifyTypeMatching(handlerFunc, args...)
 
 	if err != nil {
 		log.WithError(err).Error("Can't verify onCallback args for " + funcName + ". Be sure to omit first arg of type '*integram.Context'")
@@ -801,14 +801,19 @@ func (m *Message) SetCallbackAction(handlerFunc interface{}, args ...interface{}
 // SetReplyAction sets the reply func that will be called when user reply the message
 // !!! Please note that you must omit first arg *integram.Context, because it will be automatically prepended as message reply received and will contain actual context
 func (m *Message) SetReplyAction(handlerFunc interface{}, args ...interface{}) *Message {
-	funcName := runtime.FuncForPC(reflect.ValueOf(handlerFunc).Pointer()).Name()
+	service, err := detectServiceByBot(m.BotID)
+
+	if err != nil {
+		log.WithError(err).Errorf("SetReplyAction detectServiceByBot")
+	}
+	funcName := getShortServiceFuncName(service.Name, handlerFunc)
 
 	if _, ok := actionFuncs[funcName]; !ok {
 		log.Panic(errors.New("Action for '" + funcName + "' not registred in service's configuration!"))
 		return m
 	}
 
-	err := verifyTypeMatching(handlerFunc, args...)
+	err = verifyTypeMatching(handlerFunc, args...)
 
 	if err != nil {
 		log.WithError(err).Error("Can't verify onReply args for " + funcName + ". Be sure to omit first arg of type '*integram.Context'")

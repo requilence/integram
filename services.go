@@ -349,6 +349,33 @@ func saveStandAloneServicesToFile() error {
 	return ioutil.WriteFile(Config.ConfigDir + string(os.PathSeparator) + standAloneServicesFileName, jsonData, 0655)
 }
 
+func trimFuncPath(serviceName string, fullPath string) string{
+	// Trim funcPath for a specific service name
+	// trello, github.com/requilence/integram/services/trello.cardReplied -> trello.cardReplied
+	// trello, github.com/requilence/integram/services/Trello.cardReplied -> Trello.cardReplied
+	// trello, github.com/requilence/integram/services/unknown.cardReplied -> github.com/requilence/integram/services/unknown.cardReplied
+	// trello, github.com/requilence/integram/services/trello/another.action -> trello/another.action
+	// _/var/integram/trello.cardReplied -> trello.cardReplied
+	// trello.cardReplied -> trello.cardReplied
+
+	serviceName = strings.ToLower(serviceName)
+	index := strings.LastIndex(strings.ToLower(fullPath), "/"+serviceName+".")
+
+	if index == -1 {
+		index = strings.LastIndex(strings.ToLower(fullPath), "/"+serviceName+"/")
+	}
+
+	if index == -1 {
+		return fullPath
+	}
+	return fullPath[index+1:]
+}
+
+func getShortServiceFuncName(serviceName string, actionFunc interface{}) string {
+	fullPath := runtime.FuncForPC(reflect.ValueOf(actionFunc).Pointer()).Name()
+	return trimFuncPath(serviceName, fullPath)
+}
+
 // Register the service's config and corresponding botToken
 func Register(servicer Servicer, botToken string) {
 	//jobs.Config.Db.Address="192.168.1.101:6379"
@@ -397,6 +424,13 @@ func Register(servicer Servicer, botToken string) {
 			})
 		}
 
+		if len(service.Modules) > 0 {
+			for _, module := range service.Modules {
+				service.Actions = append(service.Actions, module.Actions...)
+				service.Jobs = append(service.Jobs, module.Jobs...)
+			}
+		}
+
 		for _, job := range service.Jobs {
 			handlerType := reflect.TypeOf(job.HandlerFunc)
 			m := make([]interface{}, handlerType.NumIn())
@@ -416,7 +450,7 @@ func Register(servicer Servicer, botToken string) {
 			}
 			gob.Register(m)
 
-			jobName := getFuncName(job.HandlerFunc)
+			jobName := getShortServiceFuncName(service.Name, job.HandlerFunc)
 
 			jobType, err := jobs.RegisterTypeWithPoolKey(jobName, "_"+service.Name, job.Retries, job.HandlerFunc)
 			if err != nil {
@@ -425,18 +459,6 @@ func Register(servicer Servicer, botToken string) {
 				jobsPerService[service.Name][jobName] = jobType
 			}
 
-			if service.JobOldPrefix != "" {
-				p := strings.Split(jobName, ".")
-
-				jobNameOld := service.JobOldPrefix+"."+p[len(p)-1]
-
-				jobType, err := jobs.RegisterTypeWithPoolKey(jobNameOld, "_"+service.Name, job.Retries, job.HandlerFunc)
-				if err != nil {
-					service.Log().WithError(err).Error("RegisterTypeWithPoolKey JobOldPrefix")
-				} else {
-					jobsPerService[service.Name][jobNameOld] = jobType
-				}
-			}
 		}
 		go func(pool *jobs.Pool, service *Service) {
 			time.Sleep(time.Second * 5)
@@ -450,13 +472,6 @@ func Register(servicer Servicer, botToken string) {
 
 		}(pool, service)
 
-	}
-
-	if len(service.Modules) > 0 {
-		for _, module := range service.Modules {
-			service.Actions = append(service.Actions, module.Actions...)
-			service.Jobs = append(service.Jobs, module.Jobs...)
-		}
 	}
 
 	if len(service.Actions) > 0 {
@@ -473,7 +488,7 @@ func Register(servicer Servicer, botToken string) {
 				gob.Register(reflect.Zero(argType).Interface())
 			}
 			gob.Register(m)
-			actionFuncs[runtime.FuncForPC(reflect.ValueOf(actionFunc).Pointer()).Name()] = actionFunc
+			actionFuncs[getShortServiceFuncName(service.Name, actionFunc)] = actionFunc
 		}
 	}
 	if botToken == "" {
@@ -547,7 +562,7 @@ func (s *Service) DoJob(handlerFunc interface{}, data ...interface{}) (*jobs.Job
 // SheduleJob schedules the job for specific time with specific priority. The job must be registred in Service's config (Jobs field). Arguments must be identically types with hudlerFunc's input args
 func (s *Service) SheduleJob(handlerFunc interface{}, priority int, time time.Time, data ...interface{}) (*jobs.Job, error) {
 	if jobsPerName, ok := jobsPerService[s.Name]; ok {
-		if jobType, ok := jobsPerName[getFuncName(handlerFunc)]; ok {
+		if jobType, ok := jobsPerName[getShortServiceFuncName(s.Name, handlerFunc)]; ok {
 			return jobType.Schedule(priority, time, data...)
 		}
 		panic("SheduleJob: Job type not found")

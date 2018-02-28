@@ -371,7 +371,7 @@ func tgCallbackHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service, *Conte
 		if rm.OnCallbackAction != "" {
 			log.Debugf("CallbackAction found %s", rm.OnCallbackAction)
 			// Instantiate a new variable to hold this argument
-			if handler, ok := actionFuncs[rm.OnCallbackAction]; ok {
+			if handler, ok := actionFuncs[trimFuncPath(service.Name, rm.OnCallbackAction)]; ok {
 				handlerType := reflect.TypeOf(handler)
 				log.Debugf("handler %v: %v %v\n", rm.OnCallbackAction, handlerType.String(), handlerType.Kind().String())
 				handlerArgsInterfaces := make([]interface{}, handlerType.NumIn()-1)
@@ -405,7 +405,7 @@ func tgCallbackHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service, *Conte
 					}
 				}
 			} else {
-				ctx.Log().WithField("handler", rm.OnCallbackAction).Error("Reply handler not registered")
+				ctx.Log().WithField("handler", rm.OnCallbackAction).Error("Callback handler not registered")
 			}
 
 		}
@@ -597,8 +597,8 @@ func tgIncomingMessageHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service,
 		// TODO: detect service by ReplyHandler
 		if rm.OnReplyAction != "" {
 			log.Debugf("ReplyHandler found %s", rm.OnReplyAction)
-			// Instantiate a new variable to hold this argument
-			if handler, ok := actionFuncs[rm.OnReplyAction]; ok {
+
+			if handler, ok := actionFuncs[trimFuncPath(service.Name, rm.OnReplyAction)]; ok {
 				handlerType := reflect.TypeOf(handler)
 				log.Debugf("handler %v: %v %v\n", rm.OnReplyAction, handlerType.String(), handlerType.Kind().String())
 				handlerArgsInterfaces := make([]interface{}, handlerType.NumIn()-1)
