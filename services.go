@@ -95,6 +95,8 @@ type Service struct {
 	UseWebhookInsteadOfLongPolling bool
 
 	machineURL string // in case of multi-instance mode URL is used to talk with the service
+
+	rootPackagePath string
 }
 
 const (
@@ -349,31 +351,40 @@ func saveStandAloneServicesToFile() error {
 	return ioutil.WriteFile(Config.ConfigDir + string(os.PathSeparator) + standAloneServicesFileName, jsonData, 0655)
 }
 
-func trimFuncPath(serviceName string, fullPath string) string{
-	// Trim funcPath for a specific service name
-	// trello, github.com/requilence/integram/services/trello.cardReplied -> trello.cardReplied
-	// trello, github.com/requilence/integram/services/Trello.cardReplied -> Trello.cardReplied
-	// trello, github.com/requilence/integram/services/unknown.cardReplied -> github.com/requilence/integram/services/unknown.cardReplied
-	// trello, github.com/requilence/integram/services/trello/another.action -> trello/another.action
-	// _/var/integram/trello.cardReplied -> trello.cardReplied
-	// trello.cardReplied -> trello.cardReplied
-
-	serviceName = strings.ToLower(serviceName)
-	index := strings.LastIndex(strings.ToLower(fullPath), "/"+serviceName+".")
-
-	if index == -1 {
-		index = strings.LastIndex(strings.ToLower(fullPath), "/"+serviceName+"/")
+func (s *Service) getShortFuncPath(actionFunc interface{}) string {
+	fullPath := runtime.FuncForPC(reflect.ValueOf(actionFunc).Pointer()).Name()
+	if fullPath == "" {
+		panic("getShortFuncPath")
 	}
-
-	if index == -1 {
-		return fullPath
-	}
-	return fullPath[index+1:]
+	return s.trimFuncPath(fullPath)
 }
 
-func getShortServiceFuncName(serviceName string, actionFunc interface{}) string {
-	fullPath := runtime.FuncForPC(reflect.ValueOf(actionFunc).Pointer()).Name()
-	return trimFuncPath(serviceName, fullPath)
+func (s *Service) trimFuncPath(fullPath string) string{
+	// Trim funcPath for a specific service name and determined service's rootPackagePath
+	// trello, github.com/requilence/integram/services/trello, github.com/requilence/integram/services/trello.cardReplied -> trello.cardReplied
+	// trello, github.com/requilence/integram/services/Trello, github.com/requilence/integram/services/Trello.cardReplied -> trello.cardReplied
+	// trello, github.com/requilence/trelloRepo, _/var/integram/trello.cardReplied -> trello.cardReplied
+	// trello, github.com/requilence/trelloRepo, _/var/integram/another.cardReplied -> trello.cardReplied
+	// trello, github.com/requilence/integram/services/trello, github.com/requilence/integram/services/trello/another.action -> trello/another.action
+	// trello, github.com/requilence/integram/services/trello, _/var/integram/trello.cardReplied -> trello.cardReplied
+	// trello, trello.cardReplied, github.com/requilence/integram/services/trello.cardReplied -> trello.cardReplied
+	if s.rootPackagePath != "" && strings.HasPrefix(fullPath, s.rootPackagePath) {
+		internalFuncPath := strings.TrimPrefix(fullPath, s.rootPackagePath)
+		return s.Name + internalFuncPath
+	} else if strings.HasPrefix(fullPath, s.Name+".") {
+		return fullPath
+	}
+	funcPos := strings.LastIndex(fullPath, s.Name+".")
+	if funcPos > -1 {
+		return fullPath[funcPos:]
+	}
+
+	funcPos = strings.LastIndex(fullPath, ".")
+	if funcPos > -1 {
+		return s.Name + fullPath[funcPos:]
+	}
+
+	return fullPath
 }
 
 // Register the service's config and corresponding botToken
@@ -450,16 +461,22 @@ func Register(servicer Servicer, botToken string) {
 			}
 			gob.Register(m)
 
-			jobName := getShortServiceFuncName(service.Name, job.HandlerFunc)
+			jobName := service.getShortFuncPath(job.HandlerFunc)
 
 			jobType, err := jobs.RegisterTypeWithPoolKey(jobName, "_"+service.Name, job.Retries, job.HandlerFunc)
 			if err != nil {
-				panic(err)
+				fmt.Errorf("RegisterTypeWithPoolKey '%s', for %s: %s", jobName, service.Name, err.Error() )
 			} else {
 				jobsPerService[service.Name][jobName] = jobType
 			}
 
 		}
+
+		rootPackagePath := reflect.TypeOf(servicer).PkgPath()
+		service.rootPackagePath = rootPackagePath
+
+		log.Debugf("RootPackagePath of %s is %s", service.Name, rootPackagePath)
+
 		go func(pool *jobs.Pool, service *Service) {
 			time.Sleep(time.Second * 5)
 
@@ -488,7 +505,7 @@ func Register(servicer Servicer, botToken string) {
 				gob.Register(reflect.Zero(argType).Interface())
 			}
 			gob.Register(m)
-			actionFuncs[getShortServiceFuncName(service.Name, actionFunc)] = actionFunc
+			actionFuncs[service.getShortFuncPath(actionFunc)] = actionFunc
 		}
 	}
 	if botToken == "" {
@@ -562,7 +579,7 @@ func (s *Service) DoJob(handlerFunc interface{}, data ...interface{}) (*jobs.Job
 // SheduleJob schedules the job for specific time with specific priority. The job must be registred in Service's config (Jobs field). Arguments must be identically types with hudlerFunc's input args
 func (s *Service) SheduleJob(handlerFunc interface{}, priority int, time time.Time, data ...interface{}) (*jobs.Job, error) {
 	if jobsPerName, ok := jobsPerService[s.Name]; ok {
-		if jobType, ok := jobsPerName[getShortServiceFuncName(s.Name, handlerFunc)]; ok {
+		if jobType, ok := jobsPerName[s.getShortFuncPath(handlerFunc)]; ok {
 			return jobType.Schedule(priority, time, data...)
 		}
 		panic("SheduleJob: Job type not found")

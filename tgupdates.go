@@ -371,7 +371,7 @@ func tgCallbackHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service, *Conte
 		if rm.OnCallbackAction != "" {
 			log.Debugf("CallbackAction found %s", rm.OnCallbackAction)
 			// Instantiate a new variable to hold this argument
-			if handler, ok := actionFuncs[trimFuncPath(service.Name, rm.OnCallbackAction)]; ok {
+			if handler, ok := actionFuncs[service.trimFuncPath(rm.OnCallbackAction)]; ok {
 				handlerType := reflect.TypeOf(handler)
 				log.Debugf("handler %v: %v %v\n", rm.OnCallbackAction, handlerType.String(), handlerType.Kind().String())
 				handlerArgsInterfaces := make([]interface{}, handlerType.NumIn()-1)
@@ -492,7 +492,7 @@ func tgEditedMessageHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service, *
 		if rm.OnEditAction != "" {
 			log.Debugf("onEditHandler found %s", rm.OnEditAction)
 			// Instantiate a new variable to hold this argument
-			if handler, ok := actionFuncs[rm.OnEditAction]; ok {
+			if handler, ok := actionFuncs[service.trimFuncPath(rm.OnEditAction)]; ok {
 				handlerType := reflect.TypeOf(handler)
 				log.Debugf("handler %v: %v %v\n", rm.OnEditAction, handlerType.String(), handlerType.Kind().String())
 				handlerArgsInterfaces := make([]interface{}, handlerType.NumIn()-1)
@@ -598,7 +598,7 @@ func tgIncomingMessageHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service,
 		if rm.OnReplyAction != "" {
 			log.Debugf("ReplyHandler found %s", rm.OnReplyAction)
 
-			if handler, ok := actionFuncs[trimFuncPath(service.Name, rm.OnReplyAction)]; ok {
+			if handler, ok := actionFuncs[service.trimFuncPath(rm.OnReplyAction)]; ok {
 				handlerType := reflect.TypeOf(handler)
 				log.Debugf("handler %v: %v %v\n", rm.OnReplyAction, handlerType.String(), handlerType.Kind().String())
 				handlerArgsInterfaces := make([]interface{}, handlerType.NumIn()-1)

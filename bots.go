@@ -776,7 +776,7 @@ func (m *Message) SetCallbackAction(handlerFunc interface{}, args ...interface{}
 	if err != nil {
 		log.WithError(err).Errorf("SetCallbackAction detectServiceByBot")
 	}
-	funcName := getShortServiceFuncName(service.Name, handlerFunc)
+	funcName := service.getShortFuncPath(handlerFunc)
 
 	err = verifyTypeMatching(handlerFunc, args...)
 
@@ -806,7 +806,7 @@ func (m *Message) SetReplyAction(handlerFunc interface{}, args ...interface{}) *
 	if err != nil {
 		log.WithError(err).Errorf("SetReplyAction detectServiceByBot")
 	}
-	funcName := getShortServiceFuncName(service.Name, handlerFunc)
+	funcName := service.getShortFuncPath(handlerFunc)
 
 	if _, ok := actionFuncs[funcName]; !ok {
 		log.Panic(errors.New("Action for '" + funcName + "' not registred in service's configuration!"))
