@@ -8,9 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"reflect"
 	"regexp"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -806,6 +804,7 @@ func (m *Message) SetReplyAction(handlerFunc interface{}, args ...interface{}) *
 	if err != nil {
 		log.WithError(err).Errorf("SetReplyAction detectServiceByBot")
 	}
+
 	funcName := service.getShortFuncPath(handlerFunc)
 
 	if _, ok := actionFuncs[funcName]; !ok {
@@ -836,14 +835,20 @@ func (m *Message) SetReplyAction(handlerFunc interface{}, args ...interface{}) *
 // SetEditAction sets the edited func that will be called when user edit the message
 // !!! Please note that you must omit first arg *integram.Context, because it will be automatically prepended as message reply received and will contain actual context
 func (m *Message) SetEditAction(handlerFunc interface{}, args ...interface{}) *Message {
-	funcName := runtime.FuncForPC(reflect.ValueOf(handlerFunc).Pointer()).Name()
+	service, err := detectServiceByBot(m.BotID)
+
+	if err != nil {
+		log.WithError(err).Errorf("SetEditAction detectServiceByBot")
+	}
+
+	funcName := service.getShortFuncPath(handlerFunc)
 
 	if _, ok := actionFuncs[funcName]; !ok {
 		log.Panic(errors.New("Action for '" + funcName + "' not registred in service's configuration!"))
 		return m
 	}
 
-	err := verifyTypeMatching(handlerFunc, args...)
+	err = verifyTypeMatching(handlerFunc, args...)
 
 	if err != nil {
 		log.WithError(err).Error("Can't verify onEdit args for " + funcName + ". Be sure to omit first arg of type '*integram.Context'")
