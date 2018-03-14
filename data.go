@@ -1000,7 +1000,7 @@ func (user *User) OAuthHTTPClient() *http.Client {
 		if ps.OAuthExpireDate != nil && ps.OAuthExpireDate.Before(time.Now().Add(time.Second*5)) {
 			token, err := ts.Token()
 			if err != nil {
-				if strings.Contains(err.Error(), "revoked") {
+				if strings.Contains(err.Error(), "revoked") || strings.Contains(err.Error(), "invalid_grant") {
 					ps.OAuthToken = ""
 					ps.OAuthExpireDate = nil
 					user.saveProtectedSettings()
@@ -1058,7 +1058,7 @@ func (user *User) OAuthToken() string {
 			token, err := user.ctx.OAuthProvider().OAuth2Client(user.ctx).TokenSource(oauth2.NoContext, &oauth2.Token{AccessToken: ps.OAuthToken, Expiry: *ps.OAuthExpireDate, RefreshToken: ps.OAuthRefreshToken}).Token()
 
 			if err != nil {
-				if strings.Contains(err.Error(), "revoked") {
+				if strings.Contains(err.Error(), "revoked") || strings.Contains(err.Error(), "invalid_grant") {
 					//remove stored OAuthToken
 					//todo: provide revoked callback
 					ps.OAuthToken = ""
