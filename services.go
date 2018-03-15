@@ -416,7 +416,7 @@ func Register(servicer Servicer, botToken string) {
 		pool, err := jobs.NewPool(&jobs.PoolConfig{
 			Key:        "_" + service.Name,
 			NumWorkers: service.JobsPool,
-			BatchSize:  service.JobsPool,
+			BatchSize:  Config.TGPoolBatchSize,
 		})
 		if err != nil {
 			log.Panicf("Can't create jobs pool: %v\n", err)
