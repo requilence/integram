@@ -1468,6 +1468,8 @@ func sendMessage(m *OutgoingMessage) error {
 	var err error
 	var tgMsg tg.Message
 	var rescheduled bool
+
+	startedAt := time.Now()
 	if m.FilePath != "" {
 		if _, err := os.Stat(m.FilePath); os.IsNotExist(err) {
 			log.Errorf("Can't send message with attachment, file not exists: %s", m.FilePath)
@@ -1547,7 +1549,7 @@ func sendMessage(m *OutgoingMessage) error {
 		db := mongoSession.Clone().DB(mongo.Database)
 		defer db.Session.Close()
 
-		log.Debugf("Successfully sent, id=%v\n", tgMsg.MessageID)
+		log.Debugf("TG MSG sent, id = %v %.2f secs spent", tgMsg.MessageID, time.Now().Sub(startedAt).Seconds())
 		m.MsgID = tgMsg.MessageID
 		m.Date = time.Now()
 

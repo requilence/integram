@@ -226,14 +226,16 @@ func init() {
 func afterJob(job *jobs.Job) {
 	// remove successed tasks from Redis
 	err := job.Error()
-	if err != nil {
-		log.WithFields(log.Fields{"jobID": job.Id(), "jobType": job.TypeName(), "poolId": job.PoolId()}).WithError(err).Error("Job failed")
-	}
 
-	if err == nil || job.Retries() == 0 {
+	if err == nil {
+		log.WithFields(log.Fields{"jobID": job.Id(), "jobType": job.TypeName(), "poolId": job.PoolId()}).WithError(err).Error("Job succeed after %.2f sec", job.Duration().Seconds())
 		job.Destroy()
-	} else {
-		log.WithFields(log.Fields{"jobID": job.Id(), "jobType": job.TypeName(), "poolId": job.PoolId()}).WithError(err).Errorf("Job failed, %d retries left", job.Retries())
+	} else if err != nil && job.Retries() == 0 {
+		log.WithFields(log.Fields{"jobID": job.Id(), "jobType": job.TypeName(), "poolId": job.PoolId()}).WithError(err).Error("Job failed after %.2f sec", job.Duration().Seconds())
+		job.Destroy()
+	} else if err != nil && job.Retries() > 0 {
+		log.WithFields(log.Fields{"jobID": job.Id(), "jobType": job.TypeName(), "poolId": job.PoolId()}).WithError(err).Error("Job failed after %.2f sec, %d retries left", job.Duration().Seconds(), job.Retries())
+		job.Destroy()
 	}
 }
 
