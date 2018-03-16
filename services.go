@@ -228,13 +228,13 @@ func afterJob(job *jobs.Job) {
 	err := job.Error()
 
 	if err == nil {
-		log.WithFields(log.Fields{"jobID": job.Id(), "jobType": job.TypeName(), "poolId": job.PoolId()}).WithError(err).Error("Job succeed after %.2f sec", job.Duration().Seconds())
+		log.WithFields(log.Fields{"jobID": job.Id(), "jobType": job.TypeName(), "poolId": job.PoolId()}).WithError(err).Infof("Job succeed after %.2f sec", job.Duration().Seconds())
 		job.Destroy()
 	} else if err != nil && job.Retries() == 0 {
-		log.WithFields(log.Fields{"jobID": job.Id(), "jobType": job.TypeName(), "poolId": job.PoolId()}).WithError(err).Error("Job failed after %.2f sec", job.Duration().Seconds())
+		log.WithFields(log.Fields{"jobID": job.Id(), "jobType": job.TypeName(), "poolId": job.PoolId()}).WithError(err).Errorf("Job failed after %.2f sec", job.Duration().Seconds())
 		job.Destroy()
 	} else if err != nil && job.Retries() > 0 {
-		log.WithFields(log.Fields{"jobID": job.Id(), "jobType": job.TypeName(), "poolId": job.PoolId()}).WithError(err).Error("Job failed after %.2f sec, %d retries left", job.Duration().Seconds(), job.Retries())
+		log.WithFields(log.Fields{"jobID": job.Id(), "jobType": job.TypeName(), "poolId": job.PoolId()}).WithError(err).Errorf("Job failed after %.2f sec, %d retries left", job.Duration().Seconds(), job.Retries())
 		job.Destroy()
 	}
 }
