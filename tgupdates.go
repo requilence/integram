@@ -639,7 +639,7 @@ func tgIncomingMessageHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service,
 	// Or it was kicked from a group chat and now it is invited again
 	if ctx != nil && ctx.Message != nil {
 		key := "protected." + ctx.ServiceName + ".botstoppedorkickedat"
-		ctx.Db().C("chats").Update(bson.M{"_id": ctx.Chat.ID, key: bson.M{"$exists": true}}, bson.M{"$unset": bson.M{key: ""}})
+		db.C("chats").Update(bson.M{"_id": ctx.Chat.ID, key: bson.M{"$exists": true}}, bson.M{"$unset": bson.M{key: ""}})
 	}
 
 	return service, ctx
