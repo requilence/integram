@@ -47,7 +47,8 @@ ignored = ["github.com/gin-gonic/gin/examples/*", "golang.org/x/oauth2/google", 
 
 [[constraint]]
   name = "github.com/gin-gonic/gin"
-  version = "1.2.0"
+  branch = "fix-redirect-slash"
+  source = "https://github.com/requilence/gin.git"
 
 [[constraint]]
   name = "github.com/kelseyhightower/envconfig"
