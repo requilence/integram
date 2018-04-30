@@ -263,6 +263,8 @@ func incomingMessageFromTGMessage(m *tg.Message) IncomingMessage {
 	if m.From != nil {
 		im.FromID = m.From.ID
 	}
+	im.InlineMessageID = m.InlineMessageID
+
 	im.ChatID = m.Chat.ID
 	im.Date = time.Unix(int64(m.Date), 0)
 	im.Text = m.Text
@@ -433,8 +435,11 @@ func tgChosenInlineResultHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Servi
 		log.WithError(err).WithField("bot", b.ID).Error("Can't detect service")
 	}
 	user := tgUser(u.ChosenInlineResult.From)
-	ctx := &Context{ServiceName: service.Name, User: user, db: db, ChosenInlineResult: &chosenInlineResult{ChosenInlineResult: *u.ChosenInlineResult}}
+	chat := tgChat(u.ChosenInlineResult.Chat)
+
+	ctx := &Context{ServiceName: service.Name, User: user, Chat: chat, db: db, ChosenInlineResult: &chosenInlineResult{ChosenInlineResult: *u.ChosenInlineResult}}
 	ctx.User.ctx = ctx
+	ctx.Chat.ctx = ctx
 
 	/*chatID:=0
 	for _,hook:=range ctx.User.data.Hooks{

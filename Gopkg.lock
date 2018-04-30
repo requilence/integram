@@ -91,7 +91,7 @@
   branch = "master"
   name = "github.com/requilence/telegram-bot-api"
   packages = ["."]
-  revision = "6bdf37841c6da77d7e2814d7cbe989f87bfaa912"
+  revision = "2167dd61acdc53894eef952626db125f470225d3"
 
 [[projects]]
   branch = "master"
