@@ -263,7 +263,7 @@ func incomingMessageFromTGMessage(m *tg.Message) IncomingMessage {
 	if m.From != nil {
 		im.FromID = m.From.ID
 	}
-	im.InlineMessageID = m.InlineMessageID
+	im.InlineMsgID = m.InlineMessageID
 
 	im.ChatID = m.Chat.ID
 	im.Date = time.Unix(int64(m.Date), 0)
