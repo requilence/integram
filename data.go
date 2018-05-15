@@ -174,11 +174,11 @@ func (c *Context) FindChats(query interface{}) ([]chatData, error) {
 	return chats, nil
 }
 
-func (c *Context) FindChatsLimit(query interface{}, limit int) ([]chatData, error) {
+func (c *Context) FindChatsLimit(query interface{}, limit int, sort ...string) ([]chatData, error) {
 	chats := []chatData{}
 	serviceID := c.getServiceID()
 
-	err := c.db.C("chats").Find(query).Limit(limit).Select(bson.M{"type": 1, "firstname": 1, "lastname": 1, "username": 1, "title": 1, "settings." + serviceID: 1, "protected." + serviceID: 1, "keyboardperbot": 1, "tz": 1, "deactivated":1, "hooks": 1}).All(&chats)
+	err := c.db.C("chats").Find(query).Limit(limit).Sort(sort...).Select(bson.M{"type": 1, "firstname": 1, "lastname": 1, "username": 1, "title": 1, "settings." + serviceID: 1, "protected." + serviceID: 1, "keyboardperbot": 1, "tz": 1, "deactivated":1, "hooks": 1}).All(&chats)
 	if err != nil {
 		//c.Log().WithError(err).WithField("query", query).Error("Can't find chat")
 		return chats, err
@@ -230,14 +230,14 @@ func (c *Context) FindUsers(query interface{}) ([]userData, error) {
 	return users, nil
 }
 
-func (c *Context) FindUsersLimit(query interface{}, limit int) ([]userData, error) {
+func (c *Context) FindUsersLimit(query interface{}, limit int, sort ...string) ([]userData, error) {
 	users := []userData{}
 	serviceID := c.getServiceID()
 	var err error
 	if serviceID != "" {
-		err = c.db.C("users").Find(query).Limit(limit).Select(bson.M{"firstname": 1, "lastname": 1, "username": 1, "settings." + serviceID: 1, "protected." + serviceID: 1, "keyboardperchat": bson.M{"$elemMatch": bson.M{"chatid": c.Chat.ID}}, "tz": 1, "hooks": 1}).All(&users) // TODO: IS it ok to lean on c.Chat.ID here?
+		err = c.db.C("users").Find(query).Limit(limit).Sort(sort...).Select(bson.M{"firstname": 1, "lastname": 1, "username": 1, "settings." + serviceID: 1, "protected." + serviceID: 1, "keyboardperchat": bson.M{"$elemMatch": bson.M{"chatid": c.Chat.ID}}, "tz": 1, "hooks": 1}).All(&users) // TODO: IS it ok to lean on c.Chat.ID here?
 	} else {
-		err = c.db.C("users").Find(query).Limit(limit).Select(bson.M{"firstname": 1, "lastname": 1, "username": 1, "settings": 1, "protected": 1, "keyboardperchat": bson.M{"$elemMatch": bson.M{"chatid": c.Chat.ID}}, "tz": 1, "hooks": 1}).All(&users) // TODO: IS it ok to lean on c.Chat.ID here?
+		err = c.db.C("users").Find(query).Limit(limit).Sort(sort...).Select(bson.M{"firstname": 1, "lastname": 1, "username": 1, "settings": 1, "protected": 1, "keyboardperchat": bson.M{"$elemMatch": bson.M{"chatid": c.Chat.ID}}, "tz": 1, "hooks": 1}).All(&users) // TODO: IS it ok to lean on c.Chat.ID here?
 	}
 
 	if err != nil {
