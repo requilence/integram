@@ -654,6 +654,17 @@ func findLastOutgoingMessageInChat(db *mgo.Database, botID int64, chatID int64) 
 	return &msg.Message, nil
 }
 
+func findLastMessageInChat(db *mgo.Database, botID int64, chatID int64) (*Message, error) {
+
+	msg := OutgoingMessage{}
+	err := db.C("messages").Find(bson.M{"chatid": chatID, "botid": botID}).Sort("-msgid").One(&msg)
+	if err != nil {
+		return nil, err
+	}
+	msg.Message.om = &msg
+	return &msg.Message, nil
+}
+
 // SetChat sets the target chat to send the message
 func (m *OutgoingMessage) SetChat(id int64) *OutgoingMessage {
 	m.ChatID = id

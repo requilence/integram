@@ -76,6 +76,7 @@ func updateRoutine(b *Bot, u *tg.Update) {
 
 	db := mongoSession.Clone().DB(mongo.Database)
 
+	println("update", u.UpdateID, db.Session.ID)
 	defer func() {
 		m.Unlock()
 
@@ -96,20 +97,66 @@ func updateRoutine(b *Bot, u *tg.Update) {
 
 	if context.Message != nil && !context.MessageEdited {
 
+		replyActionProcessed := false
+		if context.Message.ReplyToMessage != nil {
+			rm := context.Message.ReplyToMessage
+			log.Debugf("Received reply for message %d", rm.MsgID)
+			// TODO: detect service by ReplyHandler
+			if rm.OnReplyAction != "" {
+				log.Debugf("ReplyHandler found %s", rm.OnReplyAction)
 
-		if service.TGNewMessageHandler == nil {
-			context.Log().Warn("Received Message but TGNewMessageHandler not set for service")
-			return
+				if handler, ok := actionFuncs[service.trimFuncPath(rm.OnReplyAction)]; ok {
+					handlerType := reflect.TypeOf(handler)
+					log.Debugf("handler %v: %v %v\n", rm.OnReplyAction, handlerType.String(), handlerType.Kind().String())
+					handlerArgsInterfaces := make([]interface{}, handlerType.NumIn()-1)
+					handlerArgs := make([]reflect.Value, handlerType.NumIn())
+
+					for i := 1; i < handlerType.NumIn(); i++ {
+						dataVal := reflect.New(handlerType.In(i))
+						handlerArgsInterfaces[i-1] = dataVal.Interface()
+					}
+					if err := decode(rm.OnReplyData, &handlerArgsInterfaces); err != nil {
+						log.WithField("handler", rm.OnReplyAction).WithError(err).Error("Can't decode replyHandler's args")
+					}
+					handlerArgs[0] = reflect.ValueOf(context)
+					for i := 0; i < len(handlerArgsInterfaces); i++ {
+						handlerArgs[i+1] = reflect.ValueOf(handlerArgsInterfaces[i])
+					}
+
+					if len(handlerArgs) > 0 {
+						handlerVal := reflect.ValueOf(handler)
+						returnVals := handlerVal.Call(handlerArgs)
+
+						if !returnVals[0].IsNil() {
+							err := returnVals[0].Interface().(error)
+							// NOTE: panics will be caught by the recover statement above
+							log.WithField("handler", rm.OnReplyAction).WithError(err).Error("replyHandler failed")
+						}
+
+						replyActionProcessed = true
+					}
+				} else {
+					log.WithField("handler", rm.OnReplyAction).Error("Reply handler not registered")
+				}
+
+			}
+
 		}
 
-		err := service.TGNewMessageHandler(context)
+		if !replyActionProcessed {
+			if service.TGNewMessageHandler == nil {
+				context.Log().Warn("Received Message but TGNewMessageHandler not set for service")
+				return
+			}
 
-		if err != nil {
-			context.Log().WithError(err).Error("BotUpdateHandler error")
+			err := service.TGNewMessageHandler(context)
+			if err != nil {
+				context.Log().WithError(err).Error("BotUpdateHandler error")
+			}
 		}
 
 		// Save incoming message after processing to be sure to save onReply actions
-		err = context.Message.Message.saveToDB(db)
+		err := context.Message.Message.saveToDB(db)
 
 		if err != nil {
 			log.WithError(err).Error("can't add incoming message to db")
@@ -575,13 +622,13 @@ func tgIncomingMessageHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service,
 			}
 
 			if rm == nil {
-				rm, err = findLastOutgoingMessageInChat(db, b.ID, im.ChatID)
+				rm, err = findLastMessageInChat(db, b.ID, im.ChatID)
 
 				if err != nil && err.Error() != "not found" {
 					ctx.Log().WithError(err).Error("Error on findLastOutgoingMessageInChat")
 				} else if rm != nil {
 					// assume user's message as the reply for the last message sent by the bot if bot's message has Reply handler and ForceReply set
-					if !rm.om.ForceReply || rm.om.OnReplyAction == "" {
+					if rm.FromID != rm.BotID || !rm.om.ForceReply || rm.om.OnReplyAction == "" {
 						rm = nil
 					}
 				}
@@ -597,47 +644,6 @@ func tgIncomingMessageHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service,
 	}
 
 	ctx.Message = &im
-	if rm != nil {
-		log.Debugf("Received reply for message %d", rm.MsgID)
-		// TODO: detect service by ReplyHandler
-		if rm.OnReplyAction != "" {
-			log.Debugf("ReplyHandler found %s", rm.OnReplyAction)
-
-			if handler, ok := actionFuncs[service.trimFuncPath(rm.OnReplyAction)]; ok {
-				handlerType := reflect.TypeOf(handler)
-				log.Debugf("handler %v: %v %v\n", rm.OnReplyAction, handlerType.String(), handlerType.Kind().String())
-				handlerArgsInterfaces := make([]interface{}, handlerType.NumIn()-1)
-				handlerArgs := make([]reflect.Value, handlerType.NumIn())
-
-				for i := 1; i < handlerType.NumIn(); i++ {
-					dataVal := reflect.New(handlerType.In(i))
-					handlerArgsInterfaces[i-1] = dataVal.Interface()
-				}
-				if err := decode(rm.OnReplyData, &handlerArgsInterfaces); err != nil {
-					log.WithField("handler", rm.OnReplyAction).WithError(err).Error("Can't decode replyHandler's args")
-				}
-				handlerArgs[0] = reflect.ValueOf(ctx)
-				for i := 0; i < len(handlerArgsInterfaces); i++ {
-					handlerArgs[i+1] = reflect.ValueOf(handlerArgsInterfaces[i])
-				}
-
-				if len(handlerArgs) > 0 {
-					handlerVal := reflect.ValueOf(handler)
-					returnVals := handlerVal.Call(handlerArgs)
-
-					if !returnVals[0].IsNil() {
-						err := returnVals[0].Interface().(error)
-						// NOTE: panics will be caught by the recover statement above
-						log.WithField("handler", rm.OnReplyAction).WithError(err).Error("replyHandler failed")
-					}
-				}
-			} else {
-				log.WithField("handler", rm.OnReplyAction).Error("Reply handler not registered")
-			}
-
-		}
-
-	}
 
 	// unset botstoppedorkickedat in case it was previosly set
 	// E.g. bot was stopped by user and now restarted
