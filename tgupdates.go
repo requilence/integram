@@ -76,7 +76,6 @@ func updateRoutine(b *Bot, u *tg.Update) {
 
 	db := mongoSession.Clone().DB(mongo.Database)
 
-	println("update", u.UpdateID, db.Session.ID)
 	defer func() {
 		m.Unlock()
 
