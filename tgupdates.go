@@ -480,11 +480,14 @@ func tgChosenInlineResultHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Servi
 	if err != nil {
 		log.WithError(err).WithField("bot", b.ID).Error("Can't detect service")
 	}
-	user := tgUser(u.ChosenInlineResult.From)
-	chat := tgChat(u.ChosenInlineResult.Chat)
 
-	ctx := &Context{ServiceName: service.Name, User: user, Chat: chat, db: db, ChosenInlineResult: &chosenInlineResult{ChosenInlineResult: *u.ChosenInlineResult}}
+	user := tgUser(u.ChosenInlineResult.From)
+	ctx := &Context{ServiceName: service.Name, User: user, db: db, ChosenInlineResult: &chosenInlineResult{ChosenInlineResult: *u.ChosenInlineResult}}
 	ctx.User.ctx = ctx
+	if u.Message != nil {
+		// in case we corellated chosen update and chat message
+		ctx.Chat = tgChat(u.Message.Chat)
+	}
 	ctx.Chat.ctx = ctx
 
 	/*chatID:=0
@@ -505,9 +508,13 @@ func tgChosenInlineResultHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Servi
 			Text:        u.ChosenInlineResult.Query, // Todo: thats a lie. The actual message content is known while producing inline results
 			FromID:      u.ChosenInlineResult.From.ID,
 			BotID:       b.ID,
+			ChatID:      ctx.Chat.ID,
 			Date:        time.Now(),
 		}}
 
+	if u.Message != nil {
+		msg.MsgID = u.Message.MessageID
+	}
 	// we need to save this message!
 	err = db.C("messages").Insert(&msg)
 
@@ -701,7 +708,7 @@ func migrateToSuperGroup(db *mgo.Database, fromChatID int64, toChatID int64) {
 }
 func tgUpdateHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service, *Context) {
 
-	if u.Message != nil {
+	if u.Message != nil && u.ChosenInlineResult == nil {
 		if u.Message.LeftChatMember != nil {
 			db.C("chats").UpdateId(u.Message.Chat.ID, bson.M{"$pull": bson.M{"membersids": u.Message.From.ID}})
 			return nil, nil

@@ -3,166 +3,215 @@
 
 [[projects]]
   branch = "master"
+  digest = "1:899ab67e7a794d8c454b4e6088c7cb85e6b7b4ec9cf5c94d6c742eb8b2e7da26"
   name = "github.com/dchest/uniuri"
   packages = ["."]
+  pruneopts = ""
   revision = "8902c56451e9b58ff940bbe5fec35d5f9c04584a"
 
 [[projects]]
+  digest = "1:9525d0e79ccf382e32edeef466b9a91f16eb0eebdca5971a03fad1bb3be9cd89"
   name = "github.com/garyburd/redigo"
   packages = [
     "internal",
-    "redis"
+    "redis",
   ]
+  pruneopts = ""
   revision = "a69d19351219b6dd56f274f96d85a7014a2ec34e"
   version = "v1.6.0"
 
 [[projects]]
   branch = "master"
+  digest = "1:1120f960f5c334f0f94bad29eefaf73d52d226893369693686148f66c1993f15"
   name = "github.com/gin-contrib/sse"
   packages = ["."]
+  pruneopts = ""
   revision = "22d885f9ecc78bf4ee5d72b937e4bbcdc58e8cae"
 
 [[projects]]
   branch = "fix-redirect-slash"
+  digest = "1:c51a9d5aba803d3f443ef7f6ed50cae3d57fe234e508df0fa40062a261ed6143"
   name = "github.com/gin-gonic/gin"
   packages = [
     ".",
     "binding",
     "json",
-    "render"
+    "render",
   ]
+  pruneopts = ""
   revision = "588879e55f3c13099159e1f24b7b90946f31266b"
   source = "https://github.com/requilence/gin.git"
 
 [[projects]]
+  digest = "1:bcb38c8fc9b21bb8682ce2d605a7d4aeb618abc7f827e3ac0b27c0371fdb23fb"
   name = "github.com/golang/protobuf"
   packages = ["proto"]
+  pruneopts = ""
   revision = "925541529c1fa6821df4e44ce2723319eb2be768"
   version = "v1.0.0"
 
 [[projects]]
+  digest = "1:9eab2325abbed0ebcee9d44bb3660a69d5d10e42d5ac4a0e77f7a6ea22bfce88"
   name = "github.com/json-iterator/go"
   packages = ["."]
+  pruneopts = ""
   revision = "ca39e5af3ece67bbcda3d0f4f56a8e24d9f2dad4"
   version = "1.1.3"
 
 [[projects]]
+  digest = "1:b60a24f942c7031ece6c48bcab0b683c7d3d6aa9fd17e21459d9ae604da258fa"
   name = "github.com/kelseyhightower/envconfig"
   packages = ["."]
+  pruneopts = ""
   revision = "f611eb38b3875cc3bd991ca91c51d06446afa14c"
   version = "v1.3.0"
 
 [[projects]]
+  digest = "1:d077b8c23b0017d6b34d179a85f03b5eebef699306405f7dac734ceed3b23161"
   name = "github.com/kennygrant/sanitize"
   packages = ["."]
+  pruneopts = ""
   revision = "2e6820834a1f36c626bf19a253b7d3cc060e9b8b"
   version = "v1.2.3"
 
 [[projects]]
+  digest = "1:78229b46ddb7434f881390029bd1af7661294af31f6802e0e1bedaad4ab0af3c"
   name = "github.com/mattn/go-isatty"
   packages = ["."]
+  pruneopts = ""
   revision = "0360b2af4f38e8d38c7fce2a9f4e702702d73a39"
   version = "v0.0.3"
 
 [[projects]]
+  digest = "1:0c0ff2a89c1bb0d01887e1dac043ad7efbf3ec77482ef058ac423d13497e16fd"
   name = "github.com/modern-go/concurrent"
   packages = ["."]
+  pruneopts = ""
   revision = "bacd9c7ef1dd9b15be4a9909b8ac7a4e313eec94"
   version = "1.0.3"
 
 [[projects]]
+  digest = "1:420f9231f816eeca3ff5aab070caac3ed7f27e4d37ded96ce9de3d7a7a2e31ad"
   name = "github.com/modern-go/reflect2"
   packages = ["."]
+  pruneopts = ""
   revision = "1df9eeb2bb81f327b96228865c5687bc2194af3f"
   version = "1.0.0"
 
 [[projects]]
+  digest = "1:2d031fefdf62e820a4e954cc20ef1cce8b296f6df7339df778117362832b4c2b"
   name = "github.com/mrjones/oauth"
   packages = ["."]
+  pruneopts = ""
   revision = "3f67d9c274355678b2f9844b08d643e2f9213340"
 
 [[projects]]
   branch = "master"
+  digest = "1:a0cf124e491096e935f8db7aaf1465d13c99b283bde2d28d023d9e0ef6c44a78"
   name = "github.com/requilence/jobs"
   packages = ["."]
+  pruneopts = ""
   revision = "531b5ae549de0340df9ada6c1d8a512e3bc43f68"
 
 [[projects]]
-  branch = "master"
+  branch = "inline-correlation-test"
+  digest = "1:cb9b571b76a90fde343f13196f75c2c80fd41549ab2f7950765423282da2bd74"
   name = "github.com/requilence/telegram-bot-api"
   packages = ["."]
-  revision = "d116c17b77830cf0a797b5e68642d75b6da2eb96"
+  pruneopts = ""
+  revision = "440431af8b3c1c003c748ce1e3fbca1c836be891"
 
 [[projects]]
   branch = "master"
+  digest = "1:b348faf51e9fab0a644967f4b3cccb9c742cecee8b3d0160a538b39d2c8c56cd"
   name = "github.com/requilence/url"
   packages = ["."]
+  pruneopts = ""
   revision = "6fc4fc0c65da72e95d19a8e5056e222a4f12357f"
 
 [[projects]]
+  digest = "1:8cf46b6c18a91068d446e26b67512cf16f1540b45d90b28b9533706a127f0ca6"
   name = "github.com/sirupsen/logrus"
   packages = ["."]
+  pruneopts = ""
   revision = "c155da19408a8799da419ed3eeb0cb5db0ad5dbc"
   version = "v1.0.5"
 
 [[projects]]
+  digest = "1:3bfdafac43ceb125f775eb79b8ee8f1e976e227464434ffad40f956ac029e760"
   name = "github.com/technoweenie/multipartstreamer"
   packages = ["."]
+  pruneopts = ""
   revision = "a90a01d73ae432e2611d178c18367fbaa13e0154"
   version = "v1.0.1"
 
 [[projects]]
+  digest = "1:2e7f653483e51243b6cd6de60ce39bde0d6927d10a3c24295ab0f82cb1efeae2"
   name = "github.com/ugorji/go"
   packages = ["codec"]
+  pruneopts = ""
   revision = "b4c50a2b199d93b13dc15e78929cfb23bfdf21ab"
   version = "v1.1.1"
 
 [[projects]]
+  digest = "1:63e1f34a255c19d5741dd8e019e1fb86cb0c4d954a37294010538725aa38ef9e"
   name = "github.com/vova616/xxhash"
   packages = ["."]
+  pruneopts = ""
   revision = "f0a9a8b74d487f9563a527daf3bd6b4fbd3f5d00"
 
 [[projects]]
+  digest = "1:5c2e0bcdb121d29c54cfcb0e5d0988b502fa5b3f4a2e1ee1231eec7aed1b6b13"
   name = "github.com/weekface/mgorus"
   packages = ["."]
+  pruneopts = ""
   revision = "83720e22971a8301c5b2738c9364accd3d9eb13a"
 
 [[projects]]
   branch = "master"
+  digest = "1:47ff8b3229cff95d3cf3738c7a8461fdeacd3f46801e54d301a62500605ce202"
   name = "golang.org/x/crypto"
   packages = ["ssh/terminal"]
+  pruneopts = ""
   revision = "d6449816ce06963d9d136eee5a56fca5b0616e7e"
 
 [[projects]]
   branch = "master"
+  digest = "1:40dd5a4f1e82c4d3dc3de550a96152f6a8937bcfcb20c7ee34685f8764e1bda5"
   name = "golang.org/x/net"
   packages = [
     "context",
     "context/ctxhttp",
     "html",
-    "html/atom"
+    "html/atom",
   ]
+  pruneopts = ""
   revision = "61147c48b25b599e5b561d2e9c4f3e1ef489ca41"
 
 [[projects]]
   branch = "master"
+  digest = "1:217f34bc3104f3375cb368fb264fba24a300301e54a32d67a7e4b91699518e86"
   name = "golang.org/x/oauth2"
   packages = [
     ".",
-    "internal"
+    "internal",
   ]
+  pruneopts = ""
   revision = "921ae394b9430ed4fb549668d7b087601bd60a81"
 
 [[projects]]
   branch = "master"
+  digest = "1:e9490adb0a1d5ac8f621a6430754822f87e565fd71d4cd1c9c4d90626f390624"
   name = "golang.org/x/sys"
   packages = [
     "unix",
-    "windows"
+    "windows",
   ]
+  pruneopts = ""
   revision = "3b87a42e500a6dc65dae1a55d0b641295971163e"
 
 [[projects]]
+  digest = "1:934fb8966f303ede63aa405e2c8d7f0a427a05ea8df335dfdc1833dd4d40756f"
   name = "google.golang.org/appengine"
   packages = [
     "internal",
@@ -171,38 +220,59 @@
     "internal/log",
     "internal/remote_api",
     "internal/urlfetch",
-    "urlfetch"
+    "urlfetch",
   ]
+  pruneopts = ""
   revision = "150dc57a1b433e64154302bdc40b6bb8aefa313a"
   version = "v1.0.0"
 
 [[projects]]
+  digest = "1:dd549e360e5a8f982a28c2bcbe667307ceffe538ed9afc7c965524f1ac285b3f"
   name = "gopkg.in/go-playground/validator.v8"
   packages = ["."]
+  pruneopts = ""
   revision = "5f1438d3fca68893a817e4a66806cea46a9e4ebf"
   version = "v8.18.2"
 
 [[projects]]
   branch = "v2"
+  digest = "1:c80894778314c7fb90d94a5ab925214900e1341afeddc953cda7398b8cdcd006"
   name = "gopkg.in/mgo.v2"
   packages = [
     ".",
     "bson",
     "internal/json",
     "internal/sasl",
-    "internal/scram"
+    "internal/scram",
   ]
+  pruneopts = ""
   revision = "3f83fa5005286a7fe593b055f0d7771a7dce4655"
 
 [[projects]]
+  digest = "1:f0620375dd1f6251d9973b5f2596228cc8042e887cd7f827e4220bc1ce8c30e2"
   name = "gopkg.in/yaml.v2"
   packages = ["."]
+  pruneopts = ""
   revision = "5420a8b6744d3b0345ab293f6fcba19c978f1183"
   version = "v2.2.1"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "16a128dd157fe1a4304f17eb44824910ace70ddc85282d8e9e216a70ed9ba458"
+  input-imports = [
+    "github.com/gin-gonic/gin",
+    "github.com/kelseyhightower/envconfig",
+    "github.com/kennygrant/sanitize",
+    "github.com/mrjones/oauth",
+    "github.com/requilence/jobs",
+    "github.com/requilence/telegram-bot-api",
+    "github.com/requilence/url",
+    "github.com/sirupsen/logrus",
+    "github.com/vova616/xxhash",
+    "github.com/weekface/mgorus",
+    "golang.org/x/oauth2",
+    "gopkg.in/mgo.v2",
+    "gopkg.in/mgo.v2/bson",
+  ]
   solver-name = "gps-cdcl"
   solver-version = 1

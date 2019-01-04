@@ -31,7 +31,7 @@ ignored = ["github.com/gin-gonic/gin/examples/*", "golang.org/x/oauth2/google", 
 
 [[constraint]]
   name = "github.com/requilence/telegram-bot-api"
-  branch = "master"
+  branch = "inline-correlation-test"
 
 [[constraint]]
   branch = "master"
