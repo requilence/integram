@@ -484,7 +484,6 @@ func (chat *Chat) getData() (*chatData, error) {
 	}
 
 	if chat.data != nil {
-		fmt.Println("chat.data already loaded")
 		return chat.data, nil
 	}
 	cdata, _ := chat.ctx.FindChat(bson.M{"_id": chat.ID})
@@ -779,9 +778,7 @@ func (user *User) saveProtectedSettings() error {
 	}
 
 	serviceID := user.ctx.getServiceID()
-	info, err := user.ctx.db.C("users").UpsertId(user.ID, bson.M{"$set": bson.M{"protected." + serviceID: user.data.Protected[serviceID]}, "$setOnInsert": bson.M{"createdat": time.Now()}})
-
-	fmt.Printf("saveProtectedSettings %v, %+v, %+v\n", err, info, user.data.Protected[serviceID])
+	_, err := user.ctx.db.C("users").UpsertId(user.ID, bson.M{"$set": bson.M{"protected." + serviceID: user.data.Protected[serviceID]}, "$setOnInsert": bson.M{"createdat": time.Now()}})
 
 	return err
 }
