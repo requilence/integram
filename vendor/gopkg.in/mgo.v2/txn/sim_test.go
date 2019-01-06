@@ -2,14 +2,13 @@ package txn_test
 
 import (
 	"flag"
+	"gopkg.in/mgo.v2"
+	"gopkg.in/mgo.v2/bson"
+	"gopkg.in/mgo.v2/dbtest"
+	"gopkg.in/mgo.v2/txn"
+	. "gopkg.in/check.v1"
 	"math/rand"
 	"time"
-
-	"gopkg.in/mgo.v2"
-
-	. "gopkg.in/check.v1"
-	"gopkg.in/mgo.v2/bson"
-	"gopkg.in/mgo.v2/txn"
 )
 
 var (
@@ -34,7 +33,7 @@ type params struct {
 }
 
 func (s *S) TestSim1Worker(c *C) {
-	simulate(c, params{
+	simulate(c, &s.server, params{
 		workers:        1,
 		accounts:       4,
 		killChance:     0.01,
@@ -44,7 +43,7 @@ func (s *S) TestSim1Worker(c *C) {
 }
 
 func (s *S) TestSim4WorkersDense(c *C) {
-	simulate(c, params{
+	simulate(c, &s.server, params{
 		workers:        4,
 		accounts:       2,
 		killChance:     0.01,
@@ -54,7 +53,7 @@ func (s *S) TestSim4WorkersDense(c *C) {
 }
 
 func (s *S) TestSim4WorkersSparse(c *C) {
-	simulate(c, params{
+	simulate(c, &s.server, params{
 		workers:        4,
 		accounts:       10,
 		killChance:     0.01,
@@ -64,7 +63,7 @@ func (s *S) TestSim4WorkersSparse(c *C) {
 }
 
 func (s *S) TestSimHalf1Worker(c *C) {
-	simulate(c, params{
+	simulate(c, &s.server, params{
 		workers:        1,
 		accounts:       4,
 		changeHalf:     true,
@@ -75,7 +74,7 @@ func (s *S) TestSimHalf1Worker(c *C) {
 }
 
 func (s *S) TestSimHalf4WorkersDense(c *C) {
-	simulate(c, params{
+	simulate(c, &s.server, params{
 		workers:        4,
 		accounts:       2,
 		changeHalf:     true,
@@ -86,7 +85,7 @@ func (s *S) TestSimHalf4WorkersDense(c *C) {
 }
 
 func (s *S) TestSimHalf4WorkersSparse(c *C) {
-	simulate(c, params{
+	simulate(c, &s.server, params{
 		workers:        4,
 		accounts:       10,
 		changeHalf:     true,
@@ -97,7 +96,7 @@ func (s *S) TestSimHalf4WorkersSparse(c *C) {
 }
 
 func (s *S) TestSimReinsertCopy1Worker(c *C) {
-	simulate(c, params{
+	simulate(c, &s.server, params{
 		workers:        1,
 		accounts:       10,
 		reinsertCopy:   true,
@@ -108,7 +107,7 @@ func (s *S) TestSimReinsertCopy1Worker(c *C) {
 }
 
 func (s *S) TestSimReinsertCopy4Workers(c *C) {
-	simulate(c, params{
+	simulate(c, &s.server, params{
 		workers:        4,
 		accounts:       10,
 		reinsertCopy:   true,
@@ -119,7 +118,7 @@ func (s *S) TestSimReinsertCopy4Workers(c *C) {
 }
 
 func (s *S) TestSimReinsertZeroed1Worker(c *C) {
-	simulate(c, params{
+	simulate(c, &s.server, params{
 		workers:        1,
 		accounts:       10,
 		reinsertZeroed: true,
@@ -130,7 +129,7 @@ func (s *S) TestSimReinsertZeroed1Worker(c *C) {
 }
 
 func (s *S) TestSimReinsertZeroed4Workers(c *C) {
-	simulate(c, params{
+	simulate(c, &s.server, params{
 		workers:        4,
 		accounts:       10,
 		reinsertZeroed: true,
@@ -141,7 +140,7 @@ func (s *S) TestSimReinsertZeroed4Workers(c *C) {
 }
 
 func (s *S) TestSimChangeLog(c *C) {
-	simulate(c, params{
+	simulate(c, &s.server, params{
 		workers:        4,
 		accounts:       10,
 		killChance:     0.01,
@@ -158,7 +157,7 @@ type balanceChange struct {
 	amount int
 }
 
-func simulate(c *C, params params) {
+func simulate(c *C, server *dbtest.DBServer, params params) {
 	seed := *seed
 	if seed == 0 {
 		seed = time.Now().UnixNano()
@@ -173,8 +172,7 @@ func simulate(c *C, params params) {
 	})
 	defer txn.SetChaos(txn.Chaos{})
 
-	session, err := mgo.Dial(mgoaddr)
-	c.Assert(err, IsNil)
+	session := server.Session()
 	defer session.Close()
 
 	db := session.DB("test")
@@ -304,7 +302,7 @@ func simulate(c *C, params params) {
 					}}
 				}
 
-				err = runner.Run(ops, change.id, nil)
+				err := runner.Run(ops, change.id, nil)
 				if err != nil && err != txn.ErrAborted && err != txn.ErrChaos {
 					c.Check(err, IsNil)
 				}
@@ -328,7 +326,7 @@ func simulate(c *C, params params) {
 	c.Check(len(changeLog), Not(Equals), 0, Commentf("No operations were even attempted."))
 
 	txn.SetChaos(txn.Chaos{})
-	err = runner.ResumeAll()
+	err := runner.ResumeAll()
 	c.Assert(err, IsNil)
 
 	n, err := accounts.Count()

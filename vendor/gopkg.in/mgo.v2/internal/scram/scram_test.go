@@ -4,10 +4,9 @@ import (
 	"crypto/sha1"
 	"testing"
 
-	"strings"
-
 	. "gopkg.in/check.v1"
 	"gopkg.in/mgo.v2/internal/scram"
+	"strings"
 )
 
 var _ = Suite(&S{})

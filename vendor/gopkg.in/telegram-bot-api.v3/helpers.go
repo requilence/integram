@@ -1,6 +1,7 @@
 package tgbotapi
 
 import (
+	"log"
 	"net/url"
 )
 
@@ -20,6 +21,7 @@ func NewMessage(chatID int64, text string) MessageConfig {
 
 // NewMessageToChannel creates a new Message that is sent to a channel
 // by username.
+//
 // username is the username of the channel, text is the message text.
 func NewMessageToChannel(username string, text string) MessageConfig {
 	return MessageConfig{
@@ -192,6 +194,37 @@ func NewVideoShare(chatID int64, fileID string) VideoConfig {
 	}
 }
 
+// NewVideoNoteUpload creates a new video note uploader.
+//
+// chatID is where to send it, file is a string path to the file,
+// FileReader, or FileBytes.
+func NewVideoNoteUpload(chatID int64, length int, file interface{}) VideoNoteConfig {
+	return VideoNoteConfig{
+		BaseFile: BaseFile{
+			BaseChat:    BaseChat{ChatID: chatID},
+			File:        file,
+			UseExisting: false,
+		},
+		Length: length,
+	}
+}
+
+// NewVideoNoteShare shares an existing video.
+// You may use this to reshare an existing video without reuploading it.
+//
+// chatID is where to send it, fileID is the ID of the video
+// already uploaded.
+func NewVideoNoteShare(chatID int64, length int, fileID string) VideoNoteConfig {
+	return VideoNoteConfig{
+		BaseFile: BaseFile{
+			BaseChat:    BaseChat{ChatID: chatID},
+			FileID:      fileID,
+			UseExisting: true,
+		},
+		Length: length,
+	}
+}
+
 // NewVoiceUpload creates a new voice uploader.
 //
 // chatID is where to send it, file is a string path to the file,
@@ -328,6 +361,32 @@ func NewInlineQueryResultArticle(id, title, messageText string) InlineQueryResul
 	}
 }
 
+// NewInlineQueryResultArticleMarkdown creates a new inline query article with Markdown parsing.
+func NewInlineQueryResultArticleMarkdown(id, title, messageText string) InlineQueryResultArticle {
+	return InlineQueryResultArticle{
+		Type:  "article",
+		ID:    id,
+		Title: title,
+		InputMessageContent: InputTextMessageContent{
+			Text:      messageText,
+			ParseMode: "Markdown",
+		},
+	}
+}
+
+// NewInlineQueryResultArticleHTML creates a new inline query article with HTML parsing.
+func NewInlineQueryResultArticleHTML(id, title, messageText string) InlineQueryResultArticle {
+	return InlineQueryResultArticle{
+		Type:  "article",
+		ID:    id,
+		Title: title,
+		InputMessageContent: InputTextMessageContent{
+			Text:      messageText,
+			ParseMode: "HTML",
+		},
+	}
+}
+
 // NewInlineQueryResultGIF creates a new inline query GIF.
 func NewInlineQueryResultGIF(id, url string) InlineQueryResultGIF {
 	return InlineQueryResultGIF{
@@ -352,6 +411,16 @@ func NewInlineQueryResultPhoto(id, url string) InlineQueryResultPhoto {
 		Type: "photo",
 		ID:   id,
 		URL:  url,
+	}
+}
+
+// NewInlineQueryResultPhotoWithThumb creates a new inline query photo.
+func NewInlineQueryResultPhotoWithThumb(id, url, thumb string) InlineQueryResultPhoto {
+	return InlineQueryResultPhoto{
+		Type:     "photo",
+		ID:       id,
+		URL:      url,
+		ThumbURL: thumb,
 	}
 }
 
@@ -407,7 +476,18 @@ func NewInlineQueryResultLocation(id, title string, latitude, longitude float64)
 }
 
 // NewEditMessageText allows you to edit the text of a message.
-func NewEditMessageText(chatID int64, messageID int, text string, replyMarkup *InlineKeyboardMarkup) EditMessageTextConfig {
+func NewEditMessageText(chatID int64, messageID int, text string) EditMessageTextConfig {
+	return EditMessageTextConfig{
+		BaseEdit: BaseEdit{
+			ChatID:    chatID,
+			MessageID: messageID,
+		},
+		Text: text,
+	}
+}
+
+// NewEditMessageTextAndInlineKeyboard allows you to edit the text and inline keyboard a message.
+func NewEditMessageTextAndInlineKeyboard(chatID int64, messageID int, text string, replyMarkup *InlineKeyboardMarkup) EditMessageTextConfig {
 	return EditMessageTextConfig{
 		BaseEdit: BaseEdit{
 			ChatID:      chatID,
@@ -444,9 +524,20 @@ func NewEditMessageReplyMarkup(chatID int64, messageID int, replyMarkup InlineKe
 // NewHideKeyboard hides the keyboard, with the option for being selective
 // or hiding for everyone.
 func NewHideKeyboard(selective bool) ReplyKeyboardHide {
+	log.Println("NewHideKeyboard is deprecated, please use NewRemoveKeyboard")
+
 	return ReplyKeyboardHide{
 		HideKeyboard: true,
 		Selective:    selective,
+	}
+}
+
+// NewRemoveKeyboard hides the keyboard, with the option for being selective
+// or hiding for everyone.
+func NewRemoveKeyboard(selective bool) ReplyKeyboardRemove {
+	return ReplyKeyboardRemove{
+		RemoveKeyboard: true,
+		Selective:      selective,
 	}
 }
 
@@ -501,7 +592,7 @@ func NewReplyKeyboard(rows ...[]KeyboardButton) ReplyKeyboardMarkup {
 func NewInlineKeyboardButtonData(text, data string) InlineKeyboardButton {
 	return InlineKeyboardButton{
 		Text:         text,
-		CallbackData: data,
+		CallbackData: &data,
 	}
 }
 
@@ -510,7 +601,7 @@ func NewInlineKeyboardButtonData(text, data string) InlineKeyboardButton {
 func NewInlineKeyboardButtonURL(text, url string) InlineKeyboardButton {
 	return InlineKeyboardButton{
 		Text: text,
-		URL:  url,
+		URL:  &url,
 	}
 }
 
@@ -560,4 +651,17 @@ func NewCallbackWithAlert(id, text string) CallbackConfig {
 		Text:            text,
 		ShowAlert:       true,
 	}
+}
+
+// NewInvoice created a new Invoice request to the user.
+func NewInvoice(chatID int64, title, description, payload, providerToken, startParameter, currency string, prices *[]LabeledPrice) InvoiceConfig {
+	return InvoiceConfig{
+		BaseChat:       BaseChat{ChatID: chatID},
+		Title:          title,
+		Description:    description,
+		Payload:        payload,
+		ProviderToken:  providerToken,
+		StartParameter: startParameter,
+		Currency:       currency,
+		Prices:         prices}
 }

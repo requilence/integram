@@ -31,6 +31,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"net/url"
 	"reflect"
@@ -40,6 +41,7 @@ import (
 
 	. "gopkg.in/check.v1"
 	"gopkg.in/mgo.v2/bson"
+	"gopkg.in/yaml.v2"
 )
 
 func TestAll(t *testing.T) {
@@ -69,10 +71,10 @@ func makeZeroDoc(value interface{}) (zero interface{}) {
 	case reflect.Ptr:
 		pv := reflect.New(v.Type().Elem())
 		zero = pv.Interface()
-	case reflect.Slice, reflect.Int:
+	case reflect.Slice, reflect.Int, reflect.Int64, reflect.Struct:
 		zero = reflect.New(t).Interface()
 	default:
-		panic("unsupported doc type")
+		panic("unsupported doc type: " + t.Name())
 	}
 	return zero
 }
@@ -548,6 +550,10 @@ var unmarshalItems = []testItemType{
 	// Decode old binary without length. According to the spec, this shouldn't happen.
 	{bson.M{"_": []byte("old")},
 		"\x05_\x00\x03\x00\x00\x00\x02old"},
+
+	// Decode a doc within a doc in to a slice within a doc; shouldn't error
+	{&struct{ Foo []string }{},
+		"\x03\x66\x6f\x6f\x00\x05\x00\x00\x00\x00"},
 }
 
 func (s *S) TestUnmarshalOneWayItems(c *C) {
@@ -1047,6 +1053,13 @@ type inlineDupMap struct {
 type inlineBadKeyMap struct {
 	M map[int]int ",inline"
 }
+type inlineUnexported struct {
+	M          map[string]interface{} ",inline"
+	unexported ",inline"
+}
+type unexported struct {
+	A int
+}
 
 type getterSetterD bson.D
 
@@ -1278,6 +1291,7 @@ var twoWayCrossItems = []crossTypeItem{
 	{&inlineMapInt{A: 1, M: map[string]int{"b": 2}}, map[string]int{"a": 1, "b": 2}},
 	{&inlineMapInt{A: 1, M: nil}, map[string]int{"a": 1}},
 	{&inlineMapMyM{A: 1, M: MyM{"b": MyM{"c": 3}}}, map[string]interface{}{"a": 1, "b": map[string]interface{}{"c": 3}}},
+	{&inlineUnexported{M: map[string]interface{}{"b": 1}, unexported: unexported{A: 2}}, map[string]interface{}{"b": 1, "a": 2}},
 
 	// []byte <=> Binary
 	{&struct{ B []byte }{[]byte("abc")}, map[string]bson.Binary{"b": bson.Binary{Data: []byte("abc")}}},
@@ -1531,12 +1545,12 @@ var jsonIdTests = []struct {
 	unmarshal: true,
 }, {
 	json:      `{"Id":"4d88e15b60f486e428412dc9A"}`,
-	error:     `Invalid ObjectId in JSON: "4d88e15b60f486e428412dc9A"`,
+	error:     `invalid ObjectId in JSON: "4d88e15b60f486e428412dc9A"`,
 	marshal:   false,
 	unmarshal: true,
 }, {
 	json:      `{"Id":"4d88e15b60f486e428412dcZ"}`,
-	error:     `Invalid ObjectId in JSON: "4d88e15b60f486e428412dcZ" .*`,
+	error:     `invalid ObjectId in JSON: "4d88e15b60f486e428412dcZ" .*`,
 	marshal:   false,
 	unmarshal: true,
 }}
@@ -1565,6 +1579,9 @@ func (s *S) TestObjectIdJSONMarshaling(c *C) {
 		}
 	}
 }
+
+// --------------------------------------------------------------------------
+// Spec tests
 
 type specTest struct {
 	Description string
@@ -1618,6 +1635,123 @@ func (s *S) TestSpecTests(c *C) {
 			err = bson.Unmarshal(encoded, &decoded)
 			c.Assert(err, NotNil)
 			c.Logf("Failed with: %v", err)
+		}
+	}
+}
+
+// --------------------------------------------------------------------------
+// ObjectId Text encoding.TextUnmarshaler.
+
+var textIdTests = []struct {
+	value     bson.ObjectId
+	text      string
+	marshal   bool
+	unmarshal bool
+	error     string
+}{{
+	value:     bson.ObjectIdHex("4d88e15b60f486e428412dc9"),
+	text:      "4d88e15b60f486e428412dc9",
+	marshal:   true,
+	unmarshal: true,
+}, {
+	text:      "",
+	marshal:   true,
+	unmarshal: true,
+}, {
+	text:      "4d88e15b60f486e428412dc9A",
+	marshal:   false,
+	unmarshal: true,
+	error:     `invalid ObjectId: 4d88e15b60f486e428412dc9A`,
+}, {
+	text:      "4d88e15b60f486e428412dcZ",
+	marshal:   false,
+	unmarshal: true,
+	error:     `invalid ObjectId: 4d88e15b60f486e428412dcZ .*`,
+}}
+
+func (s *S) TestObjectIdTextMarshaling(c *C) {
+	for _, test := range textIdTests {
+		if test.marshal {
+			data, err := test.value.MarshalText()
+			if test.error == "" {
+				c.Assert(err, IsNil)
+				c.Assert(string(data), Equals, test.text)
+			} else {
+				c.Assert(err, ErrorMatches, test.error)
+			}
+		}
+
+		if test.unmarshal {
+			err := test.value.UnmarshalText([]byte(test.text))
+			if test.error == "" {
+				c.Assert(err, IsNil)
+				if test.value != "" {
+					value := bson.ObjectIdHex(test.text)
+					c.Assert(value, DeepEquals, test.value)
+				}
+			} else {
+				c.Assert(err, ErrorMatches, test.error)
+			}
+		}
+	}
+}
+
+// --------------------------------------------------------------------------
+// ObjectId XML marshalling.
+
+type xmlType struct {
+	Id bson.ObjectId
+}
+
+var xmlIdTests = []struct {
+	value     xmlType
+	xml       string
+	marshal   bool
+	unmarshal bool
+	error     string
+}{{
+	value:     xmlType{Id: bson.ObjectIdHex("4d88e15b60f486e428412dc9")},
+	xml:       "<xmlType><Id>4d88e15b60f486e428412dc9</Id></xmlType>",
+	marshal:   true,
+	unmarshal: true,
+}, {
+	value:     xmlType{},
+	xml:       "<xmlType><Id></Id></xmlType>",
+	marshal:   true,
+	unmarshal: true,
+}, {
+	xml:       "<xmlType><Id>4d88e15b60f486e428412dc9A</Id></xmlType>",
+	marshal:   false,
+	unmarshal: true,
+	error:     `invalid ObjectId: 4d88e15b60f486e428412dc9A`,
+}, {
+	xml:       "<xmlType><Id>4d88e15b60f486e428412dcZ</Id></xmlType>",
+	marshal:   false,
+	unmarshal: true,
+	error:     `invalid ObjectId: 4d88e15b60f486e428412dcZ .*`,
+}}
+
+func (s *S) TestObjectIdXMLMarshaling(c *C) {
+	for _, test := range xmlIdTests {
+		if test.marshal {
+			data, err := xml.Marshal(&test.value)
+			if test.error == "" {
+				c.Assert(err, IsNil)
+				c.Assert(string(data), Equals, test.xml)
+			} else {
+				c.Assert(err, ErrorMatches, test.error)
+			}
+		}
+
+		if test.unmarshal {
+			var value xmlType
+			err := xml.Unmarshal([]byte(test.xml), &value)
+			if test.error == "" {
+				c.Assert(err, IsNil)
+				c.Assert(value, DeepEquals, test.value)
+			} else {
+				c.Assert(err, ErrorMatches, test.error)
+			}
 		}
 	}
 }
@@ -1688,5 +1822,11 @@ func (s *S) BenchmarkUnmarshalRaw(c *C) {
 	}
 	if err != nil {
 		panic(err)
+	}
+}
+
+func (s *S) BenchmarkNewObjectId(c *C) {
+	for i := 0; i < c.N; i++ {
+		bson.NewObjectId()
 	}
 }

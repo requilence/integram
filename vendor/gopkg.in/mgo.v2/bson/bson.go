@@ -35,12 +35,11 @@ package bson
 import (
 	"bytes"
 	"crypto/md5"
-	"crypto/rand"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"reflect"
 	"runtime"
@@ -172,7 +171,7 @@ type ObjectId string
 func ObjectIdHex(s string) ObjectId {
 	d, err := hex.DecodeString(s)
 	if err != nil || len(d) != 12 {
-		panic(fmt.Sprintf("Invalid input to ObjectIdHex: %q", s))
+		panic(fmt.Sprintf("invalid input to ObjectIdHex: %q", s))
 	}
 	return ObjectId(d)
 }
@@ -193,17 +192,16 @@ var objectIdCounter uint32 = readRandomUint32()
 
 // readRandomUint32 returns a random objectIdCounter.
 func readRandomUint32() uint32 {
-	var b [4]byte
-	_, err := io.ReadFull(rand.Reader, b[:])
-	if err != nil {
-		panic(fmt.Errorf("cannot read random object id: %v", err))
-	}
-	return uint32((uint32(b[0]) << 0) | (uint32(b[1]) << 8) | (uint32(b[2]) << 16) | (uint32(b[3]) << 24))
+	// We've found systems hanging in this function due to lack of entropy.
+	// The randomness of these bytes is just preventing nearby clashes, so
+	// just look at the time.
+	return uint32(time.Now().UnixNano())
 }
 
 // machineId stores machine id generated once and used in subsequent calls
 // to NewObjectId function.
 var machineId = readMachineId()
+var processId = os.Getpid()
 
 // readMachineId generates and returns a machine id.
 // If this function fails to get the hostname it will cause a runtime error.
@@ -212,10 +210,10 @@ func readMachineId() []byte {
 	id := sum[:]
 	hostname, err1 := os.Hostname()
 	if err1 != nil {
-		_, err2 := io.ReadFull(rand.Reader, id)
-		if err2 != nil {
-			panic(fmt.Errorf("cannot get hostname: %v; %v", err1, err2))
-		}
+		n := uint32(time.Now().UnixNano())
+		sum[0] = byte(n >> 0)
+		sum[1] = byte(n >> 8)
+		sum[2] = byte(n >> 16)
 		return id
 	}
 	hw := md5.New()
@@ -234,9 +232,8 @@ func NewObjectId() ObjectId {
 	b[5] = machineId[1]
 	b[6] = machineId[2]
 	// Pid, 2 bytes, specs don't specify endianness, but we use big endian.
-	pid := os.Getpid()
-	b[7] = byte(pid >> 8)
-	b[8] = byte(pid)
+	b[7] = byte(processId >> 8)
+	b[8] = byte(processId)
 	// Increment, 3 bytes, big endian
 	i := atomic.AddUint32(&objectIdCounter, 1)
 	b[9] = byte(i >> 16)
@@ -276,17 +273,56 @@ var nullBytes = []byte("null")
 
 // UnmarshalJSON turns *bson.ObjectId into a json.Unmarshaller.
 func (id *ObjectId) UnmarshalJSON(data []byte) error {
+	if len(data) > 0 && (data[0] == '{' || data[0] == 'O') {
+		var v struct {
+			Id   json.RawMessage `json:"$oid"`
+			Func struct {
+				Id json.RawMessage
+			} `json:"$oidFunc"`
+		}
+		err := jdec(data, &v)
+		if err == nil {
+			if len(v.Id) > 0 {
+				data = []byte(v.Id)
+			} else {
+				data = []byte(v.Func.Id)
+			}
+		}
+	}
 	if len(data) == 2 && data[0] == '"' && data[1] == '"' || bytes.Equal(data, nullBytes) {
 		*id = ""
 		return nil
 	}
 	if len(data) != 26 || data[0] != '"' || data[25] != '"' {
-		return errors.New(fmt.Sprintf("Invalid ObjectId in JSON: %s", string(data)))
+		return errors.New(fmt.Sprintf("invalid ObjectId in JSON: %s", string(data)))
 	}
 	var buf [12]byte
 	_, err := hex.Decode(buf[:], data[1:25])
 	if err != nil {
-		return errors.New(fmt.Sprintf("Invalid ObjectId in JSON: %s (%s)", string(data), err))
+		return errors.New(fmt.Sprintf("invalid ObjectId in JSON: %s (%s)", string(data), err))
+	}
+	*id = ObjectId(string(buf[:]))
+	return nil
+}
+
+// MarshalText turns bson.ObjectId into an encoding.TextMarshaler.
+func (id ObjectId) MarshalText() ([]byte, error) {
+	return []byte(fmt.Sprintf("%x", string(id))), nil
+}
+
+// UnmarshalText turns *bson.ObjectId into an encoding.TextUnmarshaler.
+func (id *ObjectId) UnmarshalText(data []byte) error {
+	if len(data) == 1 && data[0] == ' ' || len(data) == 0 {
+		*id = ""
+		return nil
+	}
+	if len(data) != 24 {
+		return fmt.Errorf("invalid ObjectId: %s", data)
+	}
+	var buf [12]byte
+	_, err := hex.Decode(buf[:], data[:])
+	if err != nil {
+		return fmt.Errorf("invalid ObjectId: %s (%s)", data, err)
 	}
 	*id = ObjectId(string(buf[:]))
 	return nil
@@ -301,7 +337,7 @@ func (id ObjectId) Valid() bool {
 // Calling this function with an invalid id will cause a runtime panic.
 func (id ObjectId) byteSlice(start, end int) []byte {
 	if len(id) != 12 {
-		panic(fmt.Sprintf("Invalid ObjectId: %q", string(id)))
+		panic(fmt.Sprintf("invalid ObjectId: %q", string(id)))
 	}
 	return []byte(string(id)[start:end])
 }
@@ -474,6 +510,7 @@ func Marshal(in interface{}) (out []byte, err error) {
 
 // Unmarshal deserializes data from in into the out value.  The out value
 // must be a map, a pointer to a struct, or a pointer to a bson.D value.
+// In the case of struct values, only exported fields will be deserialized.
 // The lowercased field name is used as the key for each exported field,
 // but this behavior may be changed using the respective field tag.
 // The tag may also contain flags to tweak the marshalling behavior for
@@ -603,7 +640,7 @@ func getStructInfo(st reflect.Type) (*structInfo, error) {
 	inlineMap := -1
 	for i := 0; i != n; i++ {
 		field := st.Field(i)
-		if field.PkgPath != "" {
+		if field.PkgPath != "" && !field.Anonymous {
 			continue // Private field
 		}
 
@@ -615,24 +652,6 @@ func getStructInfo(st reflect.Type) (*structInfo, error) {
 		}
 		if tag == "-" {
 			continue
-		}
-
-		// XXX Drop this after a few releases.
-		if s := strings.Index(tag, "/"); s >= 0 {
-			recommend := tag[:s]
-			for _, c := range tag[s+1:] {
-				switch c {
-				case 'c':
-					recommend += ",omitempty"
-				case 's':
-					recommend += ",minsize"
-				default:
-					msg := fmt.Sprintf("Unsupported flag %q in tag %q of type %s", string([]byte{uint8(c)}), tag, st)
-					panic(externalPanic(msg))
-				}
-			}
-			msg := fmt.Sprintf("Replace tag %q in field %s of type %s by %q", tag, field.Name, st, recommend)
-			panic(externalPanic(msg))
 		}
 
 		inline := false

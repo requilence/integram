@@ -1,9 +1,8 @@
 package txn
 
 import (
-	"sort"
-
 	"gopkg.in/mgo.v2/bson"
+	"sort"
 )
 
 func tarjanSort(successors map[bson.ObjectId][]bson.ObjectId) [][]bson.ObjectId {
