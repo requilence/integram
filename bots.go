@@ -1503,14 +1503,14 @@ func sendMessage(m *OutgoingMessage) error {
 
 			db := mongoSession.Clone().DB(mongo.Database)
 			defer db.Session.Close()
-			migrateToSuperGroup(db, m.ChatID, chatID)
+			migrateToSuperGroup(db, m.ChatID, tgErr.Parameters.MigrateToChatID)
 
 			// todo: in rare case this can produce duplicate messages for incoming webhooks
 			if err != nil {
 				log.WithField("chat", m.ChatID).WithError(err).Error("Can't reschedule sendMessageJob")
 			}
 
-			m.ChatID = chatID
+			m.ChatID = tgErr.Parameters.MigrateToChatID
 
 			return nil
 		} else if tgErr.BotStoppedForUser() {
