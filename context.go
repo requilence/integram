@@ -490,7 +490,7 @@ func (c *Context) EditMessageText(om *OutgoingMessage, text string) error {
 		Text: text,
 	})
 	if err != nil {
-		if err.(tg.Error).IsCantAccessChat() || err.(tg.Error).ChatMigratedToChatID() != 0 {
+		if err.(tg.Error).IsCantAccessChat() || err.(tg.Error).ChatMigrated() {
 			if c.Callback != nil && c.Callback.AnsweredAt == nil {
 				c.AnswerCallbackQuery("Sorry, message can be outdated. Bot can't edit messages created before converting to the Super Group", false)
 			}
@@ -684,7 +684,7 @@ func (c *Context) EditMessageTextAndInlineKeyboard(om *OutgoingMessage, fromStat
 	})
 
 	if err != nil {
-		if err.(tg.Error).IsCantAccessChat() || err.(tg.Error).ChatMigratedToChatID() != 0 {
+		if err.(tg.Error).IsCantAccessChat() || err.(tg.Error).ChatMigrated() {
 			if c.Callback != nil {
 				c.AnswerCallbackQuery("Message can be outdated. Bot can't edit messages created before converting to the Super Group", false)
 			}
@@ -732,7 +732,7 @@ func (c *Context) EditInlineKeyboard(om *OutgoingMessage, fromState string, kb I
 	})
 
 	if err != nil {
-		if err.(tg.Error).IsCantAccessChat() || err.(tg.Error).ChatMigratedToChatID() != 0 {
+		if err.(tg.Error).IsCantAccessChat() || err.(tg.Error).ChatMigrated() {
 			if c.Callback != nil {
 				c.AnswerCallbackQuery("Message can be outdated. Bot can't edit messages created before converting to the Super Group", false)
 			}

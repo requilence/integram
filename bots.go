@@ -438,9 +438,9 @@ func (keyboard InlineKeyboard) tg() [][]tg.InlineKeyboardButton {
 			}
 
 			if button.URL != "" {
-				res[r][c] = tg.InlineKeyboardButton{Text: button.Text, URL: button.URL}
+				res[r][c] = tg.InlineKeyboardButton{Text: button.Text, URL: stringPointer(button.URL)}
 			} else if button.Data != "" {
-				res[r][c] = tg.InlineKeyboardButton{Text: button.Text, CallbackData: button.Data}
+				res[r][c] = tg.InlineKeyboardButton{Text: button.Text, CallbackData: stringPointer(button.Data)}
 			} else if button.SwitchInlineQueryCurrentChat != "" {
 				res[r][c] = tg.InlineKeyboardButton{Text: button.Text, SwitchInlineQueryCurrentChat: stringPointer(button.SwitchInlineQueryCurrentChat)}
 			} else {
@@ -1497,9 +1497,9 @@ func sendMessage(m *OutgoingMessage) error {
 				log.WithField("chat", m.ChatID).WithError(err).Error("Can't reschedule sendMessageJob")
 			}
 			return nil
-		} else if chatID := tgErr.ChatMigratedToChatID(); chatID != 0 {
+		} else if tgErr.ChatMigrated()  {
 			// looks like the the chat we trying to send the message is migrated to supergroup
-			log.Warnf("sendMessage error: Migrated to %v", chatID)
+			log.Warnf("sendMessage error: Migrated to %v", tgErr.Parameters.MigrateToChatID)
 
 			db := mongoSession.Clone().DB(mongo.Database)
 			defer db.Session.Close()

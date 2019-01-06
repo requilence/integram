@@ -299,7 +299,12 @@ func incomingMessageFromTGMessage(m *tg.Message) IncomingMessage {
 
 	im.Caption = m.Caption
 
-	im.NewChatMember = tgUserPointer(m.NewChatMember)
+	if m.NewChatMembers != nil {
+		// todo: rework to support multiple new members update
+		firstUser := (*m.NewChatMembers)[0]
+		im.NewChatMember = tgUserPointer(&firstUser)
+	}
+
 	im.LeftChatMember = tgUserPointer(m.LeftChatMember)
 
 	im.Audio = m.Audio

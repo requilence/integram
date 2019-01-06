@@ -53,6 +53,24 @@ func (e Error) TooManyRequests() bool {
 	return strings.Contains(strings.ToLower(e.Description), "many requests")
 }
 
+var REParseTooManyRequestsDelay = regexp.MustCompile("retry after ([0-9]*)")
+
+func (e Error) ParseTooManyRequestsDelay() int {
+
+	b := REParseTooManyRequestsDelay.FindStringSubmatch(e.Description)
+
+	if len(b) < 2 {
+		return 10
+	}
+
+	delay, err := strconv.Atoi(b[1])
+	if err != nil {
+		return -1
+	}
+
+	return delay
+}
+
 func (e Error) BotStoppedForUser() bool {
 	return strings.Contains(strings.ToLower(e.Description), "bot was blocked")
 }
