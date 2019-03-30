@@ -161,6 +161,9 @@ func servicesHealthChecker() {
 					continue
 				}
 
+				// always close the response-body, even if content is not required
+				defer res.Body.Close()
+
 				if resp.StatusCode != 200 {
 					b, err := ioutil.ReadAll(resp.Body)
 
