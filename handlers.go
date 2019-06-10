@@ -111,12 +111,10 @@ func (f roundTripper) RoundTrip(req *http.Request) (*http.Response, error) { ret
 
 type proxyRefactor url.URL
 func (target *proxyRefactor) rt(req *http.Request) (*http.Response, error) {
-    stdlog.Printf("request received. url=%s", req.URL)
     req.Host = target.Host
-    defer stdlog.Printf("request complete. url=%s", req.URL)
-
     return http.DefaultTransport.RoundTrip(req)
 }
+
 func (target *proxyRefactor) direct(req *http.Request) {
     req.URL.Scheme = target.Scheme
     req.URL.Host = target.Host
