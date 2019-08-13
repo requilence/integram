@@ -967,19 +967,10 @@ func (user *User) AuthTempToken() string {
 	}
 
 	if ps.AuthTempToken != "" {
-		fmt.Println("found AuthTempToken:" + ps.AuthTempToken)
+		oAuthIDCacheFound := oAuthIDCacheVal{BaseURL: serviceBaseURL}
+		user.SetCache("auth_"+ps.AuthTempToken, oAuthIDCacheFound, cacheTime)
 
-		oAuthIDCacheFound := oAuthIDCacheVal{}
-		if exists := user.Cache("auth_"+ps.AuthTempToken, &oAuthIDCacheFound); !exists {
-			oAuthIDCacheFound = oAuthIDCacheVal{BaseURL: serviceBaseURL}
-			user.SetCache("auth_"+ps.AuthTempToken, oAuthIDCacheFound, cacheTime)
-		}
-
-		u, _ := url.Parse(oAuthIDCacheFound.BaseURL)
-
-		if u != nil && u.Host == host {
-			return ps.AuthTempToken
-		}
+		return ps.AuthTempToken
 	}
 
 	rnd := strings.ToLower(rndStr.Get(16))
