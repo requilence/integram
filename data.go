@@ -960,13 +960,19 @@ func (user *User) AuthTempToken() string {
 	}
 
 	ps, _ := user.protectedSettings()
+	cacheTime := user.ctx.Service().DefaultOAuth2.AuthTempTokenCacheTime
+
+	if cacheTime == 0 {
+		cacheTime = time.Hour * 24 * 30
+	}
+
 	if ps.AuthTempToken != "" {
 		fmt.Println("found AuthTempToken:" + ps.AuthTempToken)
 
 		oAuthIDCacheFound := oAuthIDCacheVal{}
 		if exists := user.Cache("auth_"+ps.AuthTempToken, &oAuthIDCacheFound); !exists {
 			oAuthIDCacheFound = oAuthIDCacheVal{BaseURL: serviceBaseURL}
-			user.SetCache("auth_"+ps.AuthTempToken, oAuthIDCacheFound, time.Hour*24)
+			user.SetCache("auth_"+ps.AuthTempToken, oAuthIDCacheFound, cacheTime)
 		}
 
 		u, _ := url.Parse(oAuthIDCacheFound.BaseURL)
@@ -977,7 +983,7 @@ func (user *User) AuthTempToken() string {
 	}
 
 	rnd := strings.ToLower(rndStr.Get(16))
-	user.SetCache("auth_"+rnd, oAuthIDCacheVal{BaseURL: serviceBaseURL}, time.Hour*24)
+	user.SetCache("auth_"+rnd, oAuthIDCacheVal{BaseURL: serviceBaseURL}, cacheTime)
 
 	err := user.saveProtectedSetting("AuthTempToken", rnd)
 

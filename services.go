@@ -129,6 +129,10 @@ type DefaultOAuth1 struct {
 type DefaultOAuth2 struct {
 	oauth2.Config
 	AccessTokenReceiver func(serviceContext *Context, r *http.Request) (token string, expiresAt *time.Time, refreshToken string, err error)
+
+	// duration to cache temp token to associate with user
+	// default(when zero) will be set to 30 days
+	AuthTempTokenCacheTime time.Duration
 }
 
 func servicesHealthChecker() {
