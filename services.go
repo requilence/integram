@@ -2,24 +2,25 @@ package integram
 
 import (
 	"encoding/gob"
+	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/mrjones/oauth"
-	"github.com/requilence/url"
-	"github.com/requilence/jobs"
-	log "github.com/sirupsen/logrus"
-	"golang.org/x/oauth2"
-	"net/http"
-
-	"encoding/json"
-	"gopkg.in/mgo.v2"
 	"io/ioutil"
+	"net/http"
+	"os"
 	"reflect"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
-	"os"
-	"strings"
+
+	"github.com/mrjones/oauth"
+	"github.com/requilence/jobs"
+	"github.com/requilence/url"
+	log "github.com/sirupsen/logrus"
+	"golang.org/x/oauth2"
+
+	"gopkg.in/mgo.v2"
 )
 
 const standAloneServicesFileName = "standAloneServices.json"
@@ -93,6 +94,9 @@ type Service struct {
 	OAuthSuccessful func(ctx *Context) error
 	// Can be used for services with tiny load
 	UseWebhookInsteadOfLongPolling bool
+
+	// Can be used to automatically clean up old messages metadata from database
+	RemoveMessagesOlderThan *time.Duration
 
 	machineURL string // in case of multi-instance mode URL is used to talk with the service
 
@@ -525,10 +529,12 @@ func Register(servicer Servicer, botToken string) {
 	if err != nil {
 		log.WithError(err).WithField("token", botToken).Panic("Can't register the bot")
 	}
+	go ServiceWorkerAutorespawnGoroutine(service)
 
 	if service.Worker != nil {
-		go SeviceWorkerAutorespawnGoroutine(service)
+		go ServiceWorkerAutorespawnGoroutine(service)
 	}
+
 	// todo: here is possible bug if service just want to use inline keyboard callbacks via setCallbackAction
 	if service.TGNewMessageHandler == nil && service.TGInlineQueryHandler == nil {
 		return
@@ -536,19 +542,18 @@ func Register(servicer Servicer, botToken string) {
 
 }
 
-func SeviceWorkerAutorespawnGoroutine(s *Service) {
+func ServiceWorkerAutorespawnGoroutine(s *Service) {
 
 	c := s.EmptyContext()
 	defer func() {
 		if r := recover(); r != nil {
 			stack := stack(3)
-			log.Errorf("Panic recovery at SeviceWorkerAutorespawnGoroutine -> %s\n%s\n", r, stack)
+			log.Errorf("Panic recovery at ServiceWorkerAutorespawnGoroutine -> %s\n%s\n", r, stack)
 		}
-		go SeviceWorkerAutorespawnGoroutine(s) // restart
+		go ServiceWorkerAutorespawnGoroutine(s) // restart
 	}()
 
 	err := s.Worker(c)
-
 	if err != nil {
 		s.Log().WithError(err).Error("Worker return error")
 	}

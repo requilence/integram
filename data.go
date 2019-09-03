@@ -422,6 +422,13 @@ func (user *User) SetCache(key string, val interface{}, ttl time.Duration) error
 	return err
 }
 
+// ClearAllCacheKeys removes all User's cache keys
+func (user *User) ClearAllCacheKeys() error {
+	serviceID := user.ctx.getServiceID()
+	_, err := user.ctx.db.C("users_cache").RemoveAll(bson.M{"userid": user.ID, "service": serviceID})
+	return err
+}
+
 // UpdateCache updates the per User cache using MongoDB Update query
 func (user *User) UpdateCache(key string, update interface{}, res interface{}) error {
 
@@ -451,6 +458,13 @@ func (chat *Chat) SetCache(key string, val interface{}, ttl time.Duration) error
 		}
 		log.WithError(err).WithField("key", key).Error("Can't set user cache value")
 	}
+	return err
+}
+
+// ClearAllCacheKeys removes all Chat's cache keys
+func (chat *Chat) ClearAllCacheKeys() error {
+	serviceID := chat.ctx.getServiceID()
+	_, err := chat.ctx.db.C("chats_cache").RemoveAll(bson.M{"chatid": chat.ID, "service": serviceID})
 	return err
 }
 

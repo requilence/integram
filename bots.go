@@ -69,7 +69,8 @@ type Message struct {
 	BackupChatID     int64         `bson:",omitempty,minsize"` // This chat will be used if chatid failed (bot not started or stopped or group deactivated)
 	ReplyToMsgID     int           `bson:",omitempty"`         // If this message is reply, contains Telegram's Message ID of original message
 	Date             time.Time
-	Text             string           `bson:",omitempty"`
+	Text             string           `bson:"-"`			   // Exclude text field
+	TextHash         string           `bson:",omitempty"`
 	Location         *Location        `bson:",omitempty"`
 	AntiFlood        bool             `bson:",omitempty"`
 	Deleted          bool             `bson:",omitempty"` // f.e. admin can delete the message in supergroup and we can't longer edit or reply on it
@@ -124,7 +125,6 @@ type IncomingMessage struct {
 // OutgoingMessage specispecifiesfy data of performing or performed outgoing message
 type OutgoingMessage struct {
 	Message              `bson:",inline"`
-	TextHash             string         `bson:",omitempty"`
 	KeyboardHide         bool           `bson:",omitempty"`
 	ResizeKeyboard       bool           `bson:",omitempty"`
 	KeyboardMarkup       Keyboard       `bson:"-"`

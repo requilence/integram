@@ -154,18 +154,19 @@ func updateRoutine(b *Bot, u *tg.Update) {
 			}
 		}
 
-		// Save incoming message after processing to be sure to save onReply actions
-		err := context.Message.Message.saveToDB(db)
-
-		if err != nil {
-			log.WithError(err).Error("can't add incoming message to db")
+		// Save incoming message metadata(text and files are excluded) in case it has onReply/onEdit actions or have associated event
+		if context.Message.OnEditAction != "" || context.Message.OnReplyAction != "" || len(context.Message.EventID) > 0 {
+			err := context.Message.Message.saveToDB(db)
+			if err != nil {
+				log.WithError(err).Error("can't add incoming message to db")
+			}
 		}
+
 		if context.messageAnsweredAt != nil {
 			context.StatIncChat(StatIncomingMessageAnswered)
 		} else {
 			context.StatIncChat(StatIncomingMessageNotAnswered)
 		}
-
 	} else if context.InlineQuery != nil {
 		if service.TGInlineQueryHandler == nil {
 			context.Log().Warn("Received InlineQuery but TGInlineQueryHandler not set for service")
@@ -174,7 +175,6 @@ func updateRoutine(b *Bot, u *tg.Update) {
 
 		queryHandlerStarted := time.Now()
 		err := service.TGInlineQueryHandler(context)
-
 		if err != nil {
 			if strings.Contains(err.Error(), "QUERY_ID_INVALID") {
 				context.StatIncUser(StatInlineQueryTimeouted)
@@ -184,7 +184,6 @@ func updateRoutine(b *Bot, u *tg.Update) {
 			context.Log().WithError(err).WithField("secSpent", time.Now().Sub(queryHandlerStarted).Seconds()).WithField("secSpentSinceUpdate", time.Now().Sub(updateReceivedAt).Seconds()).Error("BotUpdateHandler InlineQuery error")
 			context.StatIncUser(StatInlineQueryProcessingError)
 		} else {
-
 			if context.inlineQueryAnsweredAt == nil {
 				context.StatIncUser(StatInlineQueryNotAnswered)
 
@@ -198,7 +197,6 @@ func updateRoutine(b *Bot, u *tg.Update) {
 				}
 			}
 		}
-
 		return
 	} else if context.ChosenInlineResult != nil {
 
@@ -760,7 +758,10 @@ func tgUpdateHandler(u *tg.Update, b *Bot, db *mgo.Database) (*Service, *Context
 	return
 }*/
 
+// saveToDB stores incoming message metadata to the database
 func (m *Message) saveToDB(db *mgo.Database) error {
+	// text is excluded, instead saving textHash
+	m.TextHash = m.GetTextHash()
 	return db.C("messages").Insert(m)
 }
 
