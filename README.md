@@ -33,7 +33,7 @@ How to host Integram on your own server (using your private bots)
 ```bash
    git clone https://github.com/requilence/integram && cd integram
 ```
-- Check the `docker-compose.yml` file for the required ENV vars for each service
+- Check the `.env-example` file for the required ENV vars for each service
     - E.g. in order to run the Trello integration you will need to export: 
     	- **INTEGRAM_BASE_URL** – the base URL where your Integram host will be accessible, e.g. **https://integram.org**
 	    - **INTEGRAM_PORT** – if set to 443 Integram will use ssl.key/ssl.cert at /go/.conf. 
@@ -49,11 +49,7 @@ How to host Integram on your own server (using your private bots)
 	      - **TRELLO_OAUTH_SECRET** – OAuth Secret
     
     - For more detailed info about other services you should check the corresponding repo at https://github.com/integram-org
-- Export the variables you identified in the previous step, for instance on linux this should be something like:
-```bash
-   export INTEGRAM_PORT=xxxx
-   export ...
-```
+- Create a new file from `.env-example` and name it `.env`. Update the variables as necessary. [Read more about `.env` and `docker-compose`](https://docs.docker.com/compose/compose-file/#variable-substitution)
 - Now you can run the services (linux: careful if you need to sudo this, the exports you just did will not be available) :
 ```bash
    docker-compose -p integram up trello gitlab ## Here you specify the services you want to run
