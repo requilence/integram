@@ -74,12 +74,7 @@ func (user *User) OAuthValid() bool {
 
 // OAuthToken returns OAuthToken for service
 func (user *User) OAuthTokenSource() (oauth2.TokenSource, error) {
-	if user.ctx.Service().DefaultOAuth1 != nil {
-		//todo make a correct httpclient
-		return nil, fmt.Errorf("OAuth1 not supported")
-	}
-
-	if user.ctx.Service().DefaultOAuth2 != nil {
+	if user.ctx.Service().DefaultOAuth2 == nil {
 		return nil, fmt.Errorf("DefaultOAuth2 config not set for the service")
 	}
 
