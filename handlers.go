@@ -1,33 +1,33 @@
 package integram
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"html/template"
+	stdlog "log"
 	"net/http"
+	"net/http/httputil"
+	nativeurl "net/url"
+	"os"
+	"os/signal"
 	"path"
 	"runtime"
 	"strings"
+	"sync"
+	"syscall"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/requilence/url"
 	log "github.com/sirupsen/logrus"
-	stdlog "log"
 
 	"github.com/weekface/mgorus"
 	"golang.org/x/oauth2"
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
-	"net/http/httputil"
-	nativeurl "net/url"
 
-	"bytes"
 	"github.com/requilence/jobs"
-	"html/template"
-	"os"
-	"os/signal"
-	"sync"
-	"syscall"
 )
 
 var startedAt time.Time
@@ -934,22 +934,15 @@ func oAuthCallback(c *gin.Context, oauthProviderID string) {
 		return
 	}
 
-	ps, err := ctx.User.protectedSettings()
-
+	err = oauthTokenStore.SetOAuthAccessToken(&ctx.User, accessToken, expiresAt)
 	if err != nil {
-		ctx.Log().WithError(err).WithError(err).Error("oAuthCallback: can't get User.protectedSettings() ")
-	}
+		log.WithError(err).WithFields(log.Fields{"oauthID": oauthProviderID}).Error("Can't save OAuth token to store")
 
-	ps.OAuthToken = accessToken
+		c.String(http.StatusInternalServerError, "failed to save OAuth access token to token store")
+		return
+	}
 	if refreshToken != "" {
-		ps.OAuthRefreshToken = refreshToken
-	}
-	if expiresAt != nil {
-		ps.OAuthExpireDate = expiresAt
-	}
-	err = ctx.User.saveProtectedSettings()
-	if err != nil {
-		ctx.Log().WithError(err).WithError(err).Error("oAuthCallback: can't saveProtectedSettings")
+		oauthTokenStore.SetOAuthRefreshToken(&ctx.User, refreshToken)
 	}
 
 	ctx.StatIncUser(StatOAuthSuccess)
