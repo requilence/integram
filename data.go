@@ -3,14 +3,12 @@ package integram
 import (
 	"errors"
 	"fmt"
-	"net/http"
 	"reflect"
 	"runtime"
 	"strings"
 	"time"
 
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/oauth2"
 	mgo "gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 )
@@ -955,175 +953,9 @@ func (user *User) SaveSetting(key string, value interface{}) error {
 	return err
 }
 
-// AuthTempToken returns Auth token used in OAuth process to associate TG user with OAuth creditianals
-func (user *User) AuthTempToken() string {
-
-	host := user.ctx.ServiceBaseURL.Host
-	if host == "" {
-		host = user.ctx.Service().DefaultBaseURL.Host
-	}
-
-	serviceBaseURL := user.ctx.ServiceBaseURL.String()
-	if serviceBaseURL == "" {
-		serviceBaseURL = user.ctx.Service().DefaultBaseURL.String()
-	}
-
-	ps, _ := user.protectedSettings()
-	cacheTime := user.ctx.Service().DefaultOAuth2.AuthTempTokenCacheTime
-
-	if cacheTime == 0 {
-		cacheTime = time.Hour * 24 * 30
-	}
-
-	if ps.AuthTempToken != "" {
-		oAuthIDCacheFound := oAuthIDCacheVal{BaseURL: serviceBaseURL}
-		user.SetCache("auth_"+ps.AuthTempToken, oAuthIDCacheFound, cacheTime)
-
-		return ps.AuthTempToken
-	}
-
-	rnd := strings.ToLower(rndStr.Get(16))
-	user.SetCache("auth_"+rnd, oAuthIDCacheVal{BaseURL: serviceBaseURL}, cacheTime)
-
-	err := user.saveProtectedSetting("AuthTempToken", rnd)
-
-	if err != nil {
-		user.ctx.Log().WithError(err).Error("Error saving AuthTempToken")
-	}
-	return rnd
-}
-
-// OauthRedirectURL used in OAuth process as returning URL
-func (user *User) OauthRedirectURL() string {
-	providerID := user.ctx.OAuthProvider().internalID()
-	if providerID == user.ctx.ServiceName {
-		return fmt.Sprintf("%s/auth/%s", Config.BaseURL, user.ctx.ServiceName)
-	}
-
-	return fmt.Sprintf("%s/auth/%s/%s", Config.BaseURL, user.ctx.ServiceName, providerID)
-}
-
-// OauthInitURL used in OAuth process as returning URL
-func (user *User) OauthInitURL() string {
-	authTempToken := user.AuthTempToken()
-	s := user.ctx.Service()
-	if authTempToken == "" {
-		user.ctx.Log().Error("authTempToken is empty")
-		return ""
-	}
-	if s.DefaultOAuth2 != nil {
-		provider := user.ctx.OAuthProvider()
-
-		return provider.OAuth2Client(user.ctx).AuthCodeURL(authTempToken, oauth2.AccessTypeOffline)
-	}
-	if s.DefaultOAuth1 != nil {
-		return fmt.Sprintf("%s/oauth1/%s/%s", Config.BaseURL, s.Name, authTempToken)
-	}
-	return ""
-}
 
 func escapeDot(s string) string {
 	return strings.Replace(s, ".", "_", -1)
-}
-
-// OAuthHTTPClient returns HTTP client with Bearer authorization headers
-func (user *User) OAuthHTTPClient() *http.Client {
-	if user.ctx.Service().DefaultOAuth2 != nil {
-		ts := user.OAuthTokenSource()
-		if ts == nil {
-			return nil
-		}
-
-		return oauth2.NewClient(oauth2.NoContext, ts)
-	} else if user.ctx.Service().DefaultOAuth1 != nil {
-		//todo make a correct httpclient
-		return http.DefaultClient
-	}
-	return nil
-}
-
-// OAuthValid checks if OAuthToken for service is set
-func (user *User) OAuthValid() bool {
-	token, _, _ := oauthTokenStore.GetOAuthAccessToken(user)
-	return token != ""
-}
-
-// OAuthToken returns OAuthToken for service
-func (user *User) OAuthTokenSource() oauth2.TokenSource {
-	token, expireDate, err := oauthTokenStore.GetOAuthAccessToken(user)
-	if err != nil {
-		log.Errorf("can't create OAuthTokenSource: oauthTokenStore.GetOAuthAccessToken got error: %s", err.Error())
-	}
-
-	if token == "" {
-		return nil
-	}
-
-	if user.ctx.Service().DefaultOAuth2 != nil {
-		var refreshToken string
-		if expireDate != nil && expireDate.Before(time.Now().Add(time.Minute*5)) {
-			refreshToken, err = oauthTokenStore.GetOAuthRefreshToken(user)
-			if err != nil {
-				log.Errorf("can't create OAuthTokenSource: oauthTokenStore.GetOAuthRefreshToken got error: %s", err.Error())
-			}
-		}
-		ts := user.ctx.OAuthProvider().OAuth2Client(user.ctx).TokenSource(oauth2.NoContext, &oauth2.Token{AccessToken: token, RefreshToken: refreshToken, Expiry: *expireDate, TokenType: "Bearer"})
-
-		newToken, err := ts.Token()
-		if err != nil {
-			if strings.Contains(err.Error(), "revoked") || strings.Contains(err.Error(), "invalid_grant") {
-				oauthTokenStore.SetOAuthAccessToken(user, "", nil)
-				//todo: provide revoked callback
-			}
-			user.ctx.Log().WithError(err).Error("OAuth token refresh failed")
-			return nil
-		}
-
-		if newToken != nil && (newToken.AccessToken != token || newToken.Expiry != *expireDate) {
-			oauthTokenStore.SetOAuthAccessToken(user, newToken.AccessToken, &newToken.Expiry)
-			if newToken.RefreshToken != "" {
-				oauthTokenStore.SetOAuthRefreshToken(user, newToken.RefreshToken)
-			}
-		}
-		return ts
-	} else if user.ctx.Service().DefaultOAuth1 != nil {
-		//todo make a correct httpclient
-		return nil
-	}
-	return nil
-}
-
-// OAuthToken returns OAuthToken for service
-func (user *User) OAuthToken() string {
-	// todo: oauthtoken per host?
-	/*
-		host := user.ctx.ServiceBaseURL.Host
-
-		if host == "" {
-			host = user.ctx.Service().DefaultBaseURL.Host
-		}
-	*/
-	ts := user.OAuthTokenSource()
-	if ts == nil {
-		return ""
-	}
-
-	token, err := ts.Token()
-	if err != nil {
-		log.Errorf("OAuthToken got tokensource error: %s", err.Error())
-		return ""
-	}
-
-	return token.AccessToken
-}
-
-// ResetOAuthToken reset OAuthToken for service
-func (user *User) ResetOAuthToken() error {
-	err := oauthTokenStore.SetOAuthAccessToken(user, "", nil)
-	if err != nil {
-		user.ctx.Log().WithError(err).Error("ResetOAuthToken error")
-	}
-	return err
 }
 
 // SetAfterAuthAction sets the handlerFunc and it's args that will be triggered on success user Auth.
@@ -1150,31 +982,6 @@ func (user *User) SetAfterAuthAction(handlerFunc interface{}, args ...interface{
 	user.saveProtectedSettings()
 
 	return nil
-}
-
-func findOauthProviderByID(db *mgo.Database, id string) (*OAuthProvider, error) {
-	oap := OAuthProvider{}
-
-	if s, _ := serviceByName(id); s != nil {
-		return s.DefaultOAuthProvider(), nil
-	}
-
-	err := db.C("oauth_providers").FindId(id).One(&oap)
-	if err != nil {
-		return nil, err
-	}
-
-	return &oap, nil
-}
-
-func findOauthProviderByHost(db *mgo.Database, host string) (*OAuthProvider, error) {
-	oap := OAuthProvider{}
-	err := db.C("oauth_providers").Find(bson.M{"baseurl.host": strings.ToLower(host)}).One(&oap)
-	if err != nil {
-		return nil, err
-	}
-
-	return &oap, nil
 }
 
 // WebPreview generate fake webpreview and store it in DB. Telegram will resolve it as we need

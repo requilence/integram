@@ -1,63 +1,234 @@
 package integram
 
 import (
+	"fmt"
+	"net/http"
+	"strings"
 	"time"
+
+	"golang.org/x/oauth2"
+	"gopkg.in/mgo.v2"
+	"gopkg.in/mgo.v2/bson"
 )
 
-type OAuthTokenStore interface {
-	GetOAuthAccessToken(user *User) (token string, expireDate *time.Time, err error)
-	SetOAuthAccessToken(user *User, token string, expireDate *time.Time) error
-	GetOAuthRefreshToken(user *User) (string, error)
-	SetOAuthRefreshToken(user *User, token string) error
+type OAuthTokenSource struct {
+	user *User
+	last *oauth2.Token
 }
 
-type DefaultOAuthTokenMongoStore struct {
-}
-
-var oauthTokenStore OAuthTokenStore = &DefaultOAuthTokenMongoStore{}
-
-func SetOAuthTokenStore(store OAuthTokenStore) {
-	oauthTokenStore = store
-}
-
-func (d *DefaultOAuthTokenMongoStore) GetOAuthAccessToken(user *User) (token string, expireDate *time.Time, err error) {
-	ps, err := user.protectedSettings()
+func (tsw *OAuthTokenSource) Token() (*oauth2.Token, error) {
+	ts := tsw.user.ctx.OAuthProvider().OAuth2Client(tsw.user.ctx).TokenSource(oauth2.NoContext, tsw.last)
+	token, err := ts.Token()
 	if err != nil {
-		return "", nil, err
+		if strings.Contains(err.Error(), "revoked") || strings.Contains(err.Error(), "invalid_grant") {
+			err = oauthTokenStore.SetOAuthAccessToken(tsw.user, "", nil)
+			if err != nil {
+				tsw.user.ctx.Log().WithError(err).Error("failed to reset revoked OAuth token in store: %s", err.Error())
+			}
+			//todo: provide revoked callback
+		}
+		tsw.user.ctx.Log().WithError(err).Error("OAuth token refresh failed, token removed")
+		return nil, err
 	}
 
-	return ps.OAuthToken, nil, nil
-}
-
-func (d *DefaultOAuthTokenMongoStore) GetOAuthRefreshToken(user *User) (string, error) {
-	ps, err := user.protectedSettings()
-
-	if err != nil {
-		return "", err
+	if token != nil && (tsw.last == nil) {
+		if token.AccessToken != tsw.last.AccessToken || !token.Expiry.Equal(tsw.last.Expiry) {
+			err = oauthTokenStore.SetOAuthAccessToken(tsw.user, token.AccessToken, &token.Expiry)
+			if err != nil {
+				tsw.user.ctx.Log().WithError(err).Error("failed to set OAuth Access token in store: %s", err.Error())
+			}
+		}
+		if token.RefreshToken != "" && token.RefreshToken != tsw.last.RefreshToken {
+			err = oauthTokenStore.SetOAuthRefreshToken(tsw.user, token.RefreshToken)
+			if err != nil {
+				tsw.user.ctx.Log().WithError(err).Error("failed to set OAuth Access token in store: %s", err.Error())
+			}
+		}
 	}
 
-	return ps.OAuthRefreshToken, nil
+	return token, nil
 }
 
-func (d *DefaultOAuthTokenMongoStore) SetOAuthAccessToken(user *User, token string, expireDate *time.Time) error {
-	ps, err := user.protectedSettings()
-	if err != nil {
-		return err
+// OAuthHTTPClient returns HTTP client with Bearer authorization headers
+func (user *User) OAuthHTTPClient() *http.Client {
+	if user.ctx.Service().DefaultOAuth2 != nil {
+		ts, err := user.OAuthTokenSource()
+		if err != nil {
+			user.ctx.Log().Errorf("OAuthTokenSource got error: %s", err.Error())
+			return nil
+		}
+
+		return oauth2.NewClient(oauth2.NoContext, ts)
+	} else if user.ctx.Service().DefaultOAuth1 != nil {
+		//todo make a correct httpclient
+		return http.DefaultClient
 	}
-
-	ps.OAuthToken = token
-	ps.OAuthExpireDate = expireDate
-
-	return user.saveProtectedSettings()
+	return nil
 }
 
-func (d *DefaultOAuthTokenMongoStore) SetOAuthRefreshToken(user *User, refreshToken string) error {
-	ps, err := user.protectedSettings()
-	if err != nil {
-		return err
+// OAuthValid checks if OAuthToken for service is set
+func (user *User) OAuthValid() bool {
+	token, _, _ := oauthTokenStore.GetOAuthAccessToken(user)
+	return token != ""
+}
+
+// OAuthToken returns OAuthToken for service
+func (user *User) OAuthTokenSource() (oauth2.TokenSource, error) {
+	if user.ctx.Service().DefaultOAuth1 != nil {
+		//todo make a correct httpclient
+		return nil, fmt.Errorf("OAuth1 not supported")
 	}
 
-	ps.OAuthRefreshToken = refreshToken
+	if user.ctx.Service().DefaultOAuth2 != nil {
+		return nil, fmt.Errorf("DefaultOAuth2 config not set for the service")
+	}
 
-	return user.saveProtectedSetting("OAuthRefreshToken", refreshToken)
+	accessToken, expireDate, err := oauthTokenStore.GetOAuthAccessToken(user)
+	if err != nil {
+		user.ctx.Log().Errorf("can't create OAuthTokenSource: oauthTokenStore.GetOAuthAccessToken got error: %s", err.Error())
+	}
+
+	otoken := &oauth2.Token{AccessToken: accessToken, TokenType: "Bearer"}
+
+	if expireDate != nil {
+		otoken.Expiry = *expireDate
+		if expireDate.Before(time.Now().Add(time.Minute * 5)) {
+			// attach refresh token in case it is close to the expiration date
+			otoken.RefreshToken, err = oauthTokenStore.GetOAuthRefreshToken(user)
+			if err != nil {
+				user.ctx.Log().Errorf("can't create OAuthTokenSource: oauthTokenStore.GetOAuthRefreshToken got error: %s", err.Error())
+			}
+		}
+	}
+
+	return &OAuthTokenSource{
+		user: user,
+		last: otoken,
+	}, nil
+}
+
+// OAuthToken returns OAuthToken for service
+func (user *User) OAuthToken() string {
+	// todo: oauthtoken per host?
+	/*
+		host := user.ctx.ServiceBaseURL.Host
+
+		if host == "" {
+			host = user.ctx.Service().DefaultBaseURL.Host
+		}
+	*/
+	ts, err := user.OAuthTokenSource()
+	if err != nil {
+		user.ctx.Log().Errorf("OAuthTokenSource got error: %s", err.Error())
+		return ""
+	}
+
+	token, err := ts.Token()
+	if err != nil {
+		user.ctx.Log().Errorf("OAuthToken got tokensource error: %s", err.Error())
+		return ""
+	}
+
+	return token.AccessToken
+}
+
+// ResetOAuthToken reset OAuthToken for service
+func (user *User) ResetOAuthToken() error {
+	err := oauthTokenStore.SetOAuthAccessToken(user, "", nil)
+	if err != nil {
+		user.ctx.Log().WithError(err).Error("ResetOAuthToken error")
+	}
+	return err
+}
+
+// OauthRedirectURL used in OAuth process as returning URL
+func (user *User) OauthRedirectURL() string {
+	providerID := user.ctx.OAuthProvider().internalID()
+	if providerID == user.ctx.ServiceName {
+		return fmt.Sprintf("%s/auth/%s", Config.BaseURL, user.ctx.ServiceName)
+	}
+
+	return fmt.Sprintf("%s/auth/%s/%s", Config.BaseURL, user.ctx.ServiceName, providerID)
+}
+
+// OauthInitURL used in OAuth process as returning URL
+func (user *User) OauthInitURL() string {
+	authTempToken := user.AuthTempToken()
+	s := user.ctx.Service()
+	if authTempToken == "" {
+		user.ctx.Log().Error("authTempToken is empty")
+		return ""
+	}
+	if s.DefaultOAuth2 != nil {
+		provider := user.ctx.OAuthProvider()
+
+		return provider.OAuth2Client(user.ctx).AuthCodeURL(authTempToken, oauth2.AccessTypeOffline)
+	}
+	if s.DefaultOAuth1 != nil {
+		return fmt.Sprintf("%s/oauth1/%s/%s", Config.BaseURL, s.Name, authTempToken)
+	}
+	return ""
+}
+
+// AuthTempToken returns Auth token used in OAuth process to associate TG user with OAuth creditianals
+func (user *User) AuthTempToken() string {
+
+	host := user.ctx.ServiceBaseURL.Host
+	if host == "" {
+		host = user.ctx.Service().DefaultBaseURL.Host
+	}
+
+	serviceBaseURL := user.ctx.ServiceBaseURL.String()
+	if serviceBaseURL == "" {
+		serviceBaseURL = user.ctx.Service().DefaultBaseURL.String()
+	}
+
+	ps, _ := user.protectedSettings()
+	cacheTime := user.ctx.Service().DefaultOAuth2.AuthTempTokenCacheTime
+
+	if cacheTime == 0 {
+		cacheTime = time.Hour * 24 * 30
+	}
+
+	if ps.AuthTempToken != "" {
+		oAuthIDCacheFound := oAuthIDCacheVal{BaseURL: serviceBaseURL}
+		user.SetCache("auth_"+ps.AuthTempToken, oAuthIDCacheFound, cacheTime)
+
+		return ps.AuthTempToken
+	}
+
+	rnd := strings.ToLower(rndStr.Get(16))
+	user.SetCache("auth_"+rnd, oAuthIDCacheVal{BaseURL: serviceBaseURL}, cacheTime)
+
+	err := user.saveProtectedSetting("AuthTempToken", rnd)
+
+	if err != nil {
+		user.ctx.Log().WithError(err).Error("Error saving AuthTempToken")
+	}
+	return rnd
+}
+
+func findOauthProviderByID(db *mgo.Database, id string) (*OAuthProvider, error) {
+	oap := OAuthProvider{}
+
+	if s, _ := serviceByName(id); s != nil {
+		return s.DefaultOAuthProvider(), nil
+	}
+
+	err := db.C("oauth_providers").FindId(id).One(&oap)
+	if err != nil {
+		return nil, err
+	}
+
+	return &oap, nil
+}
+
+func findOauthProviderByHost(db *mgo.Database, host string) (*OAuthProvider, error) {
+	oap := OAuthProvider{}
+	err := db.C("oauth_providers").Find(bson.M{"baseurl.host": strings.ToLower(host)}).One(&oap)
+	if err != nil {
+		return nil, err
+	}
+
+	return &oap, nil
 }
