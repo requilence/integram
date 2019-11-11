@@ -119,6 +119,7 @@ type userProtected struct {
 	OAuthExpireDate   *time.Time
 	OAuthRefreshToken string
 	AuthTempToken     string // Temp token for redirect to time-limited Oauth URL to authorize the user (F.e. Trello)
+	OAuthValid    	  bool // used for stat purposes
 
 	AfterAuthHandler string // Used to store function that will be called after successful auth. F.e. in case of interactive reply in chat for non-authed user
 	AfterAuthData    []byte // Gob encoded arg's

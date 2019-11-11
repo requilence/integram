@@ -21,6 +21,8 @@ func (tsw *OAuthTokenSource) Token() (*oauth2.Token, error) {
 	token, err := ts.Token()
 	if err != nil {
 		if strings.Contains(err.Error(), "revoked") || strings.Contains(err.Error(), "invalid_grant") {
+			_ = tsw.user.saveProtectedSetting("OAuthValid", false)
+
 			err = oauthTokenStore.SetOAuthAccessToken(tsw.user, "", nil)
 			if err != nil {
 				tsw.user.ctx.Log().WithError(err).Error("failed to reset revoked OAuth token in store: %s", err.Error())
@@ -33,6 +35,12 @@ func (tsw *OAuthTokenSource) Token() (*oauth2.Token, error) {
 
 	if token != nil && (tsw.last == nil) {
 		if token.AccessToken != tsw.last.AccessToken || !token.Expiry.Equal(tsw.last.Expiry) {
+			ps, _ := tsw.user.protectedSettings()
+			if ps != nil && !ps.OAuthValid {
+				ps.OAuthValid = true
+				_ = tsw.user.saveProtectedSetting("OAuthValid", true)
+			}
+
 			err = oauthTokenStore.SetOAuthAccessToken(tsw.user, token.AccessToken, &token.Expiry)
 			if err != nil {
 				tsw.user.ctx.Log().WithError(err).Error("failed to set OAuth Access token in store: %s", err.Error())

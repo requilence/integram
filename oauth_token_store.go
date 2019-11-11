@@ -2,6 +2,8 @@ package integram
 
 import (
 	"time"
+
+	"gopkg.in/mgo.v2/bson"
 )
 
 type OAuthTokenStore interface {
@@ -18,6 +20,49 @@ var oauthTokenStore OAuthTokenStore = &DefaultOAuthTokenMongoStore{}
 
 func SetOAuthTokenStore(store OAuthTokenStore) {
 	oauthTokenStore = store
+}
+
+func MigrateFromDefault(c *Context, newTS OAuthTokenStore) (total int, migrated int, expired int, err error) {
+	users := []userData{}
+	serviceID := c.getServiceID()
+	keyPrefix := "protected." + serviceID
+	err = c.db.C("users").Find(bson.M{keyPrefix + ".oauthtoken": bson.M{"$ne": ""}}).Select(bson.M{keyPrefix + ".oauthtoken": 1, keyPrefix + ".oauthexpiredate": 1, keyPrefix + ".oauthrefreshtoken": 1}).All(&users)
+	if err != nil {
+		return
+	}
+
+	total = len(users)
+	now := time.Now()
+	for _, userData := range users {
+		user := userData.User
+		if ps, exists := userData.Protected[serviceID]; exists {
+			// skip expired tokens without refresh tokens
+			if ps.OAuthExpireDate.Before(now) && ps.OAuthRefreshToken == "" {
+				expired++
+				continue
+			}
+
+			err = newTS.SetOAuthAccessToken(&user, ps.OAuthToken, ps.OAuthExpireDate)
+			if err != nil {
+				c.Log().Errorf("OAuthTokenStore MigrateFromDefault got error on SetOAuthAccessToken: %s", err.Error())
+				continue
+			}
+
+			err = newTS.SetOAuthRefreshToken(&user, ps.OAuthRefreshToken)
+			if err != nil {
+				c.Log().Errorf("OAuthTokenStore MigrateFromDefault got error on SetOAuthRefreshToken: %s", err.Error())
+				continue
+			}
+
+			err = c.db.C("users").UpdateId(user.ID, bson.M{"$set": bson.M{keyPrefix + ".oauthtoken": "", keyPrefix + ".oauthrefreshtoken": "", keyPrefix + ".oauthvalid": true}})
+			if err != nil {
+				c.Log().Errorf("OAuthTokenStore MigrateFromDefault got error: %s", err.Error())
+				continue
+			}
+		}
+	}
+
+	return
 }
 
 func (d *DefaultOAuthTokenMongoStore) GetOAuthAccessToken(user *User) (token string, expireDate *time.Time, err error) {
