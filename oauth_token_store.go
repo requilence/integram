@@ -24,8 +24,7 @@ func SetOAuthTokenStore(store OAuthTokenStore) {
 
 func MigrateFromDefault(c *Context, newTS OAuthTokenStore) (total int, migrated int, expired int, err error) {
 	users := []userData{}
-	serviceID := c.getServiceID()
-	keyPrefix := "protected." + serviceID
+	keyPrefix := "protected." + c.ServiceName
 	err = c.db.C("users").Find(bson.M{keyPrefix + ".oauthtoken": bson.M{"$exists": true, "$ne": ""}}).Select(bson.M{keyPrefix + ".oauthtoken": 1, keyPrefix + ".oauthexpiredate": 1, keyPrefix + ".oauthrefreshtoken": 1}).All(&users)
 	if err != nil {
 		return
@@ -35,7 +34,7 @@ func MigrateFromDefault(c *Context, newTS OAuthTokenStore) (total int, migrated 
 	now := time.Now()
 	for _, userData := range users {
 		user := userData.User
-		if ps, exists := userData.Protected[serviceID]; exists {
+		if ps, exists := userData.Protected[c.ServiceName]; exists {
 			// skip expired tokens without refresh tokens
 			if ps.OAuthExpireDate.Before(now) && ps.OAuthRefreshToken == "" {
 				expired++
