@@ -29,8 +29,7 @@
   revision = "22d885f9ecc78bf4ee5d72b937e4bbcdc58e8cae"
 
 [[projects]]
-  branch = "fix-redirect-slash"
-  digest = "1:c51a9d5aba803d3f443ef7f6ed50cae3d57fe234e508df0fa40062a261ed6143"
+  digest = "1:472983c95f77b657b33608dcdc85c3de3a90b6169ec714a28c40020a4d99bc09"
   name = "github.com/gin-gonic/gin"
   packages = [
     ".",
@@ -39,8 +38,7 @@
     "render",
   ]
   pruneopts = ""
-  revision = "588879e55f3c13099159e1f24b7b90946f31266b"
-  source = "https://github.com/requilence/gin.git"
+  revision = "6d913fc343cfac80d656db5be67a0ffb1323ba0d"
 
 [[projects]]
   digest = "1:bcb38c8fc9b21bb8682ce2d605a7d4aeb618abc7f827e3ac0b27c0371fdb23fb"
