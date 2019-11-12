@@ -26,7 +26,7 @@ func MigrateFromDefault(c *Context, newTS OAuthTokenStore) (total int, migrated 
 	users := []userData{}
 	serviceID := c.getServiceID()
 	keyPrefix := "protected." + serviceID
-	err = c.db.C("users").Find(bson.M{keyPrefix + ".oauthtoken": bson.M{"$ne": ""}}).Select(bson.M{keyPrefix + ".oauthtoken": 1, keyPrefix + ".oauthexpiredate": 1, keyPrefix + ".oauthrefreshtoken": 1}).All(&users)
+	err = c.db.C("users").Find(bson.M{keyPrefix + ".oauthtoken": bson.M{"$exists": true, "$ne": ""}}).Select(bson.M{keyPrefix + ".oauthtoken": 1, keyPrefix + ".oauthexpiredate": 1, keyPrefix + ".oauthrefreshtoken": 1}).All(&users)
 	if err != nil {
 		return
 	}
@@ -59,6 +59,8 @@ func MigrateFromDefault(c *Context, newTS OAuthTokenStore) (total int, migrated 
 				c.Log().Errorf("OAuthTokenStore MigrateFromDefault got error: %s", err.Error())
 				continue
 			}
+
+			migrated++
 		}
 	}
 
