@@ -35,10 +35,6 @@ ignored = ["github.com/gin-gonic/gin/examples/*", "golang.org/x/oauth2/google", 
 
 [[constraint]]
   branch = "master"
-  name = "golang.org/x/crypto"
-
-[[constraint]]
-  branch = "master"
   name = "golang.org/x/oauth2"
 
 [[constraint]]
