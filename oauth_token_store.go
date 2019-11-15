@@ -51,6 +51,10 @@ func MigrateToDefault(c *Context, oldTS OAuthTokenStore) (total int, migrated in
 			continue
 		}
 
+		if at == "" || rt == "" {
+			continue
+		}
+
 		err = c.db.C("users").UpdateId(user.ID, bson.M{"$set": bson.M{keyPrefix + ".oauthtoken": at, keyPrefix + ".oauthrefreshtoken": rt, keyPrefix + ".oauthvalid": false}})
 		if err != nil {
 			c.Log().Errorf("OAuthTokenStore MigrateToDefault got error: %s", err.Error())
