@@ -25,11 +25,11 @@ func (tsw *OAuthTokenSource) Token() (*oauth2.Token, error) {
 
 			err = oauthTokenStore.SetOAuthAccessToken(tsw.user, "", nil)
 			if err != nil {
-				tsw.user.ctx.Log().WithError(err).Error("failed to reset revoked OAuth token in store: %s", err.Error())
+				tsw.user.ctx.Log().Errorf("failed to reset revoked OAuth token in store: %s", err.Error())
 			}
 			//todo: provide revoked callback
 		}
-		tsw.user.ctx.Log().WithError(err).Error("OAuth token refresh failed, token removed")
+		tsw.user.ctx.Log().Errorf("OAuth token refresh failed, token removed")
 		return nil, err
 	}
 
@@ -43,13 +43,13 @@ func (tsw *OAuthTokenSource) Token() (*oauth2.Token, error) {
 
 			err = oauthTokenStore.SetOAuthAccessToken(tsw.user, token.AccessToken, &token.Expiry)
 			if err != nil {
-				tsw.user.ctx.Log().WithError(err).Error("failed to set OAuth Access token in store: %s", err.Error())
+				tsw.user.ctx.Log().Errorf("failed to set OAuth Access token in store: %s", err.Error())
 			}
 		}
 		if token.RefreshToken != "" && token.RefreshToken != tsw.last.RefreshToken {
 			err = oauthTokenStore.SetOAuthRefreshToken(tsw.user, token.RefreshToken)
 			if err != nil {
-				tsw.user.ctx.Log().WithError(err).Error("failed to set OAuth Access token in store: %s", err.Error())
+				tsw.user.ctx.Log().Errorf("failed to set OAuth Access token in store: %s", err.Error())
 			}
 		}
 	}
@@ -91,17 +91,14 @@ func (user *User) OAuthTokenSource() (oauth2.TokenSource, error) {
 		user.ctx.Log().Errorf("can't create OAuthTokenSource: oauthTokenStore.GetOAuthAccessToken got error: %s", err.Error())
 	}
 
-	otoken := &oauth2.Token{AccessToken: accessToken, TokenType: "Bearer"}
+	refreshToken, err := oauthTokenStore.GetOAuthRefreshToken(user)
+	if err != nil {
+		user.ctx.Log().Errorf("can't create OAuthTokenSource: oauthTokenStore.GetOAuthRefreshToken got error: %s", err.Error())
+	}
 
+	otoken := &oauth2.Token{AccessToken: accessToken, RefreshToken: refreshToken, TokenType: "Bearer"}
 	if expireDate != nil {
 		otoken.Expiry = *expireDate
-		if expireDate.Before(time.Now().Add(time.Minute * 5)) {
-			// attach refresh token in case it is close to the expiration date
-			otoken.RefreshToken, err = oauthTokenStore.GetOAuthRefreshToken(user)
-			if err != nil {
-				user.ctx.Log().Errorf("can't create OAuthTokenSource: oauthTokenStore.GetOAuthRefreshToken got error: %s", err.Error())
-			}
-		}
 	}
 
 	return &OAuthTokenSource{
