@@ -583,8 +583,7 @@ func (c *Context) getServiceID() string {
 	s := c.Service()
 
 	if s == nil {
-		// todo: is error handling is need here
-		return ""
+		return c.ServiceName
 	}
 
 	if c.ServiceBaseURL.Host == "" {
