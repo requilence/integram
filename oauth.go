@@ -13,11 +13,11 @@ import (
 
 type OAuthTokenSource struct {
 	user *User
-	last *oauth2.Token
+	last oauth2.Token
 }
 
 func (tsw *OAuthTokenSource) Token() (*oauth2.Token, error) {
-	ts := tsw.user.ctx.OAuthProvider().OAuth2Client(tsw.user.ctx).TokenSource(oauth2.NoContext, tsw.last)
+	ts := tsw.user.ctx.OAuthProvider().OAuth2Client(tsw.user.ctx).TokenSource(oauth2.NoContext, &tsw.last)
 	token, err := ts.Token()
 	if err != nil {
 		if strings.Contains(err.Error(), "revoked") || strings.Contains(err.Error(), "invalid_grant") {
@@ -33,7 +33,7 @@ func (tsw *OAuthTokenSource) Token() (*oauth2.Token, error) {
 		return nil, err
 	}
 
-	if token != nil && (tsw.last == nil) {
+	if token != nil {
 		if token.AccessToken != tsw.last.AccessToken || !token.Expiry.Equal(tsw.last.Expiry) {
 			ps, _ := tsw.user.protectedSettings()
 			if ps != nil && !ps.OAuthValid {
@@ -96,7 +96,7 @@ func (user *User) OAuthTokenSource() (oauth2.TokenSource, error) {
 		user.ctx.Log().Errorf("can't create OAuthTokenSource: oauthTokenStore.GetOAuthRefreshToken got error: %s", err.Error())
 	}
 
-	otoken := &oauth2.Token{AccessToken: accessToken, RefreshToken: refreshToken, TokenType: "Bearer"}
+	otoken := oauth2.Token{AccessToken: accessToken, RefreshToken: refreshToken, TokenType: "Bearer"}
 	if expireDate != nil {
 		otoken.Expiry = *expireDate
 	}
