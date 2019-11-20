@@ -48,12 +48,13 @@ func MigrateOAuthFromTo(c *Context, oldTS OAuthTokenStore, newTS OAuthTokenStore
 		ctxCopy.User.ctx = &ctxCopy
 		ctxCopy.Chat = Chat{ID: userData.ID, ctx: &ctxCopy}
 		userData.ctx = &ctxCopy
+		user := userData.User
+		user.data = &userData
 
 		if i%100 == 0 {
 			fmt.Printf("MigrateOAuthFromTo: %d/%d users transfered\n", i, len(users))
 		}
 
-		user := userData.User
 		token, expiry, err := oldTS.GetOAuthAccessToken(&user)
 		if err != nil {
 			c.Log().Errorf("MigrateOAuthFromTo got error on GetOAuthAccessToken: %s", err.Error())
