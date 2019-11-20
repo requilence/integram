@@ -35,7 +35,8 @@ func migrateMissingOAuthStores(db *mgo.Database, serviceName string) error {
 			"protected." + serviceName + ".oauthvalid": true,
 
 		}})
-	if err != nil {
+
+	if err != nil && err != mgo.ErrNotFound {
 		return err
 	}
 

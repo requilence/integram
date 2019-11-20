@@ -24,8 +24,8 @@ func (tsw *OAuthTokenSource) Token() (*oauth2.Token, error) {
 		if strings.Contains(err.Error(), "revoked") || strings.Contains(err.Error(), "invalid_grant") {
 			_ = tsw.user.saveProtectedSetting("OAuthValid", false)
 
-			err = oauthTokenStore.SetOAuthAccessToken(tsw.user, "", nil)
-			if err != nil {
+			err2 := oauthTokenStore.SetOAuthAccessToken(tsw.user, "", nil)
+			if err2 != nil {
 				tsw.user.ctx.Log().Errorf("failed to reset revoked OAuth token in store: %s", err.Error())
 			}
 			//todo: provide revoked callback
