@@ -13,18 +13,19 @@ import (
 
 type OAuthTokenSource struct {
 	user *User
-	last *oauth2.Token
+	last oauth2.Token
 }
 
 func (tsw *OAuthTokenSource) Token() (*oauth2.Token, error) {
-	ts := tsw.user.ctx.OAuthProvider().OAuth2Client(tsw.user.ctx).TokenSource(oauth2.NoContext, tsw.last)
+	lastToken := tsw.last
+	ts := tsw.user.ctx.OAuthProvider().OAuth2Client(tsw.user.ctx).TokenSource(oauth2.NoContext, &lastToken)
 	token, err := ts.Token()
 	if err != nil {
 		if strings.Contains(err.Error(), "revoked") || strings.Contains(err.Error(), "invalid_grant") {
 			_ = tsw.user.saveProtectedSetting("OAuthValid", false)
 
-			err = oauthTokenStore.SetOAuthAccessToken(tsw.user, "", nil)
-			if err != nil {
+			err2 := oauthTokenStore.SetOAuthAccessToken(tsw.user, "", nil)
+			if err2 != nil {
 				tsw.user.ctx.Log().Errorf("failed to reset revoked OAuth token in store: %s", err.Error())
 			}
 			//todo: provide revoked callback
@@ -33,8 +34,8 @@ func (tsw *OAuthTokenSource) Token() (*oauth2.Token, error) {
 		return nil, err
 	}
 
-	if token != nil && (tsw.last == nil) {
-		if token.AccessToken != tsw.last.AccessToken || !token.Expiry.Equal(tsw.last.Expiry) {
+	if token != nil {
+		if token.AccessToken != lastToken.AccessToken || !token.Expiry.Equal(lastToken.Expiry) {
 			ps, _ := tsw.user.protectedSettings()
 			if ps != nil && !ps.OAuthValid {
 				ps.OAuthValid = true
@@ -46,7 +47,7 @@ func (tsw *OAuthTokenSource) Token() (*oauth2.Token, error) {
 				tsw.user.ctx.Log().Errorf("failed to set OAuth Access token in store: %s", err.Error())
 			}
 		}
-		if token.RefreshToken != "" && token.RefreshToken != tsw.last.RefreshToken {
+		if token.RefreshToken != "" && token.RefreshToken != lastToken.RefreshToken {
 			err = oauthTokenStore.SetOAuthRefreshToken(tsw.user, token.RefreshToken)
 			if err != nil {
 				tsw.user.ctx.Log().Errorf("failed to set OAuth Access token in store: %s", err.Error())
@@ -96,7 +97,7 @@ func (user *User) OAuthTokenSource() (oauth2.TokenSource, error) {
 		user.ctx.Log().Errorf("can't create OAuthTokenSource: oauthTokenStore.GetOAuthRefreshToken got error: %s", err.Error())
 	}
 
-	otoken := &oauth2.Token{AccessToken: accessToken, RefreshToken: refreshToken, TokenType: "Bearer"}
+	otoken := oauth2.Token{AccessToken: accessToken, RefreshToken: refreshToken, TokenType: "Bearer"}
 	if expireDate != nil {
 		otoken.Expiry = *expireDate
 	}

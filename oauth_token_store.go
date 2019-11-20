@@ -8,6 +8,7 @@ import (
 )
 
 type OAuthTokenStore interface {
+	Name() string
 	GetOAuthAccessToken(user *User) (token string, expireDate *time.Time, err error)
 	SetOAuthAccessToken(user *User, token string, expireDate *time.Time) error
 	GetOAuthRefreshToken(user *User) (string, error)
@@ -26,15 +27,12 @@ func SetOAuthTokenStore(store OAuthTokenStore) {
 func MigrateOAuthFromTo(c *Context, oldTS OAuthTokenStore, newTS OAuthTokenStore, onlyValid bool) (total int, migrated int, expired int, err error) {
 	keyPrefix := "protected." + c.ServiceName
 
-	query := bson.M{}
+	query := bson.M{
+		keyPrefix + ".oauthstore": oldTS.Name(),
+	}
 
 	if onlyValid {
-		query = bson.M{
-			"$or": []bson.M{
-				{keyPrefix + ".oauthtoken": bson.M{"$exists": true, "$ne": ""}},
-				{keyPrefix + ".oauthvalid": true},
-			},
-		}
+		query[keyPrefix+".oauthvalid"] = true
 	}
 
 	users, err := c.FindUsers(query)
@@ -50,12 +48,12 @@ func MigrateOAuthFromTo(c *Context, oldTS OAuthTokenStore, newTS OAuthTokenStore
 		ctxCopy.User.ctx = &ctxCopy
 		ctxCopy.Chat = Chat{ID: userData.ID, ctx: &ctxCopy}
 		userData.ctx = &ctxCopy
+		user := userData.User
+		user.data = &userData
 
 		if i%100 == 0 {
 			fmt.Printf("MigrateOAuthFromTo: %d/%d users transfered\n", i, len(users))
 		}
-
-		user := userData.User
 
 		token, expiry, err := oldTS.GetOAuthAccessToken(&user)
 		if err != nil {
@@ -88,6 +86,12 @@ func MigrateOAuthFromTo(c *Context, oldTS OAuthTokenStore, newTS OAuthTokenStore
 		err = newTS.SetOAuthRefreshToken(&user, refreshToken)
 		if err != nil {
 			c.Log().Errorf("MigrateOAuthFromTo got error on SetOAuthRefreshToken: %s", err.Error())
+			continue
+		}
+
+		err = c.db.C("users").UpdateId(user.ID, bson.M{"$set": bson.M{keyPrefix + ".oauthstore": newTS.Name(), keyPrefix + ".oauthvalid": true}})
+		if err != nil {
+			c.Log().Errorf("OAuthTokenStore MigrateFromDefault got error: %s", err.Error())
 			continue
 		}
 
@@ -124,6 +128,7 @@ func (d *DefaultOAuthTokenMongoStore) SetOAuthAccessToken(user *User, token stri
 		return err
 	}
 
+	ps.OAuthStore = d.Name()
 	ps.OAuthToken = token
 	ps.OAuthExpireDate = expireDate
 
@@ -139,4 +144,8 @@ func (d *DefaultOAuthTokenMongoStore) SetOAuthRefreshToken(user *User, refreshTo
 	ps.OAuthRefreshToken = refreshToken
 
 	return user.saveProtectedSetting("OAuthRefreshToken", refreshToken)
+}
+
+func (d *DefaultOAuthTokenMongoStore) Name() string {
+	return "default"
 }
