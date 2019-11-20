@@ -403,8 +403,13 @@ func (s *Service) trimFuncPath(fullPath string) string{
 // Register the service's config and corresponding botToken
 func Register(servicer Servicer, botToken string) {
 	//jobs.Config.Db.Address="192.168.1.101:6379"
-
+	db := mongoSession.Clone().DB(mongo.Database)
 	service := servicer.Service()
+	err := migrations(db, service.Name)
+	if err != nil {
+		log.Fatalf("failed to apply migrations: %s", err.Error())
+	}
+
 	if service.DefaultOAuth1 != nil {
 		if service.DefaultOAuth1.AccessTokenReceiver == nil {
 			err := errors.New("OAuth1 need an AccessTokenReceiver func to be specified\n")
@@ -525,7 +530,7 @@ func Register(servicer Servicer, botToken string) {
 		return
 	}
 
-	err := service.registerBot(botToken)
+	err = service.registerBot(botToken)
 	if err != nil {
 		log.WithError(err).WithField("token", botToken).Panic("Can't register the bot")
 	}
