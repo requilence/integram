@@ -23,94 +23,78 @@ func SetOAuthTokenStore(store OAuthTokenStore) {
 	oauthTokenStore = store
 }
 
-func MigrateToDefault(c *Context, oldTS OAuthTokenStore) (total int, migrated int, expired int, err error) {
-	users := []userData{}
+func MigrateOAuthFromTo(c *Context, oldTS OAuthTokenStore, newTS OAuthTokenStore, onlyValid bool) (total int, migrated int, expired int, err error) {
 	keyPrefix := "protected." + c.ServiceName
-	err = c.db.C("users").Find(bson.M{keyPrefix + ".oauthvalid": true}).Select(bson.M{"_id": 1}).All(&users)
+
+	query := bson.M{}
+
+	if onlyValid {
+		query = bson.M{
+			"$or": []bson.M{
+				{keyPrefix + ".oauthtoken": bson.M{"$exists": true, "$ne": ""}},
+				{keyPrefix + ".oauthvalid": true},
+			},
+		}
+	}
+
+	users, err := c.FindUsers(query)
 	if err != nil {
 		return
 	}
 
 	total = len(users)
+	expiredOlderThan := time.Now().Add((-1) * time.Hour * 24 * 30)
 	for i, userData := range users {
+		ctxCopy := *userData.ctx
+		ctxCopy.User = userData.User
+		ctxCopy.User.ctx = &ctxCopy
+		ctxCopy.Chat = Chat{ID: userData.ID, ctx: &ctxCopy}
+		userData.ctx = &ctxCopy
+
 		if i%100 == 0 {
-			fmt.Printf("MigrateToDefault: %d/%d tokens transfered\n", i, len(users))
+			fmt.Printf("MigrateOAuthFromTo: %d/%d users transfered\n", i, len(users))
 		}
 
 		user := userData.User
 
-		at, _, err := oldTS.GetOAuthAccessToken(&user)
+		token, expiry, err := oldTS.GetOAuthAccessToken(&user)
 		if err != nil {
-			c.Log().Errorf("OAuthTokenStore MigrateToDefault got error on SetOAuthAccessToken: %s", err.Error())
+			c.Log().Errorf("MigrateOAuthFromTo got error on GetOAuthAccessToken: %s", err.Error())
 			continue
 		}
 
-		rt, err := oldTS.GetOAuthRefreshToken(&user)
-		if err != nil {
-			c.Log().Errorf("OAuthTokenStore MigrateToDefault got error on SetOAuthRefreshToken: %s", err.Error())
+		if token == "" {
+			expired++
 			continue
 		}
 
-		if at == "" || rt == "" {
+		if onlyValid && expiry != nil && expiry.Before(expiredOlderThan) {
+			expired++
 			continue
 		}
 
-		err = c.db.C("users").UpdateId(user.ID, bson.M{"$set": bson.M{keyPrefix + ".oauthtoken": at, keyPrefix + ".oauthrefreshtoken": rt, keyPrefix + ".oauthvalid": false}})
+		err = newTS.SetOAuthAccessToken(&user, token, expiry)
 		if err != nil {
-			c.Log().Errorf("OAuthTokenStore MigrateToDefault got error: %s", err.Error())
+			c.Log().Errorf("MigrateOAuthFromTo got error on SetOAuthAccessToken: %s", err.Error())
+			continue
+		}
+
+		refreshToken, err := oldTS.GetOAuthRefreshToken(&user)
+		if err != nil {
+			c.Log().Errorf("MigrateOAuthFromTo got error on GetOAuthRefreshToken: %s", err.Error())
+			continue
+		}
+
+		err = newTS.SetOAuthRefreshToken(&user, refreshToken)
+		if err != nil {
+			c.Log().Errorf("MigrateOAuthFromTo got error on SetOAuthRefreshToken: %s", err.Error())
 			continue
 		}
 
 		migrated++
 	}
 
-	return
-}
-
-func MigrateFromDefault(c *Context, newTS OAuthTokenStore) (total int, migrated int, expired int, err error) {
-	users := []userData{}
-	keyPrefix := "protected." + c.ServiceName
-	err = c.db.C("users").Find(bson.M{keyPrefix + ".oauthtoken": bson.M{"$exists": true, "$ne": ""}}).Select(bson.M{keyPrefix + ".oauthtoken": 1, keyPrefix + ".oauthexpiredate": 1, keyPrefix + ".oauthrefreshtoken": 1}).All(&users)
-	if err != nil {
-		return
-	}
-
-	total = len(users)
-	now := time.Now()
-	for i, userData := range users {
-		if i%100 == 0 {
-			fmt.Printf("MigrateFromDefault: %d/%d users transfered\n", i, len(users))
-		}
-
-		user := userData.User
-		if ps, exists := userData.Protected[c.ServiceName]; exists {
-			// skip expired tokens without refresh tokens
-			if ps.OAuthExpireDate.Before(now) && ps.OAuthRefreshToken == "" {
-				expired++
-				continue
-			}
-
-			err = newTS.SetOAuthAccessToken(&user, ps.OAuthToken, ps.OAuthExpireDate)
-			if err != nil {
-				c.Log().Errorf("OAuthTokenStore MigrateFromDefault got error on SetOAuthAccessToken: %s", err.Error())
-				continue
-			}
-
-			err = newTS.SetOAuthRefreshToken(&user, ps.OAuthRefreshToken)
-			if err != nil {
-				c.Log().Errorf("OAuthTokenStore MigrateFromDefault got error on SetOAuthRefreshToken: %s", err.Error())
-				continue
-			}
-
-			err = c.db.C("users").UpdateId(user.ID, bson.M{"$set": bson.M{keyPrefix + ".oauthtoken": "", keyPrefix + ".oauthrefreshtoken": "", keyPrefix + ".oauthvalid": true}})
-			if err != nil {
-				c.Log().Errorf("OAuthTokenStore MigrateFromDefault got error: %s", err.Error())
-				continue
-			}
-
-			migrated++
-		}
-	}
+	fmt.Printf("MigrateOAuthFromTo: %d/%d users transfered\n", len(users), len(users))
 
 	return
 }
