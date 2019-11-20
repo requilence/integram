@@ -890,9 +890,7 @@ func (user *User) saveProtectedSetting(key string, value interface{}) error {
 		return errors.New("protected setting with key " + key + " not exists")
 	}
 
-	info, err := user.ctx.db.C("users").UpsertId(user.ID, bson.M{"$set": bson.M{"protected." + serviceID + "." + strings.ToLower(key): value}})
-
-	fmt.Printf("saveProtectedSetting %v=%v err %v info %+v\n", key, value, err, info)
+	_, err := user.ctx.db.C("users").UpsertId(user.ID, bson.M{"$set": bson.M{"protected." + serviceID + "." + strings.ToLower(key): value}})
 
 	return err
 }
