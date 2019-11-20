@@ -17,7 +17,8 @@ type OAuthTokenSource struct {
 }
 
 func (tsw *OAuthTokenSource) Token() (*oauth2.Token, error) {
-	ts := tsw.user.ctx.OAuthProvider().OAuth2Client(tsw.user.ctx).TokenSource(oauth2.NoContext, &tsw.last)
+	lastToken := tsw.last
+	ts := tsw.user.ctx.OAuthProvider().OAuth2Client(tsw.user.ctx).TokenSource(oauth2.NoContext, &lastToken)
 	token, err := ts.Token()
 	if err != nil {
 		if strings.Contains(err.Error(), "revoked") || strings.Contains(err.Error(), "invalid_grant") {
@@ -34,7 +35,7 @@ func (tsw *OAuthTokenSource) Token() (*oauth2.Token, error) {
 	}
 
 	if token != nil {
-		if token.AccessToken != tsw.last.AccessToken || !token.Expiry.Equal(tsw.last.Expiry) {
+		if token.AccessToken != lastToken.AccessToken || !token.Expiry.Equal(lastToken.Expiry) {
 			ps, _ := tsw.user.protectedSettings()
 			if ps != nil && !ps.OAuthValid {
 				ps.OAuthValid = true
@@ -46,7 +47,7 @@ func (tsw *OAuthTokenSource) Token() (*oauth2.Token, error) {
 				tsw.user.ctx.Log().Errorf("failed to set OAuth Access token in store: %s", err.Error())
 			}
 		}
-		if token.RefreshToken != "" && token.RefreshToken != tsw.last.RefreshToken {
+		if token.RefreshToken != "" && token.RefreshToken != lastToken.RefreshToken {
 			err = oauthTokenStore.SetOAuthRefreshToken(tsw.user, token.RefreshToken)
 			if err != nil {
 				tsw.user.ctx.Log().Errorf("failed to set OAuth Access token in store: %s", err.Error())
