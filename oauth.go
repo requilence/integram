@@ -91,6 +91,11 @@ func (user *User) OAuthTokenStore() string {
 	return ps.OAuthStore
 }
 
+// SetOAuthTokenStore stores the new name for OAuth Store to get/set access and refresh tokens
+func (user *User) SetOAuthTokenStore(storeName string)  error {
+	return user.saveProtectedSetting("OAuthStore", storeName)
+}
+
 // OAuthTokenSource returns OAuthTokenSource to use within http client to get OAuthToken
 func (user *User) OAuthTokenSource() (oauth2.TokenSource, error) {
 	if user.ctx.Service().DefaultOAuth2 == nil {
