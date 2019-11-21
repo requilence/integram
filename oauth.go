@@ -24,13 +24,9 @@ func (tsw *OAuthTokenSource) Token() (*oauth2.Token, error) {
 		if strings.Contains(err.Error(), "revoked") || strings.Contains(err.Error(), "invalid_grant") {
 			_ = tsw.user.saveProtectedSetting("OAuthValid", false)
 
-			err2 := oauthTokenStore.SetOAuthAccessToken(tsw.user, "", nil)
-			if err2 != nil {
-				tsw.user.ctx.Log().Errorf("failed to reset revoked OAuth token in store: %s", err.Error())
-			}
 			//todo: provide revoked callback
 		}
-		tsw.user.ctx.Log().Errorf("OAuth token refresh failed, token removed")
+		tsw.user.ctx.Log().Errorf("OAuth token refresh failed, token OAuthValid set to false: %s", err.Error())
 		return nil, err
 	}
 
@@ -105,11 +101,13 @@ func (user *User) OAuthTokenSource() (oauth2.TokenSource, error) {
 	accessToken, expireDate, err := oauthTokenStore.GetOAuthAccessToken(user)
 	if err != nil {
 		user.ctx.Log().Errorf("can't create OAuthTokenSource: oauthTokenStore.GetOAuthAccessToken got error: %s", err.Error())
+		return nil, err
 	}
 
 	refreshToken, err := oauthTokenStore.GetOAuthRefreshToken(user)
 	if err != nil {
 		user.ctx.Log().Errorf("can't create OAuthTokenSource: oauthTokenStore.GetOAuthRefreshToken got error: %s", err.Error())
+		return nil, err
 	}
 
 	otoken := oauth2.Token{AccessToken: accessToken, RefreshToken: refreshToken, TokenType: "Bearer"}
