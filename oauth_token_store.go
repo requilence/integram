@@ -61,7 +61,7 @@ func MigrateOAuthFromTo(c *Context, oldTS OAuthTokenStore, newTS OAuthTokenStore
 			continue
 		}
 
-		if token == "" {
+		if onlyValid && token == "" {
 			expired++
 			continue
 		}
@@ -91,7 +91,7 @@ func MigrateOAuthFromTo(c *Context, oldTS OAuthTokenStore, newTS OAuthTokenStore
 
 		err = c.db.C("users").UpdateId(user.ID, bson.M{"$set": bson.M{keyPrefix + ".oauthstore": newTS.Name(), keyPrefix + ".oauthvalid": true}})
 		if err != nil {
-			c.Log().Errorf("OAuthTokenStore MigrateFromDefault got error: %s", err.Error())
+			c.Log().Errorf("MigrateOAuthFromTo got error: %s", err.Error())
 			continue
 		}
 

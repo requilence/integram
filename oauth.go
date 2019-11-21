@@ -81,7 +81,17 @@ func (user *User) OAuthValid() bool {
 	return token != ""
 }
 
-// OAuthToken returns OAuthToken for service
+// OAuthTokenStore returns current OAuthTokenStore name used to get/set access and refresh tokens
+func (user *User) OAuthTokenStore() string {
+	ps, _ := user.protectedSettings()
+	if ps == nil {
+		return ""
+	}
+
+	return ps.OAuthStore
+}
+
+// OAuthTokenSource returns OAuthTokenSource to use within http client to get OAuthToken
 func (user *User) OAuthTokenSource() (oauth2.TokenSource, error) {
 	if user.ctx.Service().DefaultOAuth2 == nil {
 		return nil, fmt.Errorf("DefaultOAuth2 config not set for the service")
