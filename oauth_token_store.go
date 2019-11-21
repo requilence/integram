@@ -109,7 +109,7 @@ func (d *DefaultOAuthTokenMongoStore) GetOAuthAccessToken(user *User) (token str
 		return "", nil, err
 	}
 
-	return ps.OAuthToken, nil, nil
+	return ps.OAuthToken, ps.OAuthExpireDate, nil
 }
 
 func (d *DefaultOAuthTokenMongoStore) GetOAuthRefreshToken(user *User) (string, error) {
