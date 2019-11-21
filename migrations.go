@@ -23,7 +23,7 @@ func migrateMissingOAuthStores(db *mgo.Database, serviceName string) error {
 		return nil
 	}
 
-	err := db.C("users").Update(bson.M{
+	info, err := db.C("users").UpdateAll(bson.M{
 		"protected." + serviceName + ".oauthtoken": bson.M{"$exists": true, "$ne": ""},
 		"$or": []bson.M{
 			{"protected." + serviceName + ".oauthstore": bson.M{"$exists": false}},
@@ -40,5 +40,5 @@ func migrateMissingOAuthStores(db *mgo.Database, serviceName string) error {
 		return err
 	}
 
-	return db.C("migrations").Insert(bson.M{"_id": serviceName + "_" + name, "date": time.Now()})
+	return db.C("migrations").Insert(bson.M{"_id": serviceName + "_" + name, "date": time.Now(), "migrated": info.Updated})
 }
