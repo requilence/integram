@@ -1467,6 +1467,13 @@ func sendMessage(m *OutgoingMessage) error {
 	//log.Infof("sendMessage chat=%d ts=%d text=%s",m.ChatID, m.ID.Time().UnixNano(), m.Text)
 	msg := tg.MessageConfig{Text: m.Text, BaseChat: tg.BaseChat{ChatID: m.ChatID}}
 
+	db := mongoSession.Clone().DB(mongo.Database)
+	defer db.Session.Close()
+	if blacklisted, _ := db.C("chats").Find(bson.M{"_id": m.ChatID, "blacklisted": true}).Count(); blacklisted > 0 {
+		log.Errorf("TG MSG not sent: chat %d blacklisted", m.ChatID)
+		return nil
+	}
+
 	if m.ChatID == 0 {
 		return errors.New("ChatID empty")
 	}
@@ -1556,9 +1563,6 @@ func sendMessage(m *OutgoingMessage) error {
 	}
 
 	if err == nil {
-
-		db := mongoSession.Clone().DB(mongo.Database)
-		defer db.Session.Close()
 
 		log.Debugf("TG MSG sent, id = %v %.2f secs spent", tgMsg.MessageID, time.Now().Sub(startedAt).Seconds())
 		m.MsgID = tgMsg.MessageID
