@@ -13,6 +13,7 @@ import (
 	"os/signal"
 	"path"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -21,16 +22,19 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/requilence/url"
 	log "github.com/sirupsen/logrus"
+	"github.com/throttled/throttled"
+	"github.com/throttled/throttled/store/memstore"
 
 	"github.com/weekface/mgorus"
 	"golang.org/x/oauth2"
-	"gopkg.in/mgo.v2"
+	mgo "gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 
 	"github.com/requilence/jobs"
 )
 
 var startedAt time.Time
+var webhookRateLimiter *throttled.GCRARateLimiter
 
 func getCurrentDir() string {
 	_, filename, _, _ := runtime.Caller(1)
@@ -174,6 +178,19 @@ func Run() {
 			if err != nil {
 				log.WithError(err).Panic("ensureStandAloneServiceJob error")
 			}
+		}
+	}
+
+	if Config.RateLimitMemstore > 0 {
+		rateLimiterStore, err := memstore.New(262144)
+		if err != nil {
+			log.WithError(err).Fatalf("rateLimiter memstore error")
+		}
+
+		quota := throttled.RateQuota{throttled.PerMin(Config.RateLimitPerMinute), Config.RateLimitBurst}
+		webhookRateLimiter, err = throttled.NewGCRARateLimiter(rateLimiterStore, quota)
+		if err != nil {
+			log.WithError(err).Fatalf("rateLimiter NewGCRARateLimiter error")
 		}
 	}
 
@@ -390,6 +407,27 @@ func reverseProxyForService(service string) *httputil.ReverseProxy {
 	reverseProxiesMap[service] = rp
 
 	return rp
+}
+
+func rateLimitAndSetHeaders(c *gin.Context, key string) (limited bool) {
+	if webhookRateLimiter != nil {
+		rateLimited, rateLimitedResult, err := webhookRateLimiter.RateLimit(key, 1)
+		if err != nil {
+			log.WithError(err).Errorf("ratelimit error: %s", err.Error())
+		} else {
+			c.Header("X-RateLimit-Limit", strconv.Itoa(Config.RateLimitPerMinute))
+			c.Header("X-RateLimit-Remaining", strconv.Itoa(rateLimitedResult.Remaining))
+			c.Header("X-RateLimit-Reset", strconv.Itoa(int(rateLimitedResult.ResetAfter.Seconds())))
+
+			if rateLimited {
+				c.Header("Retry-After", strconv.Itoa(int(rateLimitedResult.RetryAfter.Seconds())))
+				c.String(http.StatusTooManyRequests, fmt.Sprintf("Too many requests, retry after %.0fs", rateLimitedResult.RetryAfter.Seconds()))
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 func serviceHookHandler(c *gin.Context) {
@@ -611,7 +649,10 @@ func serviceHookHandler(c *gin.Context) {
 				c.Status(200)
 				return
 			}
+		}
 
+		if limited := rateLimitAndSetHeaders(c, webhookToken); limited {
+			return
 		}
 
 		for i, hook := range user.Hooks {
@@ -667,6 +708,13 @@ func serviceHookHandler(c *gin.Context) {
 				return
 			}
 		}
+
+		if !chat.IgnoreRateLimit {
+			if limited := rateLimitAndSetHeaders(c, webhookToken); limited {
+				return
+			}
+		}
+
 		hooks = chat.Hooks
 		ctx.Chat = chat.Chat
 		ctx.Chat.ctx = ctx

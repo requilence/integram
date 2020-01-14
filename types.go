@@ -141,6 +141,7 @@ type chatData struct {
 	Hooks              []serviceHook
 	MembersIDs         []int64
 	Deactivated        bool  	  `bson:",omitempty"`
+	IgnoreRateLimit    bool  	  `bson:",omitempty"`
 	MigratedToChatID   int64	  `bson:",omitempty"`
 	MigratedFromChatID int64	  `bson:",omitempty"`
 }

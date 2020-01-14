@@ -51,6 +51,17 @@
   version = "v1.0.0"
 
 [[projects]]
+  digest = "1:7f6f07500a0b7d3766b00fa466040b97f2f5b5f3eef2ecabfe516e703b05119a"
+  name = "github.com/hashicorp/golang-lru"
+  packages = [
+    ".",
+    "simplelru",
+  ]
+  pruneopts = ""
+  revision = "7f827b33c0f158ec5dfbba01bb0b14a4541fd81d"
+  version = "v0.5.3"
+
+[[projects]]
   digest = "1:9eab2325abbed0ebcee9d44bb3660a69d5d10e42d5ac4a0e77f7a6ea22bfce88"
   name = "github.com/json-iterator/go"
   packages = ["."]
@@ -144,6 +155,17 @@
   pruneopts = ""
   revision = "a90a01d73ae432e2611d178c18367fbaa13e0154"
   version = "v1.0.1"
+
+[[projects]]
+  digest = "1:5b607d5268f75aa5ed75bb36ebdb99511607c8f5c3a9f223b04bcc3c066392ad"
+  name = "github.com/throttled/throttled"
+  packages = [
+    ".",
+    "store/memstore",
+  ]
+  pruneopts = ""
+  revision = "def5708c45a0d2b2b9a3604521f3164e227d2c83"
+  version = "v2.2.4"
 
 [[projects]]
   digest = "1:2e7f653483e51243b6cd6de60ce39bde0d6927d10a3c24295ab0f82cb1efeae2"
@@ -268,6 +290,8 @@
     "github.com/requilence/telegram-bot-api",
     "github.com/requilence/url",
     "github.com/sirupsen/logrus",
+    "github.com/throttled/throttled",
+    "github.com/throttled/throttled/store/memstore",
     "github.com/vova616/xxhash",
     "github.com/weekface/mgorus",
     "golang.org/x/oauth2",

@@ -69,3 +69,7 @@ ignored = ["github.com/gin-gonic/gin/examples/*", "golang.org/x/oauth2/google", 
 [[constraint]]
   name = "github.com/weekface/mgorus"
   revision = "83720e22971a8301c5b2738c9364accd3d9eb13a"
+
+[[constraint]]
+  name = "github.com/throttled/throttled"
+  version = "2.2.4"

@@ -26,7 +26,12 @@ type config struct {
 	BaseURL      string `envconfig:"INTEGRAM_BASE_URL" required:"true"`
 	InstanceMode Mode   `envconfig:"INTEGRAM_INSTANCE_MODE" default:"single"` // please refer to the constants declaration
 
-	TGPoolBatchSize int   `envconfig:"INTEGRAM_TG_POOL_BATCH_SIZE" default:"100"` // Number of jobs fetching from Redis at once
+	TGPoolBatchSize    int  `envconfig:"INTEGRAM_TG_POOL_BATCH_SIZE" default:"100"` // Number of jobs fetching from Redis at once
+
+	// service webhook ratelimiter
+	RateLimitMemstore  int `envconfig:"INTEGRAM_RATELIMIT_MEMSTORE_SIZE" default:"0"` // max number of keys to store. set 0 to disable ratelimiter
+	RateLimitPerMinute int `envconfig:"INTEGRAM_RATELIMIT_PER_MINUTE" default:"30"` // max number of incoming requests per minute for user/chat
+	RateLimitBurst int `envconfig:"INTEGRAM_RATELIMIT_BURST" default:"10"` // max number of requests in a row
 
 	TGPool         int    `envconfig:"INTEGRAM_TG_POOL" default:"10"` // Maximum simultaneously message sending
 	MongoURL       string `envconfig:"INTEGRAM_MONGO_URL" default:"mongodb://localhost:27017/integram"`
@@ -36,7 +41,6 @@ type config struct {
 	MongoLogging   bool   `envconfig:"INTEGRAM_MONGO_LOGGING" default:"0"`
 	MongoStatistic bool   `envconfig:"INTEGRAM_MONGO_STATISTIC" default:"0"`
 	ConfigDir      string `envconfig:"INTEGRAM_CONFIG_DIR" default:"./.conf"` // default is $GOPATH/.conf
-
 
 	// -----
 	// only make sense for InstanceModeMultiProcessService

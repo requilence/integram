@@ -843,7 +843,7 @@ func TestContext_EditPressedInlineButton(t *testing.T) {
 		}
 
 		if but.State != tt.args.newState {
-			t.Errorf("%q. Context.EditPressedInlineKeyboard() db check got btn state = %s, want %s", tt.name, but.State, tt.args.newState)
+			t.Errorf("%q. Context.EditPressedInlineKeyboard() db check got btn state = %d, want %d", tt.name, but.State, tt.args.newState)
 		}
 	}
 }

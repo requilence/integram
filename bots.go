@@ -24,9 +24,7 @@ import (
 )
 
 const inlineButtonStateKeyword = '`'
-const antiFloodTimeout = 60
-const antiFloodChatDuration = 20
-const antiFloodChatLimit = 10
+const antiFloodSameMessageTimeout = 60
 
 var botPerID = make(map[int64]*Bot)
 var botPerService = make(map[string]*Bot)
@@ -899,7 +897,7 @@ type scheduleMessageSender struct{}
 
 var activeMessageSender = messageSender(scheduleMessageSender{})
 
-var ErrorFlood = fmt.Errorf("Too many messages. You could not send the same message more than once per %d sec. The number of messages sent to chat must not exceed %d in %d sec", antiFloodTimeout, antiFloodChatLimit, antiFloodChatDuration)
+var ErrorFlood = fmt.Errorf("Too many messages. You could not send the same message more than once per %d sec", antiFloodSameMessageTimeout)
 var ErrorBadRequstPrefix = "Can't process your request: "
 
 func (t scheduleMessageSender) Send(m *OutgoingMessage) error {
@@ -911,21 +909,12 @@ func (t scheduleMessageSender) Send(m *OutgoingMessage) error {
 		db := mongoSession.Clone().DB(mongo.Database)
 		defer db.Session.Close()
 		msg, _ := findLastOutgoingMessageInChat(db, m.BotID, m.ChatID)
-		if msg != nil && msg.om.TextHash == m.GetTextHash() && time.Now().Sub(msg.Date).Seconds() < antiFloodTimeout {
+		if msg != nil && msg.om.TextHash == m.GetTextHash() && time.Now().Sub(msg.Date).Seconds() < antiFloodSameMessageTimeout {
 			//log.Errorf("flood. mins %v", time.Now().Sub(msg.Date).Minutes())
 			return ErrorFlood
 		}
-
-		total, err := db.C("messages").Find(bson.M{"chatid": m.ChatID, "botid": m.BotID, "date": bson.M{"$gt": time.Now().Add(time.Duration(-1 * int64(time.Second) * int64(antiFloodChatDuration)))}}).Count()
-		if err != nil {
-			log.WithField("chat", m.ChatID).WithError(err).Error("AntiFlood: find messages")
-		}
-
-		if total > antiFloodChatLimit {
-			log.WithField("chat", m.ChatID).WithField("total", total).Error("antiFloodChatLimit exceed")
-			return ErrorFlood
-		}
 	}
+
 	if m.Selective && m.ChatID > 0 {
 		m.Selective = false
 	}
@@ -1006,7 +995,7 @@ func (m *OutgoingMessage) AddEventID(id ...string) *OutgoingMessage {
 	return m
 }
 
-// EnableAntiFlood will check if the message wasn't already sent within last antiFloodTimeout seconds
+// EnableAntiFlood will check if the message wasn't already sent within last antiFloodSameMessageTimeout seconds
 func (m *OutgoingMessage) EnableAntiFlood() *OutgoingMessage {
 	m.AntiFlood = true
 
