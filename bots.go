@@ -1452,17 +1452,31 @@ func botByID(ID int64) *Bot {
 	return nil
 }
 
+type ChatFlood struct {
+	Blacklisted bool `bson:"blacklisted,omitempty"`
+	FloodWaitUntil *time.Time `bson:"flood_wait_until,omitempty"`
+}
 func sendMessage(m *OutgoingMessage) error {
 	//log.Infof("sendMessage chat=%d ts=%d text=%s",m.ChatID, m.ID.Time().UnixNano(), m.Text)
 	msg := tg.MessageConfig{Text: m.Text, BaseChat: tg.BaseChat{ChatID: m.ChatID}}
 
 	db := mongoSession.Clone().DB(mongo.Database)
 	defer db.Session.Close()
-	if blacklisted, _ := db.C("chats").Find(bson.M{"_id": m.ChatID, "blacklisted": true}).Count(); blacklisted > 0 {
+	var cf ChatFlood
+	db.C("chats").Find(bson.M{"_id": m.ChatID}).Select(bson.M{"_id":0, "blacklisted": 1, "flood_wait_until": 1}).One(&cf)
+	if cf.Blacklisted {
 		log.Errorf("TG MSG not sent: chat %d blacklisted", m.ChatID)
 		return nil
 	}
 
+	if cf.FloodWaitUntil != nil && cf.FloodWaitUntil.After(time.Now()) {
+		until := time.Now().Add(time.Duration(60+rand.Intn(120))*time.Second)
+
+		_, err := sendMessageJob.Schedule(0, until, &m)
+		return err
+	}
+
+	db.C("chats").Find(bson.M{"_id": m.ChatID, "flood_wait_until": bson.M{"$gte": time.Now()}})
 	if m.ChatID == 0 {
 		return errors.New("ChatID empty")
 	}
@@ -1477,12 +1491,17 @@ func sendMessage(m *OutgoingMessage) error {
 	var rescheduled bool
 
 	startedAt := time.Now()
+	var fileSize int64
 	if m.FilePath != "" {
 		if _, err := os.Stat(m.FilePath); os.IsNotExist(err) {
 			log.Errorf("Can't send message with attachment, file not exists: %s", m.FilePath)
 			return nil
 		}
 
+		stat, _ := os.Stat(m.FilePath)
+		if stat != nil {
+			fileSize = stat.Size()
+		}
 		if m.FileType == "image" {
 
 			msg := tg.NewPhotoUpload(m.ChatID, m.FilePath)
@@ -1552,8 +1571,22 @@ func sendMessage(m *OutgoingMessage) error {
 	}
 
 	if err == nil {
+		spent := time.Now().Sub(startedAt).Seconds()
+		logtxt := fmt.Sprintf("TG MSG sent, chat=%d, bot=%d, id=%d file=%dKB %.2f secs spent", m.ChatID, m.BotID, tgMsg.MessageID, fileSize/1024, spent)
+		if fileSize == 0 && spent > 20.0 {
+			log.Warn(logtxt)
 
-		log.Debugf("TG MSG sent, id = %v %.2f secs spent", tgMsg.MessageID, time.Now().Sub(startedAt).Seconds())
+			delay := time.Second*60
+			db.C("chats").Update(bson.M{"_id": m.ChatID}, bson.M{"$set": bson.M{"flood_wait_until": time.Now().Add(delay)}})
+			until := time.Now().Add(delay+time.Second*time.Duration(rand.Intn(120)))
+
+			rescheduled = true
+			_, err := sendMessageJob.Schedule(0, until, &m)
+			return err
+		} else {
+			log.Debug(logtxt)
+		}
+
 		m.MsgID = tgMsg.MessageID
 		m.Date = time.Now()
 
