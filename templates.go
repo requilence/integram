@@ -108,7 +108,7 @@ const htmlTemplateTGRedirect = `<!doctype html>
     <div id="center">
         <b>@{{ .botUsername }}</b> needs to finish the authorization...
         <br/><br/><br/>
-        <a href="tg://resolve?domain={{ .botUsername }}&start={{ .startParam }}"><span class="btn">Continue in the Telegram</span></a>
+        <a href="tg://resolve?domain={{ .botUsername }}&start={{ .startParam }}"><span class="btn">Continue in Telegram</span></a>
     </div>
 </div>
 
