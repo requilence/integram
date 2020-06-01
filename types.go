@@ -88,13 +88,20 @@ func (o *OAuthProvider) IsSetup() bool {
 }
 
 type oAuthIDCache struct {
-	UserID  int
+	UserID  int64
 	Service string
 	Val     oAuthIDCacheVal
 }
+
 type oAuthIDCacheVal struct {
 	oauth.RequestToken `bson:",omitempty"`
 	BaseURL            string
+}
+
+type oAuthCallbackCodeInfo struct {
+	ProviderID string
+	Code string // stored OAuthCode to get the token
+	State string // State to check if it was initiated by user
 }
 
 // Webhook token for service

@@ -24,6 +24,7 @@ import (
 )
 
 const standAloneServicesFileName = "standAloneServices.json"
+
 // Map of Services configs per name. See Register func
 var serviceMapMutex = sync.RWMutex{}
 var services = make(map[string]*Service)
@@ -57,8 +58,8 @@ type Service struct {
 
 	JobsPool int // Worker pool to be created for service. Default to 1 worker. Workers will be inited only if jobs types are available
 
-	JobOldPrefix 	string
-	Jobs []Job // Job types that can be scheduled
+	JobOldPrefix string
+	Jobs         []Job // Job types that can be scheduled
 
 	Modules []Module // you can inject modules and use it across different services
 
@@ -132,11 +133,18 @@ type DefaultOAuth1 struct {
 // DefaultOAuth2 is the default OAuth2 config for the service
 type DefaultOAuth2 struct {
 	oauth2.Config
-	AccessTokenReceiver func(serviceContext *Context, r *http.Request) (token string, expiresAt *time.Time, refreshToken string, err error)
+	//AccessTokenReceiver func(serviceContext *Context, r *http.Request) (token string, expiresAt *time.Time, refreshToken string, err error)
 
 	// duration to cache temp token to associate with user
 	// default(when zero) will be set to 30 days
 	AuthTempTokenCacheTime time.Duration
+
+	// Option for the additional security in the OAuth flow
+	// OAuth callback will redirect to the tg:// schema with the temp code
+	// and only after a User presses Start button in the TG chat
+	// where it have initiated the OAuth process
+	// it will exchange the Authorization code for the Token
+	OAuthRedirectViaSchema bool
 }
 
 func servicesHealthChecker() {
@@ -361,7 +369,7 @@ func saveStandAloneServicesToFile() error {
 		return err
 	}
 
-	return ioutil.WriteFile(Config.ConfigDir + string(os.PathSeparator) + standAloneServicesFileName, jsonData, 0655)
+	return ioutil.WriteFile(Config.ConfigDir+string(os.PathSeparator)+standAloneServicesFileName, jsonData, 0655)
 }
 
 func (s *Service) getShortFuncPath(actionFunc interface{}) string {
@@ -372,7 +380,7 @@ func (s *Service) getShortFuncPath(actionFunc interface{}) string {
 	return s.trimFuncPath(fullPath)
 }
 
-func (s *Service) trimFuncPath(fullPath string) string{
+func (s *Service) trimFuncPath(fullPath string) string {
 	// Trim funcPath for a specific service name and determined service's rootPackagePath
 	// trello, github.com/requilence/integram/services/trello, github.com/requilence/integram/services/trello.cardReplied -> trello.cardReplied
 	// trello, github.com/requilence/integram/services/Trello, github.com/requilence/integram/services/Trello.cardReplied -> trello.cardReplied
@@ -483,7 +491,7 @@ func Register(servicer Servicer, botToken string) {
 
 			jobType, err := jobs.RegisterTypeWithPoolKey(jobName, "_"+service.Name, job.Retries, job.HandlerFunc)
 			if err != nil {
-				fmt.Errorf("RegisterTypeWithPoolKey '%s', for %s: %s", jobName, service.Name, err.Error() )
+				fmt.Errorf("RegisterTypeWithPoolKey '%s', for %s: %s", jobName, service.Name, err.Error())
 			} else {
 				jobsPerService[service.Name][jobName] = jobType
 			}

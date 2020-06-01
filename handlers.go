@@ -24,9 +24,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/throttled/throttled"
 	"github.com/throttled/throttled/store/memstore"
-
 	"github.com/weekface/mgorus"
-	"golang.org/x/oauth2"
 	mgo "gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 
@@ -200,6 +198,7 @@ func Run() {
 	// register some HTML templates
 	templ := template.Must(template.New("webpreview").Parse(htmlTemplateWebpreview))
 	template.Must(templ.New("determineTZ").Parse(htmlTemplateDetermineTZ))
+	template.Must(templ.New("tgredirect").Parse(htmlTemplateTGRedirect))
 
 	router.SetHTMLTemplate(templ)
 
@@ -834,7 +833,6 @@ func serviceHookHandler(c *gin.Context) {
 }
 
 func oAuthInitRedirect(c *gin.Context, service string, authTempID string) {
-
 	if Config.IsMainInstance() && service != "" {
 		s, _ := serviceByName(service)
 
@@ -908,7 +906,6 @@ func oAuthInitRedirect(c *gin.Context, service string, authTempID string) {
 }
 
 func oAuthCallback(c *gin.Context, oauthProviderID string) {
-
 	db := c.MustGet("db").(*mgo.Database)
 
 	authTempID := c.Query("u")
@@ -921,83 +918,87 @@ func oAuthCallback(c *gin.Context, oauthProviderID string) {
 	err := db.C("users_cache").Find(bson.M{"key": "auth_" + authTempID}).One(&val)
 
 	if !(err == nil && val.UserID > 0) {
-		err := errors.New("Unknown auth token")
+		err := errors.New("unknown auth token")
 
 		log.WithFields(log.Fields{"token": authTempID}).Error(err)
-		c.String(http.StatusForbidden, "This OAuth is not associated with any user")
+		c.String(http.StatusForbidden, "This OAuth state is not associated with any user")
 		return
 	}
 
 	oap, err := findOauthProviderByID(db, oauthProviderID)
-
 	if err != nil {
 		log.WithError(err).WithField("OauthProviderID", oauthProviderID).Error("Can't get OauthProvider")
-		c.String(http.StatusInternalServerError, "Error occured")
+		c.String(http.StatusInternalServerError, "Error occurred")
 		return
 	}
 
 	ctx := &Context{ServiceBaseURL: oap.BaseURL, ServiceName: oap.Service, db: db, gin: c}
-
-	userData, _ := ctx.FindUser(bson.M{"_id": val.UserID})
 	s := ctx.Service()
 
-	ctx.User = userData.User
-	ctx.User.data = &userData
-	ctx.User.ctx = ctx
+	// simplified flow – just get the access token from the authorization code and store it
+	if ctx.Service().DefaultOAuth1 != nil ||
+	   ctx.Service().DefaultOAuth2 != nil && !ctx.Service().DefaultOAuth2.OAuthRedirectViaSchema {
+		userData, _ := ctx.FindUser(bson.M{"_id": val.UserID})
+		ctx.User = userData.User
+		ctx.User.data = &userData
+		ctx.User.ctx = ctx
 
-	ctx.Chat = ctx.User.Chat()
+		ctx.Chat = ctx.User.Chat()
 
-	accessToken := ""
-	refreshToken := ""
-	var expiresAt *time.Time
+		if s.DefaultOAuth1 != nil {
+			accessToken, err := s.DefaultOAuth1.AccessTokenReceiver(ctx, c.Request, &val.Val.RequestToken)
+			if accessToken == "" {
+				log.WithError(err).WithFields(log.Fields{"oauthID": oauthProviderID}).Error("Can't verify OAuth token")
 
-	if s.DefaultOAuth2 != nil {
-		if s.DefaultOAuth2.AccessTokenReceiver != nil {
-			accessToken, expiresAt, refreshToken, err = s.DefaultOAuth2.AccessTokenReceiver(ctx, c.Request)
-		} else {
-			code := c.Request.FormValue("code")
-
-			if code == "" {
-				ctx.Log().Error("OAuth2 code is empty")
+				c.String(http.StatusForbidden, err.Error())
 				return
 			}
 
-			var otoken *oauth2.Token
-			otoken, err = ctx.OAuthProvider().OAuth2Client(ctx).Exchange(oauth2.NoContext, code)
-			if otoken != nil {
-				accessToken = otoken.AccessToken
-				refreshToken = otoken.RefreshToken
-				expiresAt = &otoken.Expiry
+			err = oauthTokenStore.SetOAuthAccessToken(&ctx.User, accessToken, nil)
+			if err != nil {
+				log.WithError(err).WithFields(log.Fields{"oauthID": oauthProviderID}).Error("Can't save OAuth token to store")
+
+				c.String(http.StatusInternalServerError, "failed to save OAuth access token to token store")
+				return
+			}
+		} else {
+			code := c.Request.FormValue("code")
+			if code == "" {
+				c.String(http.StatusForbidden, "Authorization code not set")
+				return
+			}
+
+			err = ctx.getAndStoreOAuth2TokenFromAuthCode(code)
+			if err != nil {
+				log.WithError(err).WithFields(log.Fields{"oauthID": oauthProviderID}).Error("can't get oauth token from code: %s", err.Error())
+				c.String(http.StatusForbidden, err.Error())
+				return
 			}
 		}
 
-	} else if s.DefaultOAuth1 != nil {
-		accessToken, err = s.DefaultOAuth1.AccessTokenReceiver(ctx, c.Request, &val.Val.RequestToken)
-	}
 
-	if accessToken == "" {
-		log.WithError(err).WithFields(log.Fields{"oauthID": oauthProviderID}).Error("Can't verify OAuth token")
+		ctx.StatIncUser(StatOAuthSuccess)
 
-		c.String(http.StatusForbidden, err.Error())
+		if s.OAuthSuccessful != nil {
+			s.DoJob(s.OAuthSuccessful, ctx)
+		}
+
+		c.Redirect(302, "tg://resolve?domain="+s.Bot().Username)
 		return
 	}
 
-	err = oauthTokenStore.SetOAuthAccessToken(&ctx.User, accessToken, expiresAt)
-	if err != nil {
-		log.WithError(err).WithFields(log.Fields{"oauthID": oauthProviderID}).Error("Can't save OAuth token to store")
+	// extra-step flow
+	// store authorization code with a random key in the cache and redirect via tg:// scheme to the app
+	code := c.Request.FormValue("code")
 
-		c.String(http.StatusInternalServerError, "failed to save OAuth access token to token store")
-		return
-	}
-	if refreshToken != "" {
-		oauthTokenStore.SetOAuthRefreshToken(&ctx.User, refreshToken)
-	}
+	// now we store the Authorization Code in the cache because we can't pass it to the bot via start param directly
+	oauthStoredAuthCodeKey := rndStr.Get(32)
+	ctx.SetServiceCache("oauth_code_"+oauthStoredAuthCodeKey, oAuthCallbackCodeInfo{ProviderID: oauthProviderID, Code: code, State: authTempID}, time.Hour)
 
-	ctx.StatIncUser(StatOAuthSuccess)
-
-	if s.OAuthSuccessful != nil {
-		s.DoJob(s.OAuthSuccessful, ctx)
-	}
-
-	c.Redirect(302, "https://telegram.me/"+s.Bot().Username)
+	c.HTML(200, "tgredirect",
+		gin.H{
+			"botUsername":  ctx.Bot().Username,
+			"startParam":  "oauth_"+oauthStoredAuthCodeKey,
+		},
+	)
 }

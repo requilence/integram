@@ -38,3 +38,80 @@ const htmlTemplateWebpreview = `<!DOCTYPE html>
 </body>
 </html>
 `
+
+const htmlTemplateTGRedirect = `<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+	<meta property="al:ios:app_store_id" content="686449807">
+	<meta property="al:ios:app_name" content="Telegram Messenger">
+	<meta property="al:ios:url" content="tg://resolve?domain={{ .botUsername }}&start={{ .startParam }}">
+	
+	<meta property="al:android:url" content="tg://resolve?domain={{ .botUsername }}&start={{ .startParam }}">
+	<meta property="al:android:app_name" content="Telegram">
+	<meta property="al:android:package" content="org.telegram.messenger">
+    <title>Redirecting...</title>
+    <script>
+		var redirectToApp = function() {
+			window.location.replace("tg://resolve?domain={{ .botUsername }}&start={{ .startParam }}");
+			setTimeout(function appNotInstalled() {
+				document.getElementById("container").style.display = "flex";
+			}, 2000);
+		};
+		window.onload = redirectToApp;
+    </script>
+    <style>
+        #container {
+            display: none;
+            color: rgb(43, 45, 46);
+            font-family: Roboto, sans-serif;
+            font-size: 16px;
+            height: 100%;
+            width: 100%;
+            position: fixed;
+            text-align: center;
+            align-items: center;
+            justify-content: center;
+        }
+        #container center {
+            text-align: center;
+            align-items: center;
+            justify-content: center;
+        }
+        .btn {
+            background-color: rgb(51, 214, 132);
+            border-radius: 22px;
+            box-sizing: border-box;
+            color: rgb(255, 255, 255);
+            display: inline-block;
+            font-family: Roboto, sans-serif;
+            font-size: 14px;
+            font-weight: bold;
+            height: 42px;
+            line-height: 14px;
+            overflow-x: hidden;
+            overflow-y: hidden;
+            padding-bottom: 13px;
+            padding-left: 27px;
+            padding-right: 27px;
+            padding-top: 15px;
+            text-align: center;
+            text-decoration: none;
+            text-transform: uppercase;
+            width: 260px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+<div id="container">
+    <div id="center">
+        <b>@{{ .botUsername }}</b> needs to finish the authorization...
+        <br/><br/><br/>
+        <a href="tg://resolve?domain={{ .botUsername }}&start={{ .startParam }}"><span class="btn">Continue in the Telegram</span></a>
+    </div>
+</div>
+
+</body>
+</html>
+`

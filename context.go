@@ -15,8 +15,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/kennygrant/sanitize"
 	"github.com/mrjones/oauth"
-	"github.com/requilence/url"
 	tg "github.com/requilence/telegram-bot-api"
+	"github.com/requilence/url"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/oauth2"
 	"gopkg.in/mgo.v2"
@@ -43,7 +43,7 @@ type Context struct {
 
 	Callback              *callback  // Telegram inline buttons callback if it it triggired current request
 	inlineQueryAnsweredAt *time.Time // used to log slow inline responses
-	messageAnsweredAt *time.Time 	 // used to log slow messages responses
+	messageAnsweredAt     *time.Time // used to log slow messages responses
 
 }
 
@@ -111,6 +111,76 @@ func (c *Context) OAuthProvider() *OAuthProvider {
 		return p
 	}
 	c.Log().Error("Can't get OAuthProvider – empty ServiceBaseURL")
+
+	return nil
+}
+
+func (c *Context) getAndStoreOAuth2TokenFromAuthCode(code string) error {
+	var expiresAt *time.Time
+	var accessToken string
+	var refreshToken string
+
+	otoken, err := c.OAuthProvider().OAuth2Client(c).Exchange(oauth2.NoContext, code)
+	if err != nil {
+		return fmt.Errorf("failed to get token: %s", err.Error())
+	}
+
+	if otoken != nil {
+		accessToken = otoken.AccessToken
+		refreshToken = otoken.RefreshToken
+		expiresAt = &otoken.Expiry
+	}
+
+	err = oauthTokenStore.SetOAuthAccessToken(&c.User, accessToken, expiresAt)
+	if err != nil {
+		log.WithError(err).Error("Can't save OAuth token to store")
+		return fmt.Errorf("failed to store oauth token")
+	}
+
+	if refreshToken != "" {
+		oauthTokenStore.SetOAuthRefreshToken(&c.User, refreshToken)
+	}
+
+	return nil
+}
+
+// OAuthFinishFromCommand should be called in the OAuth2 flow after bot gets '/start oauth_<codeKey>' command
+// it extracts the actual Authorization code from the cache, ensures it match the current user ID
+func (c *Context) OAuthFinishFromCommand(codeKey string) error {
+	s := c.Service()
+	if s.DefaultOAuth2 == nil {
+		return fmt.Errorf("oauth2 config not set")
+	}
+	var codeInfo oAuthCallbackCodeInfo
+	exists := c.ServiceCache("oauth_code_"+codeKey, &codeInfo)
+	if !exists {
+		return fmt.Errorf("oauth code not found")
+	}
+
+	if codeInfo.State != c.User.AuthTempToken() {
+		return fmt.Errorf("oauth state mismatches the one for the current TG user")
+	}
+
+	val := oAuthIDCache{}
+	err := c.Db().C("users_cache").Find(bson.M{"key": "auth_" + codeInfo.State}).One(&val)
+	if err != nil || val.UserID == 0 {
+		return fmt.Errorf("failed to find oauth state info")
+	}
+
+	if val.UserID != c.User.ID {
+		return fmt.Errorf("oauth state has mismatching user ID")
+	}
+
+	err = c.getAndStoreOAuth2TokenFromAuthCode(codeInfo.Code)
+	if err != nil {
+		return err
+	}
+
+	c.StatIncUser(StatOAuthSuccess)
+
+	if s.OAuthSuccessful != nil {
+		s.DoJob(s.OAuthSuccessful, c)
+	}
 
 	return nil
 }
@@ -494,12 +564,10 @@ func (c *Context) EditMessageText(om *OutgoingMessage, text string) error {
 	prevTextHash := om.TextHash
 	om.TextHash = om.GetTextHash()
 
-
 	if om.TextHash == prevTextHash {
 		c.Log().Debugf("EditMessageText – message (_id=%s botid=%v id=%v) not updated text have not changed", om.ID.Hex(), bot.ID, om.MsgID)
 		return nil
 	}
-
 
 	_, err := bot.API.Send(tg.EditMessageTextConfig{
 		BaseEdit: tg.BaseEdit{
@@ -509,7 +577,7 @@ func (c *Context) EditMessageText(om *OutgoingMessage, text string) error {
 		},
 		ParseMode:             om.ParseMode,
 		DisableWebPagePreview: !om.WebPreview,
-		Text: text,
+		Text:                  text,
 	})
 	if err != nil {
 		if err.(tg.Error).IsCantAccessChat() || err.(tg.Error).ChatMigrated() {
@@ -699,7 +767,6 @@ func (c *Context) EditMessageTextAndInlineKeyboard(om *OutgoingMessage, fromStat
 		}
 	}
 
-
 	_, err = bot.API.Send(tg.EditMessageTextConfig{
 		BaseEdit: tg.BaseEdit{
 			ChatID:          om.ChatID,
@@ -707,8 +774,8 @@ func (c *Context) EditMessageTextAndInlineKeyboard(om *OutgoingMessage, fromStat
 			MessageID:       om.MsgID,
 			ReplyMarkup:     &tg.InlineKeyboardMarkup{InlineKeyboard: tgKeyboard},
 		},
-		ParseMode: om.ParseMode,
-		Text:      text,
+		ParseMode:             om.ParseMode,
+		Text:                  text,
 		DisableWebPagePreview: !om.WebPreview,
 	})
 

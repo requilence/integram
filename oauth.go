@@ -20,8 +20,11 @@ func (tsw *OAuthTokenSource) Token() (*oauth2.Token, error) {
 	lastToken := tsw.last
 	ts := tsw.user.ctx.OAuthProvider().OAuth2Client(tsw.user.ctx).TokenSource(oauth2.NoContext, &lastToken)
 	token, err := ts.Token()
+
 	if err != nil {
-		if strings.Contains(err.Error(), "revoked") || strings.Contains(err.Error(), "invalid_grant") {
+		if strings.Contains(err.Error(), "revoked") ||
+			strings.Contains(err.Error(), "invalid_grant") ||
+			strings.Contains(err.Error(), "token expired and refresh token is not set") {
 			_ = tsw.user.saveProtectedSetting("OAuthValid", false)
 
 			//todo: provide revoked callback
