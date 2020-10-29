@@ -36,7 +36,8 @@ How to host Integram on your own server (using your private bots)
 - Check the `docker-compose.yml` file for the required ENV vars for each service
     - E.g. in order to run the Trello integration you will need to export: 
     	- **INTEGRAM_BASE_URL** – the base URL where your Integram host will be accessible, e.g. **https://integram.org**
-	    - **INTEGRAM_PORT** – if set to 443 Integram will use ssl.key/ssl.cert at /go/.conf. 
+	    - **INTEGRAM_PORT** – if set to 443 Integram will use ssl.key/ssl.cert at /go/.conf.
+	    	- For **Let's Encrypt**: `ssl.cert` has to be `fullchain.pem`, not `cert.pem`
 	    
 	        This directory is mounted on your host machine. Just get the path and put these files inside
             ```bash
