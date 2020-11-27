@@ -109,8 +109,28 @@ func ginRecovery(c *gin.Context) {
 	c.Next()
 }
 
+// roundTripper makes func signature a http.RoundTripper
+type roundTripper func(*http.Request) (*http.Response, error)
+func (f roundTripper) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
+
+type proxyRefactor url.URL
+func (target *proxyRefactor) rt(req *http.Request) (*http.Response, error) {
+    req.Host = target.Host
+    return http.DefaultTransport.RoundTrip(req)
+}
+
+func (target *proxyRefactor) direct(req *http.Request) {
+    req.URL.Scheme = target.Scheme
+    req.URL.Host = target.Host
+    req.Host = target.Host
+}
+
 func ReverseProxy(target *url.URL) gin.HandlerFunc {
 	proxy := httputil.NewSingleHostReverseProxy((*nativeurl.URL)(target))
+    refactor := proxyRefactor(*target)
+    proxy.Transport = roundTripper(refactor.rt)
+    proxy.Director = refactor.direct
+
 	return func(c *gin.Context) {
 		proxy.ServeHTTP(c.Writer, c.Request)
 	}
@@ -400,6 +420,9 @@ func reverseProxyForService(service string) *httputil.ReverseProxy {
 	reverseProxiesMapMutex.Lock()
 	defer reverseProxiesMapMutex.Unlock()
 	rp := httputil.NewSingleHostReverseProxy(u)
+    refactor := proxyRefactor(*u)
+    rp.Transport = roundTripper(refactor.rt)
+    rp.Director = refactor.direct
 
 	buf := new(bytes.Buffer)
 	rp.ErrorLog = stdlog.New(buf, "reverseProxy ", stdlog.LUTC)
