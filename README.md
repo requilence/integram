@@ -44,7 +44,12 @@ How to host Integram on your own server (using your private bots)
                ## Get the path of config directory on the host machine
                docker volume inspect -f '{{ .Mountpoint }}' integram_data-mainapp
             ```
-	    - **TRELLO_BOT_TOKEN** – your bot's token you got from [@BotFather](https://t.me/botfather)
+	    - **&lt;Name of the Service&gt;_BOT_TOKEN** – your bot's token you got from [@BotFather](https://t.me/botfather)
+            - **TRELLO_BOT_TOKEN** – For Trello Bot
+            - **WEBHOOK_BOT_TOKEN** – For Webhook Bot
+            - **GITLAB_BOT_TOKEN** – For Gitlab Bot
+            - **BITBUCKET_BOT_TOKEN** – For Bitbucket Bot
+
 	    - You will need to [get your own OAuth credentials from Trello](https://trello.com/app-key)
 	      - **TRELLO_OAUTH_ID** – API Key
 	      - **TRELLO_OAUTH_SECRET** – OAuth Secret
