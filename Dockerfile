@@ -1,18 +1,17 @@
-FROM golang:1.11 AS builder
+FROM golang:1.19 AS builder
 
-RUN curl -fsSL -o /usr/local/bin/dep https://github.com/golang/dep/releases/download/v0.3.2/dep-linux-amd64 && chmod +x /usr/local/bin/dep
+RUN mkdir /app
+WORKDIR /app
 
-RUN mkdir -p /go/src/github.com/requilence/integram
-WORKDIR /go/src/github.com/requilence/integram
 
-COPY Gopkg.toml Gopkg.lock ./
+COPY go.mod go.sum ./
 
 # install the dependencies without checking for go code
-RUN dep ensure -vendor-only
+RUN go mod download
 
 COPY . ./
 
-RUN CGO_ENABLED=0 GOOS=linux go build -installsuffix cgo -o /go/app github.com/requilence/integram/cmd/multi-process-mode
+RUN CGO_ENABLED=0 GOOS=linux go build -installsuffix cgo -o /go/app ./cmd/multi-process-mode/main.go
 
 # move the builded binary into the tiny alpine linux image
 FROM alpine:latest
